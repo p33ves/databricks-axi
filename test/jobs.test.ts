@@ -79,6 +79,32 @@ describe("jobs list", () => {
     ]);
   });
 
+  it("rejects a non-integer --limit as a usage error", async () => {
+    const { out, exitCode } = await run(["jobs", "list", "--limit", "abc"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("--limit must be a positive integer");
+    expect(fake.calls()).toEqual([]);
+  });
+
+  it("rejects --limit 0", async () => {
+    const { exitCode } = await run(["jobs", "list", "--limit", "0"]);
+    expect(exitCode).toBe(2);
+  });
+
+  it("accepts --fields keys that only later items carry", async () => {
+    fake.respond("jobs list", {
+      jobs: [JOB, { job_id: 102, extra: "x" }],
+    });
+    const { out, exitCode } = await run([
+      "jobs",
+      "list",
+      "--fields",
+      "job_id,extra",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("102,x");
+  });
+
   it("rejects the removed --page-token flag", async () => {
     const { out, exitCode } = await run([
       "jobs",
@@ -186,6 +212,14 @@ describe("jobs view", () => {
     const { out, exitCode } = await run(["jobs", "view", "banana"]);
     expect(exitCode).toBe(2);
     expect(out).toContain("jobs view <job_id>");
+  });
+
+  it("maps an empty upstream response to a structured error", async () => {
+    fake.respondError("jobs get", "", 0);
+    const { out, exitCode } = await run(["jobs", "view", "101"]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: UPSTREAM_ERROR");
+    expect(out).toContain("empty response");
   });
 });
 

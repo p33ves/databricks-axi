@@ -60,6 +60,18 @@ describe("runDatabricks", () => {
     });
   });
 
+  it("surfaces spawn errno messages like EACCES instead of a generic failure", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "noexec-databricks-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(bin, "not executable");
+    chmodSync(bin, 0o644);
+    process.env.PATH = dir;
+    await expect(runDatabricks(["jobs", "list"])).rejects.toMatchObject({
+      code: "UPSTREAM_ERROR",
+      message: expect.stringContaining("EACCES") as string,
+    });
+  });
+
   it("kills a hung CLI and throws TIMEOUT", async () => {
     const dir = mkdtempSync(join(tmpdir(), "slow-databricks-"));
     const bin = join(dir, "databricks");

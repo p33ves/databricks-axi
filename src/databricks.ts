@@ -87,7 +87,7 @@ function spawnCollect(argv: string[], timeoutMs: number): Promise<SpawnResult> {
       resolve({
         code: null,
         stdout,
-        stderr,
+        stderr: stderr || error.message,
         enoent: error.code === "ENOENT",
         timedOut,
       });

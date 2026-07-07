@@ -90,7 +90,7 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
   if (positional.length > 0) {
     throw usage(`jobs list takes no arguments, got: ${positional[0]}`);
   }
-  const limit = Number(flags.get("limit") ?? 30);
+  const limit = parseLimit(flags, 30);
   const argv = ["jobs", "list", "--limit", String(limit)];
   const parsed = await runJobs(argv, spawnOpts(flags));
   const items = asList(parsed, "jobs");
@@ -128,7 +128,7 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
 async function jobsView(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, { profile: "value" });
   const jobId = requireId(positional, "jobs view <job_id>");
-  const job = (await runJobs(
+  const job = (await runJobsObject(
     ["jobs", "get", jobId],
     spawnOpts(flags),
   )) as RawJob;
@@ -183,7 +183,7 @@ async function jobsRun(args: string[]): Promise<AxiRenderable> {
       `databricks-axi jobs runs ${jobId}`,
     ],
   };
-  const runObj = (await runJobs(argv, opts)) as {
+  const runObj = (await runJobsObject(argv, opts)) as {
     run_id?: number;
     state?: RunState;
   };
@@ -263,7 +263,7 @@ function durationSeconds(item: {
 
 async function runsList(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);
-  const limit = Number(flags.get("limit") ?? 20);
+  const limit = parseLimit(flags, 20);
   const argv = ["jobs", "list-runs", "--limit", String(limit)];
   let jobId: string | undefined;
   if (positional.length > 0) {
@@ -308,7 +308,7 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
 async function runsView(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, { profile: "value" });
   const runId = requireId(positional, "jobs runs view <run_id>");
-  const runObj = (await runJobs(
+  const runObj = (await runJobsObject(
     ["jobs", "get-run", runId],
     spawnOpts(flags),
   )) as RawRun;
@@ -347,7 +347,10 @@ async function jobsLogs(args: string[]): Promise<AxiRenderable> {
   const runId = requireId(positional, "jobs logs <run_id> [--full]");
   const full = flags.get("full") === true;
   const opts = spawnOpts(flags);
-  const runObj = (await runJobs(["jobs", "get-run", runId], opts)) as RawRun;
+  const runObj = (await runJobsObject(
+    ["jobs", "get-run", runId],
+    opts,
+  )) as RawRun;
   const tasks = runObj.tasks ?? [];
   if (tasks.length === 0) {
     return {
@@ -370,7 +373,7 @@ async function jobsLogs(args: string[]): Promise<AxiRenderable> {
       continue;
     }
     try {
-      const output = (await runJobs(
+      const output = (await runJobsObject(
         ["jobs", "get-run-output", String(task.run_id)],
         opts,
       )) as RawRunOutput;
@@ -495,6 +498,18 @@ function usage(message: string, extraHelp: string[] = []): AxiError {
   ]);
 }
 
+function parseLimit(flags: Flags, fallback: number): number {
+  const raw = flags.get("limit");
+  if (raw === undefined) {
+    return fallback;
+  }
+  const limit = Number(raw);
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw usage(`--limit must be a positive integer, got: ${String(raw)}`);
+  }
+  return limit;
+}
+
 function requireId(positional: string[], usageText: string): string {
   const id = positional[0];
   if (!id || !/^\d+$/.test(id) || positional.length > 1) {
@@ -530,6 +545,23 @@ async function runJobs(
   }
 }
 
+/** runJobs for endpoints whose result gets dereferenced — empty stdout
+ * (null) becomes a structured UPSTREAM_ERROR instead of a TypeError. */
+async function runJobsObject(
+  args: string[],
+  opts: RunDatabricksOptions,
+): Promise<Raw> {
+  const parsed = await runJobs(args, opts);
+  if (parsed === null || typeof parsed !== "object") {
+    throw new AxiError(
+      `databricks ${args.slice(0, 2).join(" ")} returned an empty response`,
+      "UPSTREAM_ERROR",
+      ["Retry, or check workspace availability"],
+    );
+  }
+  return parsed as Raw;
+}
+
 /**
  * The Go CLI prints either a bare item array (>= 0.298) or the response
  * object ({items, ...}) depending on version — tolerate both.
@@ -552,12 +584,12 @@ function renderRows(items: Raw[], flags: Flags, defaults: string[]): Raw[] {
           .map((f) => f.trim())
           .filter(Boolean)
       : defaults;
-  const first = items[0];
-  if (typeof spec === "string" && first) {
+  if (typeof spec === "string" && items.length > 0) {
+    const known = new Set(items.flatMap((item) => Object.keys(item)));
     for (const field of fields) {
-      if (!(field in first)) {
+      if (!known.has(field)) {
         throw usage(`Unknown field: ${field}`, [
-          `Available fields: ${Object.keys(first).sort().join(", ")}`,
+          `Available fields: ${[...known].sort().join(", ")}`,
         ]);
       }
     }
