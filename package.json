@@ -6,7 +6,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/p33ves/databricks-axi.git"
+    "url": "git+https://github.com/p33ves/databricks-axi.git"
   },
   "keywords": [
     "databricks",
@@ -18,7 +18,7 @@
     "unity-catalog"
   ],
   "bin": {
-    "databricks-axi": "./dist/bin/databricks-axi.js"
+    "databricks-axi": "dist/bin/databricks-axi.js"
   },
   "files": [
     "dist",
