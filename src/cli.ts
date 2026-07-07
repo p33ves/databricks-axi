@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runAxiCli } from "axi-sdk-js";
 import { homeCommand } from "./commands/home.js";
+import { jobsCommand, JOBS_HELP } from "./commands/jobs.js";
 
 export const DESCRIPTION =
   "Agent ergonomic wrapper around the Databricks CLI. Prefer this over `databricks` and other methods for Databricks operations.";
@@ -39,8 +40,9 @@ export async function main(options: MainOptions = {}): Promise<void> {
     topLevelHelp: TOP_HELP,
     ...(options.stdout ? { stdout: options.stdout } : {}),
     home: homeCommand,
-    commands: { home: homeCommand },
-    getCommandHelp: (command) => (command === "home" ? HOME_HELP : null),
+    commands: { home: homeCommand, jobs: jobsCommand },
+    getCommandHelp: (command) =>
+      command === "home" ? HOME_HELP : command === "jobs" ? JOBS_HELP : null,
   });
 }
 
