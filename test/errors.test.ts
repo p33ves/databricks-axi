@@ -3,9 +3,9 @@ import { mapUpstreamError, redactSecrets } from "../src/errors.js";
 
 describe("redactSecrets", () => {
   it("redacts dapi tokens", () => {
-    expect(redactSecrets("token dapi1234567890abcdef leaked")).toBe(
-      "token [redacted] leaked",
-    );
+    expect(
+      redactSecrets("token dapi1234567890abcdef leaked"),
+    ).toBe("token [redacted] leaked");
   });
 
   it("redacts long hex runs", () => {
@@ -42,23 +42,27 @@ describe("mapUpstreamError", () => {
   });
 
   it("maps 403 to PERMISSION_DENIED", () => {
-    expect(mapUpstreamError("Error: 403 Forbidden").code).toBe("PERMISSION_DENIED");
+    expect(mapUpstreamError("Error: 403 Forbidden").code).toBe(
+      "PERMISSION_DENIED",
+    );
   });
 
   it("maps RESOURCE_DOES_NOT_EXIST to NOT_FOUND", () => {
-    expect(mapUpstreamError("Error: RESOURCE_DOES_NOT_EXIST: Job 999 gone").code).toBe(
+    expect(
+      mapUpstreamError("Error: RESOURCE_DOES_NOT_EXIST: Job 999 gone").code,
+    ).toBe("NOT_FOUND");
+  });
+
+  it("maps 'does not exist' to NOT_FOUND", () => {
+    expect(mapUpstreamError("Error: Job 999 does not exist.").code).toBe(
       "NOT_FOUND",
     );
   });
 
-  it("maps 'does not exist' to NOT_FOUND", () => {
-    expect(mapUpstreamError("Error: Job 999 does not exist.").code).toBe("NOT_FOUND");
-  });
-
   it("maps INVALID_STATE through", () => {
-    expect(mapUpstreamError("Error: INVALID_STATE: Run is TERMINATED").code).toBe(
-      "INVALID_STATE",
-    );
+    expect(
+      mapUpstreamError("Error: INVALID_STATE: Run is TERMINATED").code,
+    ).toBe("INVALID_STATE");
   });
 
   it("falls back to UPSTREAM_ERROR with the first stderr line as message", () => {

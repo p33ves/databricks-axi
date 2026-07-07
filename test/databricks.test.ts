@@ -73,7 +73,10 @@ describe("runDatabricks", () => {
 
   it("diagnoses CLI_TOO_OLD on unknown-command failures", async () => {
     const fake = useFake();
-    fake.respondError("jobs list", 'Error: unknown command "jobs" for "databricks"');
+    fake.respondError(
+      "jobs list",
+      'Error: unknown command "jobs" for "databricks"',
+    );
     fake.respond("-v", "Databricks CLI v0.18.0");
     await expect(runDatabricks(["jobs", "list"])).rejects.toMatchObject({
       code: "CLI_TOO_OLD",
@@ -92,7 +95,10 @@ describe("runDatabricks", () => {
   it("wraps malformed JSON stdout in an AxiError", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bad-json-databricks-"));
     const bin = join(dir, "databricks");
-    writeFileSync(bin, "#!/usr/bin/env node\nprocess.stdout.write('not json');\n");
+    writeFileSync(
+      bin,
+      "#!/usr/bin/env node\nprocess.stdout.write('not json');\n",
+    );
     chmodSync(bin, 0o755);
     process.env.PATH = `${dir}:${prevPath ?? ""}`;
     await expect(runDatabricks(["jobs", "list"])).rejects.toMatchObject({

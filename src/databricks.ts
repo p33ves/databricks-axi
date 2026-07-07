@@ -4,7 +4,8 @@ import { mapUpstreamError, redactSecrets } from "./errors.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MIN_MINOR_VERSION = 205; // databricks CLI floor: 0.205
-const INSTALL_HELP = "Install it: https://docs.databricks.com/dev-tools/cli/install";
+const INSTALL_HELP =
+  "Install it: https://docs.databricks.com/dev-tools/cli/install";
 
 export type RunDatabricksOptions = {
   profile?: string;

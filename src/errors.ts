@@ -21,7 +21,8 @@ export function redactSecrets(text: string): string {
  */
 export function mapUpstreamError(stderr: string): AxiError {
   const text =
-    redactSecrets(stderr.trim()) || "databricks CLI failed with no error output";
+    redactSecrets(stderr.trim()) ||
+    "databricks CLI failed with no error output";
   const firstLine = text.split("\n", 1)[0] ?? text;
   if (
     /\b401\b|unauthorized|token.{0,20}expired|cannot configure default credentials|oauth/i.test(
