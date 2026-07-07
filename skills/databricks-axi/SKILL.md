@@ -30,7 +30,7 @@ commands[8]:
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
   jobs run <job_id> [--wait]
-  jobs runs [job_id] [--limit N]
+  jobs runs [job_id] [--limit N] [--fields a,b]
   jobs runs view <run_id>
   jobs logs <run_id> [--full]
   jobs cancel <run_id>
