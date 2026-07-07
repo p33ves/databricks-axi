@@ -5,7 +5,8 @@ canonical; CLAUDE.md defers here.
 
 ## What this is
 
-AXI-compliant wrapper around the official `databricks` CLI (Go, >= 0.205).
+AXI-compliant wrapper around the official `databricks` CLI (Go, >= 0.298;
+v1.x is fine — the guard only rejects 0.x below 0.298).
 The [AXI standard](https://github.com/kunchenguid/axi) defines 10 principles —
 they are requirements, not suggestions.
 
