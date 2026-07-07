@@ -369,11 +369,20 @@ async function jobsLogs(args: string[]): Promise<AxiRenderable> {
       });
       continue;
     }
-    const output = (await runJobs(
-      ["jobs", "get-run-output", String(task.run_id)],
-      opts,
-    )) as RawRunOutput;
-    entries.push(taskLogEntry(task, output, full));
+    try {
+      const output = (await runJobs(
+        ["jobs", "get-run-output", String(task.run_id)],
+        opts,
+      )) as RawRunOutput;
+      entries.push(taskLogEntry(task, output, full));
+    } catch (error) {
+      // One task's output failing shouldn't sink the rest of the fan-out.
+      entries.push({
+        task: task.task_key,
+        state: compactState(task),
+        error: `output fetch failed: ${error instanceof AxiError ? error.message : String(error)}`,
+      });
+    }
   }
   entries.sort(
     (a, b) => Number(a.state === "SUCCESS") - Number(b.state === "SUCCESS"),
@@ -395,13 +404,18 @@ function taskLogEntry(
     task: task.task_key,
     state: compactState(task),
   };
+  let traceClipped = false;
   if (output.error) {
     entry.error = output.error;
   }
   if (output.error_trace) {
-    entry.error_trace = full
-      ? output.error_trace
-      : tail(output.error_trace, LOG_TAIL_LINES).text;
+    if (full) {
+      entry.error_trace = output.error_trace;
+    } else {
+      const t = tail(output.error_trace, LOG_TAIL_LINES);
+      entry.error_trace = t.text;
+      traceClipped = t.truncated;
+    }
   }
   const text = output.notebook_output?.result ?? output.logs ?? "";
   if (text) {
@@ -414,6 +428,9 @@ function taskLogEntry(
         entry.truncated = `showing last ${LOG_TAIL_LINES} of ${t.total} lines — rerun with --full`;
       }
     }
+  }
+  if (traceClipped && !entry.truncated) {
+    entry.truncated = `error_trace clipped to last ${LOG_TAIL_LINES} lines — rerun with --full`;
   }
   return entry;
 }
@@ -480,7 +497,7 @@ function usage(message: string, extraHelp: string[] = []): AxiError {
 
 function requireId(positional: string[], usageText: string): string {
   const id = positional[0];
-  if (!id || !/^\d+$/.test(id)) {
+  if (!id || !/^\d+$/.test(id) || positional.length > 1) {
     throw usage(`Usage: databricks-axi ${usageText}`);
   }
   return id;

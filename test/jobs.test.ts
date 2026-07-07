@@ -245,6 +245,16 @@ describe("jobs cancel", () => {
     expect(exitCode).toBe(1);
     expect(out).toContain("code: NOT_FOUND");
   });
+
+  it("treats a cannot-be-canceled message as an exit-0 no-op", async () => {
+    fake.respondError(
+      "jobs cancel-run",
+      "Error: Run 777 cannot be canceled since it is already completed",
+    );
+    const { out, exitCode } = await run(["jobs", "cancel", "777"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("run already terminated (no-op)");
+  });
 });
 
 describe("jobs dispatch", () => {
@@ -252,6 +262,17 @@ describe("jobs dispatch", () => {
     const { out, exitCode } = await run(["jobs", "frobnicate"]);
     expect(exitCode).toBe(2);
     expect(out).toContain("frobnicate");
+  });
+
+  it("rejects extra positionals on id commands", async () => {
+    const { exitCode } = await run(["jobs", "view", "101", "102"]);
+    expect(exitCode).toBe(2);
+  });
+
+  it("rejects a value flag without a value", async () => {
+    const { out, exitCode } = await run(["jobs", "list", "--limit"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("requires a value");
   });
 
   it("rejects a bare jobs invocation", async () => {
@@ -309,6 +330,13 @@ describe("jobs runs", () => {
       ["jobs", "list-runs", "--limit", "20", "--job-id", "101", "-o", "json"],
     ]);
     expect(out).toContain("jobs logs 902");
+  });
+
+  it("selects raw fields with --fields on runs", async () => {
+    fake.respond("jobs list-runs", RUNS);
+    const { out } = await run(["jobs", "runs", "--fields", "run_id,job_id"]);
+    expect(out).toContain("runs[2]{run_id,job_id}:");
+    expect(out).toContain("901,101");
   });
 
   it("treats non-SUCCESS terminal states like TIMEDOUT as failed", async () => {
@@ -480,6 +508,35 @@ describe("jobs logs", () => {
     expect(out).toContain("showing last 50 of 60 lines");
     expect(out).toContain("line-060");
     expect(out).not.toContain("line-005");
+  });
+
+  it("marks a clipped error_trace with a truncation hint", async () => {
+    const trace = Array.from({ length: 60 }, (_, i) => `frame-${i}`).join("\n");
+    fake.respond("jobs get-run", {
+      run_id: 903,
+      state: { life_cycle_state: "TERMINATED", result_state: "FAILED" },
+      tasks: [
+        { task_key: "only", run_id: 9031, state: { result_state: "FAILED" } },
+      ],
+    });
+    fake.respond("jobs get-run-output 9031", {
+      error: "Boom",
+      error_trace: trace,
+    });
+    const { out } = await run(["jobs", "logs", "903"]);
+    expect(out).toContain("frame-59");
+    expect(out).not.toContain("frame-5\n");
+    expect(out).toContain("error_trace clipped to last 50 lines");
+  });
+
+  it("keeps going when one task's output fetch fails", async () => {
+    fake.respond("jobs get-run", RUN_WITH_TASKS);
+    fake.respondError("jobs get-run-output 9021", "Error: boom upstream");
+    fake.respond("jobs get-run-output 9022", { logs: "transform ok" });
+    const { out, exitCode } = await run(["jobs", "logs", "902"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("output fetch failed");
+    expect(out).toContain("transform ok");
   });
 
   it("--full disables truncation", async () => {
