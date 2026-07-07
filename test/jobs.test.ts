@@ -178,6 +178,64 @@ describe("jobs view", () => {
   });
 });
 
+describe("jobs run", () => {
+  it("triggers async by default and suggests runs view", async () => {
+    fake.respond("jobs run-now", { run_id: 777 });
+    const { out, exitCode } = await run(["jobs", "run", "101"]);
+    expect(exitCode).toBe(0);
+    expect(fake.calls()).toEqual([
+      ["jobs", "run-now", "101", "--no-wait", "-o", "json"],
+    ]);
+    expect(out).toContain("run_id: 777");
+    expect(out).toContain("jobs runs view 777");
+  });
+
+  it("drops --no-wait with --wait", async () => {
+    fake.respond("jobs run-now", {
+      run_id: 778,
+      state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+    });
+    const { out } = await run(["jobs", "run", "101", "--wait"]);
+    expect(fake.calls()).toEqual([["jobs", "run-now", "101", "-o", "json"]]);
+    expect(out).toContain("state: SUCCESS");
+  });
+
+  it("requires a numeric job id", async () => {
+    const { exitCode } = await run(["jobs", "run", "nope"]);
+    expect(exitCode).toBe(2);
+  });
+});
+
+describe("jobs cancel", () => {
+  it("cancels async and confirms", async () => {
+    fake.respondError("jobs cancel-run", "", 0);
+    const { out, exitCode } = await run(["jobs", "cancel", "777"]);
+    expect(exitCode).toBe(0);
+    expect(fake.calls()).toEqual([
+      ["jobs", "cancel-run", "777", "--no-wait", "-o", "json"],
+    ]);
+    expect(out).toContain("cancel requested");
+    expect(out).toContain("jobs runs view 777");
+  });
+
+  it("treats an already-terminated run as an exit-0 no-op", async () => {
+    fake.respondError(
+      "jobs cancel-run",
+      "Error: INVALID_STATE: Run 777 is already in a terminal state TERMINATED",
+    );
+    const { out, exitCode } = await run(["jobs", "cancel", "777"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("run already terminated (no-op)");
+  });
+
+  it("still fails on real cancel errors", async () => {
+    fake.respondError("jobs cancel-run", "Error: Run 999 does not exist.");
+    const { out, exitCode } = await run(["jobs", "cancel", "999"]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+  });
+});
+
 describe("jobs dispatch", () => {
   it("rejects unknown subcommands", async () => {
     const { out, exitCode } = await run(["jobs", "frobnicate"]);

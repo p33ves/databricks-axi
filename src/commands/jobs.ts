@@ -6,14 +6,18 @@ import {
 import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
 
 export const JOBS_HELP = `usage: databricks-axi jobs <subcommand> [args] [flags]
-subcommands[2]:
+subcommands[4]:
   list [--limit N] [--page-token T] [--fields a,b]
   view <job_id>
+  run <job_id> [--wait]
+  cancel <run_id>
 flags:
   --profile <name>  databricks auth profile passthrough
 examples:
   databricks-axi jobs list
-  databricks-axi jobs view 101
+  databricks-axi jobs run 101
+notes:
+  run is async by default; --wait blocks up to ~20 min upstream (agents: avoid)
 `;
 
 type Raw = Record<string, unknown>;
@@ -42,6 +46,10 @@ export async function jobsCommand(args: string[]): Promise<AxiRenderable> {
       return jobsList(rest);
     case "view":
       return jobsView(rest);
+    case "run":
+      return jobsRun(rest);
+    case "cancel":
+      return jobsCancel(rest);
     default:
       throw usage(
         sub ? `Unknown jobs subcommand: ${sub}` : "jobs requires a subcommand",
@@ -124,6 +132,71 @@ async function jobsView(args: string[]): Promise<AxiRenderable> {
     `databricks-axi jobs runs ${jobId}`,
   ];
   return out;
+}
+
+const WAIT_TIMEOUT_MS = 25 * 60_000; // upstream blocks up to 20 min on --wait
+
+function compactState(item: { state?: RunState }): string {
+  return item.state?.result_state ?? item.state?.life_cycle_state ?? "UNKNOWN";
+}
+
+async function jobsRun(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, {
+    profile: "value",
+    wait: "boolean",
+  });
+  const jobId = requireId(positional, "jobs run <job_id> [--wait]");
+  const wait = flags.get("wait") === true;
+  const argv = ["jobs", "run-now", jobId];
+  if (!wait) {
+    argv.push("--no-wait");
+  }
+  const opts = {
+    ...spawnOpts(flags),
+    ...(wait ? { timeoutMs: WAIT_TIMEOUT_MS } : {}),
+  };
+  const runObj = (await runJobs(argv, opts)) as {
+    run_id?: number;
+    state?: RunState;
+  };
+  const out: AxiStructuredOutput = { run_id: runObj.run_id };
+  if (runObj.state) {
+    out.state = compactState(runObj);
+  }
+  out.help = [`databricks-axi jobs runs view ${runObj.run_id}`];
+  return out;
+}
+
+async function jobsCancel(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, { profile: "value" });
+  const runId = requireId(positional, "jobs cancel <run_id>");
+  try {
+    await runJobs(["jobs", "cancel-run", runId, "--no-wait"], spawnOpts(flags));
+  } catch (error) {
+    if (isAlreadyTerminated(error)) {
+      return {
+        run_id: Number(runId),
+        status: "run already terminated (no-op)",
+        help: [`databricks-axi jobs runs view ${runId}`],
+      };
+    }
+    throw error;
+  }
+  return {
+    run_id: Number(runId),
+    status: "cancel requested",
+    help: [`databricks-axi jobs runs view ${runId}`],
+  };
+}
+
+function isAlreadyTerminated(error: unknown): boolean {
+  if (!(error instanceof AxiError)) {
+    return false;
+  }
+  return (
+    error.code === "INVALID_STATE" ||
+    /cannot be canceled|already (terminated|completed)/i.test(error.message)
+  );
 }
 
 function taskType(task: RawTask): string {
