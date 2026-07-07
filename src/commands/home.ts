@@ -1,12 +1,14 @@
-// Home view for the scaffold release. Honest empty state (AXI: definitive
-// empty states, no advertised commands that don't exist yet). Replaced with
-// the real ambient-context dashboard when the jobs/clusters domains land.
+// Home view. Honest surface: lists only implemented domains (AXI: no
+// advertised commands that don't exist yet). Becomes the real
+// ambient-context dashboard when the clusters domain lands.
 export async function homeCommand(): Promise<string> {
   return [
     "databricks-axi: pre-release scaffold",
-    "status: command domains (jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, api, setup) are not implemented yet",
+    "available: jobs (list, view, run, runs, logs, cancel)",
+    "coming: clusters, sql, catalog, workspace, fs, pipelines, serving, api, setup",
     "roadmap: https://github.com/p33ves/databricks-axi#roadmap",
-    "help[1]:",
+    "help[2]:",
+    "  databricks-axi jobs list",
     "  databricks-axi --help",
   ].join("\n");
 }

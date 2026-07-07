@@ -1,9 +1,10 @@
-import {
-  AxiError,
-  type AxiRenderable,
-  type AxiStructuredOutput,
-} from "axi-sdk-js";
+import { AxiError } from "axi-sdk-js";
 import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
+
+// axi-sdk-js 0.1.8 doesn't re-export its output types from the package
+// index; mirror the two one-line aliases locally until it does.
+type AxiStructuredOutput = Record<string, unknown>;
+type AxiRenderable = string | AxiStructuredOutput;
 
 export const JOBS_HELP = `usage: databricks-axi jobs <subcommand> [args] [flags]
 subcommands[7]:

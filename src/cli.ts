@@ -10,12 +10,21 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[1]:
+commands[8]:
   (none)=home
-flags[2]:
-  --help, -v/-V/--version
+  jobs list [--limit N] [--fields a,b]
+  jobs view <job_id>
+  jobs run <job_id> [--wait]
+  jobs runs [job_id] [--limit N]
+  jobs runs view <run_id>
+  jobs logs <run_id> [--full]
+  jobs cancel <run_id>
+flags[3]:
+  --help, -v/-V/--version, --profile <name>
 examples:
   databricks-axi
+  databricks-axi jobs list
+  databricks-axi jobs logs <run_id>
 `;
 
 const HOME_HELP = `usage: databricks-axi [home]
@@ -24,6 +33,9 @@ examples:
   databricks-axi
   databricks-axi home
 `;
+
+// Exported so tests can assert every wired domain is advertised in TOP_HELP.
+export const COMMANDS = { home: homeCommand, jobs: jobsCommand };
 
 type CliStdout = { write: (chunk: string) => unknown };
 
@@ -40,7 +52,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     topLevelHelp: TOP_HELP,
     ...(options.stdout ? { stdout: options.stdout } : {}),
     home: homeCommand,
-    commands: { home: homeCommand, jobs: jobsCommand },
+    commands: COMMANDS,
     getCommandHelp: (command) =>
       command === "home" ? HOME_HELP : command === "jobs" ? JOBS_HELP : null,
   });

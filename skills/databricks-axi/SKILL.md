@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI. Pre-release scaffold: command domains (jobs, clusters, SQL, catalog, workspace, fs, pipelines, serving, api, setup) are not implemented yet - run `databricks-axi --help` to see the current surface before relying on it."
+description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel). Other domains (clusters, SQL, catalog, workspace, fs, pipelines, serving, api, setup) land incrementally - run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark]
+    tags: [databricks, spark, jobs]
     category: data
 ---
 
@@ -25,8 +25,15 @@ Pre-release scaffold: command domains are landing incrementally. Run `npx -y dat
 ## Commands
 
 ```
-commands[1]:
+commands[8]:
   (none)=home
+  jobs list [--limit N] [--fields a,b]
+  jobs view <job_id>
+  jobs run <job_id> [--wait]
+  jobs runs [job_id] [--limit N]
+  jobs runs view <run_id>
+  jobs logs <run_id> [--full]
+  jobs cancel <run_id>
 ```
 
 Run `npx -y databricks-axi --help` for global flags, or `npx -y databricks-axi <command> --help` for per-command usage.
