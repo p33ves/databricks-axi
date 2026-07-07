@@ -311,6 +311,20 @@ describe("jobs runs", () => {
     expect(out).toContain("jobs logs 902");
   });
 
+  it("treats non-SUCCESS terminal states like TIMEDOUT as failed", async () => {
+    fake.respond("jobs list-runs", {
+      runs: [
+        {
+          run_id: 903,
+          job_id: 101,
+          state: { life_cycle_state: "TERMINATED", result_state: "TIMEDOUT" },
+        },
+      ],
+    });
+    const { out } = await run(["jobs", "runs"]);
+    expect(out).toContain("jobs logs 903");
+  });
+
   it("flags a full page as has_more, keeping the job_id filter", async () => {
     fake.respond("jobs list-runs", RUNS);
     const { out } = await run([
@@ -401,6 +415,29 @@ describe("jobs logs", () => {
     ]);
     expect(out).toContain("Boom: table missing");
     expect(out.indexOf("transform")).toBeLessThan(out.indexOf("extract"));
+  });
+
+  it("skips tasks without a run_id instead of fetching 'undefined'", async () => {
+    fake.respond("jobs get-run", {
+      run_id: 904,
+      state: { life_cycle_state: "RUNNING" },
+      tasks: [
+        { task_key: "pending", state: { life_cycle_state: "PENDING" } },
+        {
+          task_key: "done",
+          run_id: 9041,
+          state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+        },
+      ],
+    });
+    fake.respond("jobs get-run-output 9041", { logs: "done ok" });
+    const { out, exitCode } = await run(["jobs", "logs", "904"]);
+    expect(exitCode).toBe(0);
+    expect(fake.calls()).toEqual([
+      ["jobs", "get-run", "904", "-o", "json"],
+      ["jobs", "get-run-output", "9041", "-o", "json"],
+    ]);
+    expect(out).toContain("output unavailable");
   });
 
   it("fans out even for a single-task run (parent id would fail upstream)", async () => {

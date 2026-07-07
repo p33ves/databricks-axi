@@ -158,6 +158,12 @@ function compactState(item: { state?: RunState }): string {
   return item.state?.result_state ?? item.state?.life_cycle_state ?? "UNKNOWN";
 }
 
+/** Terminal and not clean success (FAILED, TIMEDOUT, CANCELED, ...). */
+function isFailed(item: { state?: RunState }): boolean {
+  const result = item.state?.result_state;
+  return typeof result === "string" && result !== "SUCCESS";
+}
+
 async function jobsRun(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, {
     profile: "value",
@@ -284,7 +290,7 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
     };
   }
   const help = ["databricks-axi jobs runs view <run_id>"];
-  const firstFailed = runs.find((r) => compactState(r) === "FAILED");
+  const firstFailed = runs.find(isFailed);
   if (firstFailed) {
     help.unshift(`databricks-axi jobs logs ${firstFailed.run_id}`);
   }
@@ -318,10 +324,9 @@ async function runsView(args: string[]): Promise<AxiRenderable> {
       state: compactState(task),
       duration_s: durationSeconds(task),
     })),
-    help:
-      state === "FAILED"
-        ? [`databricks-axi jobs logs ${runId}`]
-        : [`databricks-axi jobs runs ${runObj.job_id ?? ""}`.trim()],
+    help: isFailed(runObj)
+      ? [`databricks-axi jobs logs ${runId}`]
+      : [`databricks-axi jobs runs ${runObj.job_id ?? ""}`.trim()],
   };
 }
 
@@ -356,6 +361,14 @@ async function jobsLogs(args: string[]): Promise<AxiRenderable> {
   // only if logs latency ever actually hurts.
   const entries: AxiStructuredOutput[] = [];
   for (const task of tasks) {
+    if (task.run_id == null) {
+      entries.push({
+        task: task.task_key,
+        state: compactState(task),
+        error: "task has no run_id; output unavailable",
+      });
+      continue;
+    }
     const output = (await runJobs(
       ["jobs", "get-run-output", String(task.run_id)],
       opts,

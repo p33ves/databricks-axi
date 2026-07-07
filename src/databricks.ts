@@ -3,7 +3,7 @@ import { AxiError } from "axi-sdk-js";
 import { mapUpstreamError, redactSecrets } from "./errors.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const MIN_MINOR_VERSION = 205; // databricks CLI floor: 0.205
+const MIN_MINOR_VERSION = 298; // databricks CLI floor: 0.298 (pre-0.298 pagination flags differ)
 const INSTALL_HELP =
   "Install it: https://docs.databricks.com/dev-tools/cli/install";
 
@@ -102,11 +102,13 @@ function spawnCollect(argv: string[], timeoutMs: number): Promise<SpawnResult> {
 // ponytail: version guard runs only on the failure path — a pre-flight
 // `databricks -v` would tax every happy-path invocation for nothing.
 async function diagnoseFailure(stderr: string): Promise<AxiError> {
-  if (/unknown (command|flag|shorthand)/i.test(stderr)) {
+  if (
+    /unknown (command|flag|shorthand)|no such (option|command)/i.test(stderr)
+  ) {
     const version = await detectVersion();
     if (version && version.major === 0 && version.minor < MIN_MINOR_VERSION) {
       return new AxiError(
-        `databricks CLI ${version.raw} is too old (need >= 0.205)`,
+        `databricks CLI ${version.raw} is too old (need >= 0.298)`,
         "CLI_TOO_OLD",
         [`Upgrade: https://docs.databricks.com/dev-tools/cli/install`],
       );
@@ -121,7 +123,8 @@ async function detectVersion(): Promise<{
   raw: string;
 } | null> {
   const result = await spawnCollect(["-v"], 5_000);
-  const match = /v?(\d+)\.(\d+)\.(\d+)/.exec(result.stdout);
+  // Legacy CLIs print the version to stderr.
+  const match = /v?(\d+)\.(\d+)\.(\d+)/.exec(result.stdout + result.stderr);
   if (!match) {
     return null;
   }

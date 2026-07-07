@@ -103,9 +103,18 @@ describe("runDatabricks", () => {
   it("keeps the mapped error when the CLI is new enough", async () => {
     const fake = useFake();
     fake.respondError("jobs list", 'Error: unknown flag "--bogus"');
-    fake.respond("-v", "Databricks CLI v0.230.0");
+    fake.respond("-v", "Databricks CLI v1.6.0");
     await expect(runDatabricks(["jobs", "list"])).rejects.toMatchObject({
       code: "UPSTREAM_ERROR",
+    });
+  });
+
+  it("diagnoses CLI_TOO_OLD on legacy no-such-option failures", async () => {
+    const fake = useFake();
+    fake.respondError("jobs list", "Error: no such option: -o");
+    fake.respond("-v", "Version 0.18.0");
+    await expect(runDatabricks(["jobs", "list"])).rejects.toMatchObject({
+      code: "CLI_TOO_OLD",
     });
   });
 
