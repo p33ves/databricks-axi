@@ -7,9 +7,6 @@ settings:
 importers:
   .:
     dependencies:
-      "@toon-format/toon":
-        specifier: ^2.1.0
-        version: 2.3.0
       axi-sdk-js:
         specifier: ^0.1.8
         version: 0.1.8
