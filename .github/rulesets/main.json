@@ -27,10 +27,19 @@
       "parameters": {
         "strict_required_status_checks_policy": false,
         "required_status_checks": [
-          { "context": "build-and-test" },
-          { "context": "Analyze JavaScript/TypeScript" },
-          { "context": "Generated files must not be hand-edited" },
-          { "context": "PR must be raised via no-mistakes" }
+          { "context": "build-and-test", "integration_id": 15368 },
+          {
+            "context": "Analyze JavaScript/TypeScript",
+            "integration_id": 15368
+          },
+          {
+            "context": "Generated files must not be hand-edited",
+            "integration_id": 15368
+          },
+          {
+            "context": "PR must be raised via no-mistakes",
+            "integration_id": 15368
+          }
         ]
       }
     }
