@@ -37,10 +37,18 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
   (databricks/cli#3896). `sql exec` must poll
   `POST /api/2.0/sql/statements` → `GET /statements/{id}` via the api
   passthrough; `wait_timeout` <= 50s per call; INLINE results cap ~25MB.
+  Watch #3896: if `databricks query sql` ships upstream, `sql exec` can
+  delegate instead of polling.
+- There is **no `clusters stop` upstream** — the terminate verb is
+  `databricks clusters delete` (keeps config, restartable). Never
+  `permanent-delete`, which destroys the cluster. Our `clusters stop` maps to
+  `clusters delete`.
 - `jobs run-now` and `clusters start` **block by default** (20-min timeout).
   Mutations are async by default here: pass `--no-wait` upstream, return the
   id + a follow-up suggestion.
 - `INVALID_STATE` on start/stop means already-running/stopped → exit-0 no-op.
+  Note `clusters start` on a non-TERMINATED cluster is already a no-op
+  upstream.
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =
   `jobs get-run` → per-task `get-run-output` fan-out.
 - Pagination is manual (`--page-token`); surface `has_more` + a next-page
