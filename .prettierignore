@@ -1,0 +1,4 @@
+# Generated files - owned by their generators, not prettier.
+CHANGELOG.md
+.release-please-manifest.json
+skills/databricks-axi/SKILL.md
