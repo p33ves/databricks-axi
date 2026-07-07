@@ -16,7 +16,7 @@ experience for agents.
 ## Requirements
 
 - Node.js >= 20
-- Official `databricks` CLI >= 0.205, authenticated
+- Official `databricks` CLI >= 0.298, authenticated
   (`databricks auth login --host <workspace-url>`, or
   `DATABRICKS_HOST`/`DATABRICKS_TOKEN` env vars)
 

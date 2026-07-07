@@ -28,8 +28,8 @@ these instead of auto-detecting): `pnpm test`,
 ## Architecture
 
 `bin/databricks-axi.ts` → `src/cli.ts` (`runAxiCli` from axi-sdk-js) →
-`src/commands/<domain>.ts`. Planned support modules: `src/databricks.ts`
-(spawn wrapper), `src/errors.ts` (taxonomy), `src/suggestions.ts`,
+`src/commands/<domain>.ts`. Support modules: `src/databricks.ts`
+(spawn wrapper), `src/errors.ts` (taxonomy); planned: `src/suggestions.ts`,
 `src/context.ts`, `src/fields.ts`. Internal logic stays on JSON; TOON
 conversion happens only at the output boundary.
 
