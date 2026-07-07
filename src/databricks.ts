@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { AxiError } from "axi-sdk-js";
-import { mapUpstreamError } from "./errors.js";
+import { mapUpstreamError, redactSecrets } from "./errors.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MIN_MINOR_VERSION = 205; // databricks CLI floor: 0.205
@@ -52,7 +52,17 @@ export async function runDatabricks(
     throw await diagnoseFailure(result.stderr);
   }
   const trimmed = result.stdout.trim();
-  return trimmed ? (JSON.parse(trimmed) as unknown) : null;
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    throw new AxiError(
+      `databricks returned invalid JSON: ${redactSecrets(trimmed).slice(0, 120)}`,
+      "UPSTREAM_ERROR",
+    );
+  }
 }
 
 function spawnCollect(argv: string[], timeoutMs: number): Promise<SpawnResult> {

@@ -88,4 +88,15 @@ describe("runDatabricks", () => {
       code: "UPSTREAM_ERROR",
     });
   });
+
+  it("wraps malformed JSON stdout in an AxiError", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "bad-json-databricks-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(bin, "#!/usr/bin/env node\nprocess.stdout.write('not json');\n");
+    chmodSync(bin, 0o755);
+    process.env.PATH = `${dir}:${prevPath ?? ""}`;
+    await expect(runDatabricks(["jobs", "list"])).rejects.toMatchObject({
+      code: "UPSTREAM_ERROR",
+    });
+  });
 });
