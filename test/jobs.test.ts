@@ -254,3 +254,96 @@ describe("jobs dispatch", () => {
     expect(out).toContain("usage: databricks-axi jobs");
   });
 });
+
+const RUNS = {
+  runs: [
+    {
+      run_id: 901,
+      job_id: 101,
+      state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+      start_time: 1751760000000,
+      run_duration: 63000,
+    },
+    {
+      run_id: 902,
+      job_id: 101,
+      state: { life_cycle_state: "TERMINATED", result_state: "FAILED" },
+      start_time: 1751763600000,
+      run_duration: 12000,
+    },
+  ],
+};
+
+describe("jobs runs", () => {
+  it("lists runs with compact state, ISO time, and duration", async () => {
+    fake.respond("jobs list-runs", RUNS);
+    const { out, exitCode } = await run(["jobs", "runs"]);
+    expect(exitCode).toBe(0);
+    expect(fake.calls()).toEqual([
+      ["jobs", "list-runs", "--limit", "20", "-o", "json"],
+    ]);
+    expect(out).toContain("runs[2]{run_id,state,start_time,duration_s}:");
+    // Row assertions stay tolerant of TOON's string-quoting rules for the
+    // ISO timestamp cell: assert the pieces, not the exact joined row.
+    expect(out).toContain("901,SUCCESS");
+    expect(out).toContain("2025-07-06T00:00:00.000Z");
+    expect(out).toContain("902,FAILED");
+    expect(out).toContain("2025-07-06T01:00:00.000Z");
+  });
+
+  it("filters by job id and suggests logs for the first failed run", async () => {
+    fake.respond("jobs list-runs", RUNS);
+    const { out } = await run(["jobs", "runs", "101"]);
+    expect(fake.calls()).toEqual([
+      ["jobs", "list-runs", "--limit", "20", "--job-id", "101", "-o", "json"],
+    ]);
+    expect(out).toContain("jobs logs 902");
+  });
+
+  it("surfaces pagination", async () => {
+    fake.respond("jobs list-runs", { ...RUNS, next_page_token: "rt9" });
+    const { out } = await run(["jobs", "runs"]);
+    expect(out).toContain("has_more: true");
+    expect(out).toContain("--page-token rt9");
+  });
+
+  it("renders a definitive empty state", async () => {
+    fake.respond("jobs list-runs", { runs: [] });
+    const { out, exitCode } = await run(["jobs", "runs", "101"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("no runs found");
+  });
+});
+
+describe("jobs runs view", () => {
+  it("shows run detail with per-task states", async () => {
+    fake.respond("jobs get-run", {
+      run_id: 902,
+      job_id: 101,
+      state: { life_cycle_state: "TERMINATED", result_state: "FAILED" },
+      start_time: 1751763600000,
+      run_duration: 12000,
+      tasks: [
+        {
+          task_key: "extract",
+          run_id: 9021,
+          state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+          execution_duration: 5000,
+        },
+        {
+          task_key: "transform",
+          run_id: 9022,
+          state: { life_cycle_state: "TERMINATED", result_state: "FAILED" },
+          execution_duration: 4000,
+        },
+      ],
+    });
+    const { out, exitCode } = await run(["jobs", "runs", "view", "902"]);
+    expect(exitCode).toBe(0);
+    expect(fake.calls()).toEqual([["jobs", "get-run", "902", "-o", "json"]]);
+    expect(out).toContain("state: FAILED");
+    expect(out).toContain("tasks[2]{task_key,state,duration_s}:");
+    expect(out).toContain("transform,FAILED");
+    expect(out).toContain("jobs logs 902");
+  });
+});

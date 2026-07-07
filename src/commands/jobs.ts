@@ -6,16 +6,19 @@ import {
 import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
 
 export const JOBS_HELP = `usage: databricks-axi jobs <subcommand> [args] [flags]
-subcommands[4]:
+subcommands[6]:
   list [--limit N] [--page-token T] [--fields a,b]
   view <job_id>
   run <job_id> [--wait]
+  runs [job_id] [--limit N] [--page-token T]
+  runs view <run_id>
   cancel <run_id>
 flags:
   --profile <name>  databricks auth profile passthrough
 examples:
   databricks-axi jobs list
   databricks-axi jobs run 101
+  databricks-axi jobs runs view 901
 notes:
   run is async by default; --wait blocks up to ~20 min upstream (agents: avoid)
 `;
@@ -28,6 +31,7 @@ type RawTask = {
   state?: RunState;
   notebook_task?: { notebook_path?: string };
   spark_python_task?: { python_file?: string };
+  execution_duration?: number;
 } & Raw;
 type RawJob = {
   job_id?: number;
@@ -37,6 +41,15 @@ type RawJob = {
     schedule?: { quartz_cron_expression?: string; pause_status?: string };
     tasks?: RawTask[];
   };
+} & Raw;
+type RawRun = {
+  run_id?: number;
+  job_id?: number;
+  state?: RunState;
+  start_time?: number;
+  end_time?: number;
+  run_duration?: number;
+  tasks?: RawTask[];
 } & Raw;
 
 export async function jobsCommand(args: string[]): Promise<AxiRenderable> {
@@ -48,6 +61,8 @@ export async function jobsCommand(args: string[]): Promise<AxiRenderable> {
       return jobsView(rest);
     case "run":
       return jobsRun(rest);
+    case "runs":
+      return rest[0] === "view" ? runsView(rest.slice(1)) : runsList(rest);
     case "cancel":
       return jobsCancel(rest);
     default:
@@ -208,6 +223,97 @@ function taskType(task: RawTask): string {
   }
   const key = Object.keys(task).find((k) => k.endsWith("_task"));
   return key ? key.replace(/_task$/, "") : "unknown";
+}
+
+function iso(ms: number | undefined): string {
+  return typeof ms === "number" && ms > 0 ? new Date(ms).toISOString() : "";
+}
+
+function durationSeconds(item: {
+  run_duration?: number;
+  execution_duration?: number;
+  start_time?: number;
+  end_time?: number;
+}): number {
+  const ms =
+    item.run_duration ??
+    item.execution_duration ??
+    (item.end_time && item.start_time ? item.end_time - item.start_time : 0);
+  return Math.round(ms / 1000);
+}
+
+async function runsList(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, LIST_FLAGS);
+  const argv = [
+    "jobs",
+    "list-runs",
+    "--limit",
+    String(flags.get("limit") ?? "20"),
+  ];
+  if (positional.length > 0) {
+    argv.push("--job-id", requireId(positional, "jobs runs [job_id]"));
+  }
+  const pageToken = flags.get("page-token");
+  if (typeof pageToken === "string") {
+    argv.push("--page-token", pageToken);
+  }
+  const parsed = await runJobs(argv, spawnOpts(flags));
+  const { items, nextPageToken } = asList(parsed, "runs");
+  const runs = items as RawRun[];
+  const rows =
+    typeof flags.get("fields") === "string"
+      ? renderRows(items, flags, [])
+      : runs.map((r) => ({
+          run_id: r.run_id,
+          state: compactState(r),
+          start_time: iso(r.start_time),
+          duration_s: durationSeconds(r),
+        }));
+  if (rows.length === 0) {
+    return {
+      runs: [],
+      status: "no runs found",
+      help: ["databricks-axi jobs run <job_id>"],
+    };
+  }
+  const help = ["databricks-axi jobs runs view <run_id>"];
+  const firstFailed = runs.find((r) => compactState(r) === "FAILED");
+  if (firstFailed) {
+    help.unshift(`databricks-axi jobs logs ${firstFailed.run_id}`);
+  }
+  const out: AxiStructuredOutput = { runs: rows, count: rows.length };
+  if (nextPageToken) {
+    out.has_more = true;
+    help.unshift(`databricks-axi jobs runs --page-token ${nextPageToken}`);
+  }
+  out.help = help;
+  return out;
+}
+
+async function runsView(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, { profile: "value" });
+  const runId = requireId(positional, "jobs runs view <run_id>");
+  const runObj = (await runJobs(
+    ["jobs", "get-run", runId],
+    spawnOpts(flags),
+  )) as RawRun;
+  const state = compactState(runObj);
+  return {
+    run_id: runObj.run_id,
+    job_id: runObj.job_id,
+    state,
+    start_time: iso(runObj.start_time),
+    duration_s: durationSeconds(runObj),
+    tasks: (runObj.tasks ?? []).map((task) => ({
+      task_key: task.task_key,
+      state: compactState(task),
+      duration_s: durationSeconds(task),
+    })),
+    help:
+      state === "FAILED"
+        ? [`databricks-axi jobs logs ${runId}`]
+        : [`databricks-axi jobs runs ${runObj.job_id ?? ""}`.trim()],
+  };
 }
 
 // --- shared helpers (used by every jobs subcommand) ---
