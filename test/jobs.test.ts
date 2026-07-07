@@ -64,19 +64,30 @@ describe("jobs list", () => {
     expect(out).toContain("axi-bench-etl");
   });
 
-  it("surfaces pagination as has_more plus a suggestion", async () => {
-    fake.respond("jobs list", { jobs: [JOB], next_page_token: "tok123" });
-    const { out } = await run(["jobs", "list"]);
+  it("flags a full page as has_more with a bigger-limit suggestion", async () => {
+    fake.respond("jobs list", { jobs: [JOB] });
+    const { out } = await run(["jobs", "list", "--limit", "1"]);
     expect(out).toContain("has_more: true");
-    expect(out).toContain("jobs list --page-token tok123");
+    expect(out).toContain("jobs list --limit 2");
   });
 
-  it("passes --page-token and --limit through", async () => {
+  it("passes --limit through", async () => {
     fake.respond("jobs list", { jobs: [] });
-    await run(["jobs", "list", "--limit", "5", "--page-token", "tok123"]);
+    await run(["jobs", "list", "--limit", "5"]);
     expect(fake.calls()).toEqual([
-      ["jobs", "list", "--limit", "5", "--page-token", "tok123", "-o", "json"],
+      ["jobs", "list", "--limit", "5", "-o", "json"],
     ]);
+  });
+
+  it("rejects the removed --page-token flag", async () => {
+    const { out, exitCode } = await run([
+      "jobs",
+      "list",
+      "--page-token",
+      "tok123",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown flag: --page-token");
   });
 
   it("renders a definitive empty state", async () => {
@@ -300,11 +311,17 @@ describe("jobs runs", () => {
     expect(out).toContain("jobs logs 902");
   });
 
-  it("surfaces pagination", async () => {
-    fake.respond("jobs list-runs", { ...RUNS, next_page_token: "rt9" });
-    const { out } = await run(["jobs", "runs"]);
+  it("flags a full page as has_more, keeping the job_id filter", async () => {
+    fake.respond("jobs list-runs", RUNS);
+    const { out } = await run([
+      "jobs",
+      "runs",
+      "101",
+      "--limit",
+      String(RUNS.runs.length),
+    ]);
     expect(out).toContain("has_more: true");
-    expect(out).toContain("--page-token rt9");
+    expect(out).toContain(`jobs runs 101 --limit ${RUNS.runs.length * 2}`);
   });
 
   it("renders a definitive empty state", async () => {

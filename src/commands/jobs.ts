@@ -8,10 +8,10 @@ type AxiRenderable = string | AxiStructuredOutput;
 
 export const JOBS_HELP = `usage: databricks-axi jobs <subcommand> [args] [flags]
 subcommands[7]:
-  list [--limit N] [--page-token T] [--fields a,b]
+  list [--limit N] [--fields a,b]
   view <job_id>
   run <job_id> [--wait]
-  runs [job_id] [--limit N] [--page-token T]
+  runs [job_id] [--limit N] [--fields a,b]
   runs view <run_id>
   logs <run_id> [--full]
   cancel <run_id>
@@ -82,7 +82,6 @@ export async function jobsCommand(args: string[]): Promise<AxiRenderable> {
 const LIST_FLAGS = {
   profile: "value",
   limit: "value",
-  "page-token": "value",
   fields: "value",
 } as const;
 
@@ -91,13 +90,10 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
   if (positional.length > 0) {
     throw usage(`jobs list takes no arguments, got: ${positional[0]}`);
   }
-  const argv = ["jobs", "list", "--limit", String(flags.get("limit") ?? "30")];
-  const pageToken = flags.get("page-token");
-  if (typeof pageToken === "string") {
-    argv.push("--page-token", pageToken);
-  }
+  const limit = Number(flags.get("limit") ?? 30);
+  const argv = ["jobs", "list", "--limit", String(limit)];
   const parsed = await runJobs(argv, spawnOpts(flags));
-  const { items, nextPageToken } = asList(parsed, "jobs");
+  const items = asList(parsed, "jobs");
   const flattened = items.map((job) => ({
     ...job,
     name: (job as RawJob).settings?.name,
@@ -119,9 +115,11 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
     "databricks-axi jobs runs <job_id>",
   ];
   const out: AxiStructuredOutput = { jobs: rows, count: rows.length };
-  if (nextPageToken) {
+  // CLI >= 0.298 caps results client-side at --limit; a full page means
+  // there may be more.
+  if (rows.length >= limit) {
     out.has_more = true;
-    help.unshift(`databricks-axi jobs list --page-token ${nextPageToken}`);
+    help.unshift(`databricks-axi jobs list --limit ${limit * 2}`);
   }
   out.help = help;
   return out;
@@ -249,21 +247,15 @@ function durationSeconds(item: {
 
 async function runsList(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);
-  const argv = [
-    "jobs",
-    "list-runs",
-    "--limit",
-    String(flags.get("limit") ?? "20"),
-  ];
+  const limit = Number(flags.get("limit") ?? 20);
+  const argv = ["jobs", "list-runs", "--limit", String(limit)];
+  let jobId: string | undefined;
   if (positional.length > 0) {
-    argv.push("--job-id", requireId(positional, "jobs runs [job_id]"));
-  }
-  const pageToken = flags.get("page-token");
-  if (typeof pageToken === "string") {
-    argv.push("--page-token", pageToken);
+    jobId = requireId(positional, "jobs runs [job_id]");
+    argv.push("--job-id", jobId);
   }
   const parsed = await runJobs(argv, spawnOpts(flags));
-  const { items, nextPageToken } = asList(parsed, "runs");
+  const items = asList(parsed, "runs");
   const runs = items as RawRun[];
   const rows =
     typeof flags.get("fields") === "string"
@@ -287,9 +279,11 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
     help.unshift(`databricks-axi jobs logs ${firstFailed.run_id}`);
   }
   const out: AxiStructuredOutput = { runs: rows, count: rows.length };
-  if (nextPageToken) {
+  if (rows.length >= limit) {
     out.has_more = true;
-    help.unshift(`databricks-axi jobs runs --page-token ${nextPageToken}`);
+    help.unshift(
+      `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${limit * 2}`,
+    );
   }
   out.help = help;
   return out;
@@ -497,23 +491,15 @@ async function runJobs(
 }
 
 /**
- * The Go CLI prints either a bare item array or the full response object
- * ({items, next_page_token}) depending on version — tolerate both.
+ * The Go CLI prints either a bare item array (>= 0.298) or the response
+ * object ({items, ...}) depending on version — tolerate both.
  */
-function asList(
-  parsed: unknown,
-  key: string,
-): { items: Raw[]; nextPageToken?: string } {
+function asList(parsed: unknown, key: string): Raw[] {
   if (Array.isArray(parsed)) {
-    return { items: parsed as Raw[] };
+    return parsed as Raw[];
   }
   const obj = (parsed ?? {}) as Raw;
-  const items = (obj[key] as Raw[] | undefined) ?? [];
-  const token = obj["next_page_token"];
-  return {
-    items,
-    ...(typeof token === "string" && token ? { nextPageToken: token } : {}),
-  };
+  return (obj[key] as Raw[] | undefined) ?? [];
 }
 
 /** Apply --fields (raw top-level keys) or the default field list. */

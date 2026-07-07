@@ -56,7 +56,8 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
   upstream.
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =
   `jobs get-run` → per-task `get-run-output` fan-out.
-- Pagination is manual (`--page-token`); surface `has_more` + a next-page
+- CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
+  cap. A full page → `has_more: true` + a rerun-with-`--limit <2N>`
   suggestion, never auto-paginate unboundedly.
 - Legacy CLI 0.18.x is incompatible; the spawn layer version-guards >= 0.205.
 - The Go CLI emits plain-text stderr errors; map them to the structured
