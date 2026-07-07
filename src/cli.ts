@@ -17,6 +17,13 @@ examples:
   databricks-axi
 `;
 
+const HOME_HELP = `usage: databricks-axi [home]
+Workspace overview. Pre-release scaffold: reports which command domains are available.
+examples:
+  databricks-axi
+  databricks-axi home
+`;
+
 type CliStdout = { write: (chunk: string) => unknown };
 
 type MainOptions = {
@@ -32,7 +39,8 @@ export async function main(options: MainOptions = {}): Promise<void> {
     topLevelHelp: TOP_HELP,
     ...(options.stdout ? { stdout: options.stdout } : {}),
     home: homeCommand,
-    commands: {},
+    commands: { home: homeCommand },
+    getCommandHelp: (command) => (command === "home" ? HOME_HELP : null),
   });
 }
 

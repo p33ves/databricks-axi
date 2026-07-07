@@ -32,13 +32,32 @@ describe("main", () => {
   it("shows the home view with no args", async () => {
     const c = capture();
     await main({ argv: [], stdout: c.stdout });
-    expect(c.read()).toContain("help:");
+    expect(c.read()).toMatch(/help\[\d+\]:/);
     expect(process.exitCode ?? 0).toBe(0);
   });
 
-  it("reports unknown commands as usage errors", async () => {
+  it("reports unknown commands as structured usage errors on stdout", async () => {
     const c = capture();
     await main({ argv: ["frobnicate"], stdout: c.stdout });
     expect(process.exitCode).toBe(2);
+    expect(c.read()).toContain("error:");
+    expect(c.read()).toContain("frobnicate");
+  });
+
+  it("reports unknown flags as usage errors", async () => {
+    const c = capture();
+    await main({ argv: ["--frobnicate"], stdout: c.stdout });
+    expect(process.exitCode).toBe(2);
+  });
+
+  it("resolves home by name with per-command help", async () => {
+    const c = capture();
+    await main({ argv: ["home"], stdout: c.stdout });
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(c.read()).toContain("pre-release scaffold");
+
+    const h = capture();
+    await main({ argv: ["home", "--help"], stdout: h.stdout });
+    expect(h.read()).toContain("usage: databricks-axi [home]");
   });
 });
