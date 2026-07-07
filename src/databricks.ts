@@ -10,6 +10,8 @@ const INSTALL_HELP =
 export type RunDatabricksOptions = {
   profile?: string;
   timeoutMs?: number;
+  /** TIMEOUT suggestions — mutations pass a state check, not "retry". */
+  timeoutHelp?: string[];
 };
 
 type SpawnResult = {
@@ -46,7 +48,7 @@ export async function runDatabricks(
     throw new AxiError(
       `databricks ${args[0] ?? ""} timed out after ${timeoutMs}ms`,
       "TIMEOUT",
-      ["Retry, or check workspace availability"],
+      opts.timeoutHelp ?? ["Retry, or check workspace availability"],
     );
   }
   if (result.code !== 0) {

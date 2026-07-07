@@ -71,6 +71,23 @@ describe("runDatabricks", () => {
     ).rejects.toMatchObject({ code: "TIMEOUT" });
   });
 
+  it("uses caller-supplied timeoutHelp for mutation-safe advice", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "slow-databricks-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(bin, "#!/usr/bin/env node\nsetTimeout(() => {}, 60000);\n");
+    chmodSync(bin, 0o755);
+    process.env.PATH = `${dir}:${prevPath ?? ""}`;
+    await expect(
+      runDatabricks(["jobs", "run-now", "101"], {
+        timeoutMs: 300,
+        timeoutHelp: ["databricks-axi jobs runs 101"],
+      }),
+    ).rejects.toMatchObject({
+      code: "TIMEOUT",
+      suggestions: ["databricks-axi jobs runs 101"],
+    });
+  });
+
   it("diagnoses CLI_TOO_OLD on unknown-command failures", async () => {
     const fake = useFake();
     fake.respondError(

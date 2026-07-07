@@ -172,6 +172,10 @@ async function jobsRun(args: string[]): Promise<AxiRenderable> {
   const opts = {
     ...spawnOpts(flags),
     ...(wait ? { timeoutMs: WAIT_TIMEOUT_MS } : {}),
+    timeoutHelp: [
+      "The run may have started despite the timeout — check before retrying:",
+      `databricks-axi jobs runs ${jobId}`,
+    ],
   };
   const runObj = (await runJobs(argv, opts)) as {
     run_id?: number;
@@ -189,7 +193,13 @@ async function jobsCancel(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, { profile: "value" });
   const runId = requireId(positional, "jobs cancel <run_id>");
   try {
-    await runJobs(["jobs", "cancel-run", runId, "--no-wait"], spawnOpts(flags));
+    await runJobs(["jobs", "cancel-run", runId, "--no-wait"], {
+      ...spawnOpts(flags),
+      timeoutHelp: [
+        "The cancel may have applied despite the timeout — check state:",
+        `databricks-axi jobs runs view ${runId}`,
+      ],
+    });
   } catch (error) {
     if (isAlreadyTerminated(error)) {
       return {
