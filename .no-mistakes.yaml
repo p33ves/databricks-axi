@@ -1,0 +1,8 @@
+# no-mistakes repo config (trusted only from the default branch).
+# Pins the gate to the exact commands AGENTS.md calls the full gate, instead
+# of agent auto-detection. lint bundles build + skill drift check so the gate
+# fails locally on anything CI would reject.
+commands:
+  test: "pnpm test"
+  lint: "pnpm run lint && pnpm run build && pnpm run build:skill -- --check"
+  format: "pnpm run format"

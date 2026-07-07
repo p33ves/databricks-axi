@@ -19,6 +19,11 @@ they are requirements, not suggestions.
 | `pnpm run build:skill`                    | regenerate `skills/databricks-axi/SKILL.md` |
 | `pnpm run dev -- <args>`                  | run the CLI from source                     |
 
+The full gate (pinned in `.no-mistakes.yaml`, so the no-mistakes gate runs
+these instead of auto-detecting): `pnpm test`,
+`pnpm run lint && pnpm run build && pnpm run build:skill -- --check`
+(`--check` fails on a stale SKILL.md), and `pnpm run format`.
+
 ## Architecture
 
 `bin/databricks-axi.ts` → `src/cli.ts` (`runAxiCli` from axi-sdk-js) →
