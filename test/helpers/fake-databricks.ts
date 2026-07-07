@@ -11,11 +11,15 @@ import { join } from "node:path";
 export type FakeDatabricks = {
   /** Prepend to PATH so `databricks` resolves to the stub. */
   binDir: string;
-  /** Replay `json` on stdout for any invocation whose argv starts with `prefix`. */
+  /** Replay `json` on stdout (exit 0) when argv starts with the tokens of `prefix`. */
   respond: (prefix: string, json: unknown) => void;
+  /** Replay `stderr` text with a nonzero exit (default 1) — canned upstream errors. */
+  respondError: (prefix: string, stderr: string, exitCode?: number) => void;
   /** Every recorded invocation, as raw argv arrays, in call order. */
   calls: () => string[][];
 };
+
+type CannedReply = { stdout?: unknown; stderr?: string; exitCode?: number };
 
 /**
  * Drops an executable `databricks` stub into a temp dir. The stub appends each
@@ -36,30 +40,37 @@ const { appendFileSync, readFileSync } = require("node:fs");
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify(args) + "\\n");
 const responses = JSON.parse(readFileSync(${JSON.stringify(responsesFile)}, "utf8"));
-const key = args.join(" ");
 for (const [prefix, reply] of Object.entries(responses)) {
-  if (key.startsWith(prefix)) {
-    process.stdout.write(JSON.stringify(reply));
-    process.exit(0);
+  // Token-wise match: "jobs get" matches ["jobs","get",...] but never
+  // ["jobs","get-run",...], unlike a joined-string startsWith.
+  const parts = prefix.split(" ");
+  if (parts.every((part, i) => args[i] === part)) {
+    if (reply.stderr) process.stderr.write(reply.stderr);
+    if (reply.stdout !== undefined) process.stdout.write(JSON.stringify(reply.stdout));
+    process.exit(reply.exitCode ?? 0);
   }
 }
-process.stderr.write("fake-databricks: no canned response for: " + key + "\\n");
+process.stderr.write("fake-databricks: no canned response for: " + args.join(" ") + "\\n");
 process.exit(1);
 `;
   const bin = join(dir, "databricks");
   writeFileSync(bin, script);
   chmodSync(bin, 0o755);
 
+  const seed = (prefix: string, reply: CannedReply) => {
+    const current = JSON.parse(readFileSync(responsesFile, "utf8")) as Record<
+      string,
+      CannedReply
+    >;
+    current[prefix] = reply;
+    writeFileSync(responsesFile, JSON.stringify(current));
+  };
+
   return {
     binDir: dir,
-    respond: (prefix, json) => {
-      const current = JSON.parse(readFileSync(responsesFile, "utf8")) as Record<
-        string,
-        unknown
-      >;
-      current[prefix] = json;
-      writeFileSync(responsesFile, JSON.stringify(current));
-    },
+    respond: (prefix, json) => seed(prefix, { stdout: json }),
+    respondError: (prefix, stderr, exitCode = 1) =>
+      seed(prefix, { stderr, exitCode }),
     calls: () =>
       existsSync(callsFile)
         ? readFileSync(callsFile, "utf8")
