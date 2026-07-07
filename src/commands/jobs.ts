@@ -6,21 +6,23 @@ import {
 import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
 
 export const JOBS_HELP = `usage: databricks-axi jobs <subcommand> [args] [flags]
-subcommands[6]:
+subcommands[7]:
   list [--limit N] [--page-token T] [--fields a,b]
   view <job_id>
   run <job_id> [--wait]
   runs [job_id] [--limit N] [--page-token T]
   runs view <run_id>
+  logs <run_id> [--full]
   cancel <run_id>
 flags:
   --profile <name>  databricks auth profile passthrough
 examples:
   databricks-axi jobs list
   databricks-axi jobs run 101
-  databricks-axi jobs runs view 901
+  databricks-axi jobs logs 901
 notes:
   run is async by default; --wait blocks up to ~20 min upstream (agents: avoid)
+  logs shows failed tasks first, last 50 lines each; --full for everything
 `;
 
 type Raw = Record<string, unknown>;
@@ -63,6 +65,8 @@ export async function jobsCommand(args: string[]): Promise<AxiRenderable> {
       return jobsRun(rest);
     case "runs":
       return rest[0] === "view" ? runsView(rest.slice(1)) : runsList(rest);
+    case "logs":
+      return jobsLogs(rest);
     case "cancel":
       return jobsCancel(rest);
     default:
@@ -313,6 +317,101 @@ async function runsView(args: string[]): Promise<AxiRenderable> {
       state === "FAILED"
         ? [`databricks-axi jobs logs ${runId}`]
         : [`databricks-axi jobs runs ${runObj.job_id ?? ""}`.trim()],
+  };
+}
+
+const LOG_TAIL_LINES = 50;
+
+type RawRunOutput = {
+  error?: string;
+  error_trace?: string;
+  logs?: string;
+  notebook_output?: { result?: string };
+};
+
+async function jobsLogs(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, {
+    profile: "value",
+    full: "boolean",
+  });
+  const runId = requireId(positional, "jobs logs <run_id> [--full]");
+  const full = flags.get("full") === true;
+  const opts = spawnOpts(flags);
+  const runObj = (await runJobs(["jobs", "get-run", runId], opts)) as RawRun;
+  const tasks = runObj.tasks ?? [];
+  if (tasks.length === 0) {
+    return {
+      run_id: runObj.run_id,
+      state: compactState(runObj),
+      status: "run has no tasks (no output to fetch)",
+      help: [`databricks-axi jobs runs view ${runId}`],
+    };
+  }
+  // ponytail: sequential fan-out — runs have a handful of tasks; parallelize
+  // only if logs latency ever actually hurts.
+  const entries: AxiStructuredOutput[] = [];
+  for (const task of tasks) {
+    const output = (await runJobs(
+      ["jobs", "get-run-output", String(task.run_id)],
+      opts,
+    )) as RawRunOutput;
+    entries.push(taskLogEntry(task, output, full));
+  }
+  entries.sort(
+    (a, b) => Number(a.state === "SUCCESS") - Number(b.state === "SUCCESS"),
+  );
+  return {
+    run_id: runObj.run_id,
+    state: compactState(runObj),
+    tasks: entries,
+    help: [`databricks-axi jobs runs view ${runId}`],
+  };
+}
+
+function taskLogEntry(
+  task: RawTask,
+  output: RawRunOutput,
+  full: boolean,
+): AxiStructuredOutput {
+  const entry: AxiStructuredOutput = {
+    task: task.task_key,
+    state: compactState(task),
+  };
+  if (output.error) {
+    entry.error = output.error;
+  }
+  if (output.error_trace) {
+    entry.error_trace = full
+      ? output.error_trace
+      : tail(output.error_trace, LOG_TAIL_LINES).text;
+  }
+  const text = output.notebook_output?.result ?? output.logs ?? "";
+  if (text) {
+    if (full) {
+      entry.output = text;
+    } else {
+      const t = tail(text, LOG_TAIL_LINES);
+      entry.output = t.text;
+      if (t.truncated) {
+        entry.truncated = `showing last ${LOG_TAIL_LINES} of ${t.total} lines — rerun with --full`;
+      }
+    }
+  }
+  return entry;
+}
+
+function tail(
+  text: string,
+  maxLines: number,
+): { text: string; truncated: boolean; total: number } {
+  const lines = text.split("\n");
+  if (lines.length <= maxLines) {
+    return { text, truncated: false, total: lines.length };
+  }
+  return {
+    text: lines.slice(-maxLines).join("\n"),
+    truncated: true,
+    total: lines.length,
   };
 }
 

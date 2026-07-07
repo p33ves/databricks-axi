@@ -347,3 +347,113 @@ describe("jobs runs view", () => {
     expect(out).toContain("jobs logs 902");
   });
 });
+
+describe("jobs logs", () => {
+  const RUN_WITH_TASKS = {
+    run_id: 902,
+    state: { life_cycle_state: "TERMINATED", result_state: "FAILED" },
+    tasks: [
+      {
+        task_key: "extract",
+        run_id: 9021,
+        state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+      },
+      {
+        task_key: "transform",
+        run_id: 9022,
+        state: { life_cycle_state: "TERMINATED", result_state: "FAILED" },
+      },
+    ],
+  };
+
+  it("fans out to task run ids and renders failed tasks first", async () => {
+    fake.respond("jobs get-run", RUN_WITH_TASKS);
+    fake.respond("jobs get-run-output 9021", {
+      notebook_output: { result: "extract ok" },
+    });
+    fake.respond("jobs get-run-output 9022", {
+      error: "Boom: table missing",
+      error_trace: "Traceback: ...",
+    });
+    const { out, exitCode } = await run(["jobs", "logs", "902"]);
+    expect(exitCode).toBe(0);
+    expect(fake.calls()).toEqual([
+      ["jobs", "get-run", "902", "-o", "json"],
+      ["jobs", "get-run-output", "9021", "-o", "json"],
+      ["jobs", "get-run-output", "9022", "-o", "json"],
+    ]);
+    expect(out).toContain("Boom: table missing");
+    expect(out.indexOf("transform")).toBeLessThan(out.indexOf("extract"));
+  });
+
+  it("fans out even for a single-task run (parent id would fail upstream)", async () => {
+    fake.respond("jobs get-run", {
+      run_id: 903,
+      state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+      tasks: [
+        {
+          task_key: "only",
+          run_id: 9031,
+          state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+        },
+      ],
+    });
+    fake.respond("jobs get-run-output 9031", { logs: "fine" });
+    await run(["jobs", "logs", "903"]);
+    expect(fake.calls()[1]).toEqual([
+      "jobs",
+      "get-run-output",
+      "9031",
+      "-o",
+      "json",
+    ]);
+  });
+
+  it("truncates long output to the last 50 lines with a marker", async () => {
+    const lines = Array.from(
+      { length: 60 },
+      (_, i) => `line-${String(i + 1).padStart(3, "0")}`,
+    );
+    fake.respond("jobs get-run", {
+      run_id: 903,
+      state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+      tasks: [
+        { task_key: "only", run_id: 9031, state: { result_state: "SUCCESS" } },
+      ],
+    });
+    fake.respond("jobs get-run-output 9031", { logs: lines.join("\n") });
+    const { out } = await run(["jobs", "logs", "903"]);
+    expect(out).toContain("showing last 50 of 60 lines");
+    expect(out).toContain("line-060");
+    expect(out).not.toContain("line-005");
+  });
+
+  it("--full disables truncation", async () => {
+    const lines = Array.from(
+      { length: 60 },
+      (_, i) => `line-${String(i + 1).padStart(3, "0")}`,
+    );
+    fake.respond("jobs get-run", {
+      run_id: 903,
+      state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+      tasks: [
+        { task_key: "only", run_id: 9031, state: { result_state: "SUCCESS" } },
+      ],
+    });
+    fake.respond("jobs get-run-output 9031", { logs: lines.join("\n") });
+    const { out } = await run(["jobs", "logs", "903", "--full"]);
+    expect(out).toContain("line-001");
+    expect(out).not.toContain("showing last");
+  });
+
+  it("reports a run with no tasks definitively", async () => {
+    fake.respond("jobs get-run", {
+      run_id: 904,
+      state: { life_cycle_state: "PENDING" },
+      tasks: [],
+    });
+    const { out, exitCode } = await run(["jobs", "logs", "904"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("run has no tasks");
+  });
+});
