@@ -56,7 +56,7 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
   Note `clusters start` on a non-TERMINATED cluster is already a no-op
   upstream.
 - Don't assume that pattern carries to every domain: `sql warehouses
-  start/stop` on an already-in-state warehouse exits 0 silently upstream
+start/stop` on an already-in-state warehouse exits 0 silently upstream
   (pinned live 2026-07-07) — no `INVALID_STATE` no-op mapping needed there.
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =
   `jobs get-run` → per-task `get-run-output` fan-out.
