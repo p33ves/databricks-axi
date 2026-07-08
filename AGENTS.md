@@ -101,7 +101,7 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 | Design   | architecture reviewer   | validates specs/design changes; researches best practice; never touches code |
 | Build    | domain implementer      | implements one command domain, TDD against the fake stub                     |
 | Review   | AXI compliance reviewer | reviews code against the 10 AXI principles + spec drift                      |
-| Validate | benchmarker             | measures vs raw `databricks` CLI and MCP; LLM-judge graded task success      |
+| Validate | benchmarker             | measures vs raw `databricks` CLI and MCP; hybrid-graded task success         |
 
 ## Shipping (required)
 

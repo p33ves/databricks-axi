@@ -6,3 +6,4 @@ docs/superpowers/
 .cache/
 .databricks*
 .npm/
+.local/
