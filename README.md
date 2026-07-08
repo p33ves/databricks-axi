@@ -19,8 +19,9 @@ Agent ergonomics is measurable. The benchmark (methodology follows the
 [axi benchmark](https://axi.md)) runs 7 real-world Databricks tasks —
 failed-run triage, job triggering, SQL row counts, schema lookups, error
 recovery, warehouse checks, capability discovery — through 3 interface
-setups, 5 repeats each (the warehouse-cycling task runs once per condition
-since it mutates shared cluster state), with `claude-sonnet-5` as the agent.
+setups, 5 repeats each (the warehouse-cycling task runs once, not five
+times, in the two conditions that run it, since it mutates shared cluster
+state), with `claude-sonnet-5` as the agent.
 Task success is scored against seeded fixtures — deterministically where the
 answer is machine-checkable, by an LLM judge otherwise (87 runs total,
 v0.3.0, 2026-07-08; durations are API-reported medians).
