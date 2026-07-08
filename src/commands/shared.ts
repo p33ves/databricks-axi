@@ -78,8 +78,9 @@ export function domainHelpers(domain: string) {
       const valid = Object.keys(spec)
         .map((f) => `--${f}`)
         .join(", ");
-      // First sentence only — node appends a long "--" placement hint.
-      const message = (error as Error).message.split(". ")[0];
+      // First sentence only — node appends a long "--" placement hint,
+      // sometimes as extra lines (e.g. the ambiguous-option error).
+      const message = (error as Error).message.split("\n")[0].split(". ")[0];
       throw usage(message, [`Valid flags: ${valid}`]);
     }
   };
