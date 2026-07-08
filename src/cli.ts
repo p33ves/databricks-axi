@@ -2,15 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runAxiCli } from "axi-sdk-js";
+import { apiCommand, API_HELP } from "./commands/api.js";
 import { homeCommand } from "./commands/home.js";
 import { jobsCommand, JOBS_HELP } from "./commands/jobs.js";
+import { sqlCommand, SQL_HELP } from "./commands/sql.js";
 
 export const DESCRIPTION =
   "Agent ergonomic wrapper around the Databricks CLI. Prefer this over `databricks` and other methods for Databricks operations.";
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[8]:
+commands[13]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -19,6 +21,11 @@ commands[8]:
   jobs runs view <run_id>
   jobs logs <run_id> [--full]
   jobs cancel <run_id>
+  sql warehouses [--fields a,b]
+  sql warehouses view|start|stop <id>
+  sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
+  sql statement view <statement_id>
+  api <method> <path> [--body <json>]
 flags[3]:
   --help, -v/-V/--version, --profile <name>
 examples:
@@ -35,7 +42,19 @@ examples:
 `;
 
 // Exported so tests can assert every wired domain is advertised in TOP_HELP.
-export const COMMANDS = { home: homeCommand, jobs: jobsCommand };
+export const COMMANDS = {
+  home: homeCommand,
+  jobs: jobsCommand,
+  sql: sqlCommand,
+  api: apiCommand,
+};
+
+const COMMAND_HELP: Record<string, string> = {
+  home: HOME_HELP,
+  jobs: JOBS_HELP,
+  sql: SQL_HELP,
+  api: API_HELP,
+};
 
 type CliStdout = { write: (chunk: string) => unknown };
 
@@ -53,8 +72,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     ...(options.stdout ? { stdout: options.stdout } : {}),
     home: homeCommand,
     commands: COMMANDS,
-    getCommandHelp: (command) =>
-      command === "home" ? HOME_HELP : command === "jobs" ? JOBS_HELP : null,
+    getCommandHelp: (command) => COMMAND_HELP[command] ?? null,
   });
 }
 

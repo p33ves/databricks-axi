@@ -29,13 +29,17 @@ these instead of auto-detecting): `pnpm test`,
 
 `bin/databricks-axi.ts` → `src/cli.ts` (`runAxiCli` from axi-sdk-js) →
 `src/commands/<domain>.ts`. Support modules: `src/databricks.ts`
-(spawn wrapper), `src/errors.ts` (taxonomy); planned: `src/suggestions.ts`,
-`src/context.ts`, `src/fields.ts`. Internal logic stays on JSON; TOON
-conversion happens only at the output boundary.
+(spawn wrapper), `src/errors.ts` (taxonomy), `src/commands/shared.ts`
+(`domainHelpers(domain)` — the shared `parseArgs`/`parseIntFlag`/`requireId`/
+`renderRows`, built on `node:util`'s `parseArgs` in strict mode); planned:
+`src/suggestions.ts`, `src/context.ts`, `src/fields.ts`. Internal logic stays
+on JSON; TOON conversion happens only at the output boundary.
 
-Tests mirror `src/` under `test/`. Domain tests use
-`test/helpers/fake-databricks.ts` — prepend its `binDir` to PATH, seed
-canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
+Tests mirror `src/` under `test/`. Domain tests call `setupCli()` from
+`test/helpers/fake-databricks.ts` for the standard rig (fresh fake
+`databricks` on PATH each test, `t.run(argv)` to invoke the CLI and capture
+stdout/exit code); seed canned JSON with `respond(prefix, json)`, assert
+exact argv with `calls()`.
 
 ## Sharp edges (learned the hard way — do not rediscover)
 
@@ -55,6 +59,9 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
 - `INVALID_STATE` on start/stop means already-running/stopped → exit-0 no-op.
   Note `clusters start` on a non-TERMINATED cluster is already a no-op
   upstream.
+- Don't assume that pattern carries to every domain: `sql warehouses
+start/stop` on an already-in-state warehouse exits 0 silently upstream
+  (pinned live 2026-07-07) — no `INVALID_STATE` no-op mapping needed there.
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =
   `jobs get-run` → per-task `get-run-output` fan-out.
 - CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
@@ -76,6 +83,11 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
 - TypeScript 6 defaults `types` to `[]` (was: all `node_modules/@types`);
   `tsconfig.json` pins `"types": ["node"]`, so a new `@types/*` package must
   be added there or it is silently ignored.
+- Flag parsing (`domainHelpers(domain).parseArgs`) is `node:util`'s
+  `parseArgs` in strict mode, not a hand-rolled loop — usage-error wording
+  follows node's own messages (`Unknown option '--x'`, `argument missing`),
+  and `--flag=value` works alongside `--flag value`. Don't hand-write flag
+  parsing in a new domain; call `domainHelpers`.
 
 ## Generated files — never hand-edit
 

@@ -44,6 +44,30 @@ describe("fake databricks binary", () => {
     expect(JSON.parse(stdout)).toEqual({ job_id: 7 });
   });
 
+  it("replays sequential responses in order via respondSeq", async () => {
+    const fake = installFakeDatabricks();
+    fake.respondSeq("api get", [
+      { status: { state: "RUNNING" } },
+      { status: { state: "SUCCEEDED" } },
+    ]);
+    const env = {
+      ...process.env,
+      PATH: `${fake.binDir}:${process.env["PATH"]}`,
+    };
+
+    const first = await run("databricks", ["api", "get", "/x"], { env });
+    expect(JSON.parse(first.stdout)).toEqual({ status: { state: "RUNNING" } });
+    const second = await run("databricks", ["api", "get", "/x"], { env });
+    expect(JSON.parse(second.stdout)).toEqual({
+      status: { state: "SUCCEEDED" },
+    });
+    // The last response sticks for any further calls.
+    const third = await run("databricks", ["api", "get", "/x"], { env });
+    expect(JSON.parse(third.stdout)).toEqual({
+      status: { state: "SUCCEEDED" },
+    });
+  });
+
   it("replays canned stderr and exit code for upstream errors", async () => {
     const fake = installFakeDatabricks();
     fake.respondError(

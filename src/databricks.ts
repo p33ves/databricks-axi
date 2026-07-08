@@ -72,6 +72,23 @@ export async function runDatabricks(
   }
 }
 
+/**
+ * REST passthrough over the CLI's `api` subcommand. Rule for all callers:
+ * `body` lands on child argv (visible in `ps`) — secret-bearing bodies are
+ * forbidden (the secrets domain uses upstream's stdin mechanism instead).
+ */
+export async function runDatabricksApi(
+  method: string,
+  path: string,
+  body?: string,
+  opts: RunDatabricksOptions = {},
+): Promise<unknown> {
+  return runDatabricks(
+    ["api", method, path, ...(body !== undefined ? ["--json", body] : [])],
+    opts,
+  );
+}
+
 function spawnCollect(argv: string[], timeoutMs: number): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const child = spawn("databricks", argv, {
