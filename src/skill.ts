@@ -15,7 +15,7 @@ export const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
 // Extended frontmatter read by Nous Research's Hermes Agent harness.
 // Harnesses that don't know these fields (e.g. Claude Code) ignore them.
 // Scoped like SKILL_DESCRIPTION: topical only, no unimplemented domains —
-// re-add sql/unity-catalog as those domains land.
+// extend tags as more domains land.
 export const HERMES_TAGS = [
   "databricks",
   "spark",

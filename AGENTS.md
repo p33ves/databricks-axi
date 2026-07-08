@@ -55,6 +55,9 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
 - `INVALID_STATE` on start/stop means already-running/stopped → exit-0 no-op.
   Note `clusters start` on a non-TERMINATED cluster is already a no-op
   upstream.
+- Don't assume that pattern carries to every domain: `sql warehouses
+  start/stop` on an already-in-state warehouse exits 0 silently upstream
+  (pinned live 2026-07-07) — no `INVALID_STATE` no-op mapping needed there.
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =
   `jobs get-run` → per-task `get-run-output` fan-out.
 - CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
