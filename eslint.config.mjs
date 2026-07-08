@@ -4,7 +4,17 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "node_modules/**"],
+    // Mirrors .gitignore: .cache holds corepack/node bundles (project-local
+    // HOME for databricks auth) that OOM eslint if walked.
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      ".cache/**",
+      ".databricks/**",
+      ".claude/**",
+      ".superpowers/**",
+      "docs/superpowers/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

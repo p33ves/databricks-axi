@@ -4,18 +4,18 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 // Scoped to the implemented surface only (AXI: no advertised capabilities
 // that don't exist yet) - extend as command domains land.
 export const SKILL_DESCRIPTION =
-  "Agent-ergonomic wrapper around the Databricks CLI. Pre-release scaffold: " +
-  "command domains (jobs, clusters, SQL, catalog, workspace, fs, pipelines, " +
-  "serving, api, setup) are not implemented yet - run `databricks-axi --help` " +
-  "to see the current surface before relying on it.";
+  "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs " +
+  "(list, view, run, runs, logs, cancel). Other domains (clusters, SQL, " +
+  "catalog, workspace, fs, pipelines, serving, api, setup) land " +
+  "incrementally - run `databricks-axi --help` for the current surface.";
 
 export const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
 
 // Extended frontmatter read by Nous Research's Hermes Agent harness.
 // Harnesses that don't know these fields (e.g. Claude Code) ignore them.
 // Scoped like SKILL_DESCRIPTION: topical only, no unimplemented domains —
-// re-add sql/unity-catalog/jobs as those domains land.
-export const HERMES_TAGS = ["databricks", "spark"];
+// re-add sql/unity-catalog as those domains land.
+export const HERMES_TAGS = ["databricks", "spark", "jobs"];
 export const HERMES_CATEGORY = "data";
 
 function yamlDoubleQuote(value: string): string {
@@ -58,7 +58,7 @@ ${DESCRIPTION}
 You do not need databricks-axi installed globally - invoke it with \`npx -y databricks-axi <command>\`.
 If databricks-axi output shows a follow-up command starting with \`databricks-axi\`, run it as \`npx -y databricks-axi ...\` instead.
 
-databricks-axi requires the official [\`databricks\` CLI](https://docs.databricks.com/dev-tools/cli/) (version 0.205 or newer) installed and authenticated. If a command fails with an authentication error, ask the user to run \`databricks auth login --host <workspace-url>\` themselves.
+databricks-axi requires the official [\`databricks\` CLI](https://docs.databricks.com/dev-tools/cli/) (version 0.298 or newer) installed and authenticated. If a command fails with an authentication error, ask the user to run \`databricks auth login --host <workspace-url>\` themselves.
 
 ## Status
 

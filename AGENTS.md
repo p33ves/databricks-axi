@@ -5,7 +5,8 @@ canonical; CLAUDE.md defers here.
 
 ## What this is
 
-AXI-compliant wrapper around the official `databricks` CLI (Go, >= 0.205).
+AXI-compliant wrapper around the official `databricks` CLI (Go, >= 0.298;
+v1.x is fine — the guard only rejects 0.x below 0.298).
 The [AXI standard](https://github.com/kunchenguid/axi) defines 10 principles —
 they are requirements, not suggestions.
 
@@ -27,8 +28,8 @@ these instead of auto-detecting): `pnpm test`,
 ## Architecture
 
 `bin/databricks-axi.ts` → `src/cli.ts` (`runAxiCli` from axi-sdk-js) →
-`src/commands/<domain>.ts`. Planned support modules: `src/databricks.ts`
-(spawn wrapper), `src/errors.ts` (taxonomy), `src/suggestions.ts`,
+`src/commands/<domain>.ts`. Support modules: `src/databricks.ts`
+(spawn wrapper), `src/errors.ts` (taxonomy); planned: `src/suggestions.ts`,
 `src/context.ts`, `src/fields.ts`. Internal logic stays on JSON; TOON
 conversion happens only at the output boundary.
 
@@ -56,9 +57,13 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
   upstream.
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =
   `jobs get-run` → per-task `get-run-output` fan-out.
-- Pagination is manual (`--page-token`); surface `has_more` + a next-page
+- CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
+  cap. A full page → `has_more: true` + a rerun-with-`--limit <2N>`
   suggestion, never auto-paginate unboundedly.
-- Legacy CLI 0.18.x is incompatible; the spawn layer version-guards >= 0.205.
+- Legacy CLI 0.18.x is incompatible; the spawn layer version-guards >= 0.298.
+- int64 ids (`job_id`/`run_id`) can exceed 2^53, where `JSON.parse` silently
+  rounds; `runDatabricks` quotes 16+-digit `*_id` values so they stay exact
+  strings. Treat ids as `number | string` downstream.
 - The Go CLI emits plain-text stderr errors; map them to the structured
   taxonomy in `src/errors.ts`. Never leak raw stack traces or token-shaped
   strings.
