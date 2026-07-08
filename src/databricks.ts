@@ -84,8 +84,10 @@ function spawnCollect(argv: string[], timeoutMs: number): Promise<SpawnResult> {
       timedOut = true;
       child.kill("SIGKILL");
     }, timeoutMs);
-    child.stdout.on("data", (chunk: Buffer) => (stdout += chunk));
-    child.stderr.on("data", (chunk: Buffer) => (stderr += chunk));
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => (stdout += chunk));
+    child.stderr.on("data", (chunk: string) => (stderr += chunk));
     child.on("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       resolve({

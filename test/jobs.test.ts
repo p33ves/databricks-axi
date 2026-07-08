@@ -408,6 +408,38 @@ describe("jobs runs", () => {
   });
 });
 
+describe("--profile in suggested commands", () => {
+  it("threads --profile into help follow-ups", async () => {
+    fake.respond("-p dev jobs get-run", {
+      run_id: 902,
+      job_id: 101,
+      state: { life_cycle_state: "TERMINATED", result_state: "FAILED" },
+    });
+    const { out } = await run([
+      "jobs",
+      "runs",
+      "view",
+      "902",
+      "--profile",
+      "dev",
+    ]);
+    expect(out).toContain("jobs logs 902 --profile dev");
+  });
+
+  it("threads --profile into NOT_FOUND suggestions", async () => {
+    fake.respondError("-p dev jobs get", "Error: Job 999 does not exist.");
+    const { out, exitCode } = await run([
+      "jobs",
+      "view",
+      "999",
+      "--profile",
+      "dev",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("jobs list --profile dev");
+  });
+});
+
 describe("jobs runs view", () => {
   it("shows run detail with per-task states", async () => {
     fake.respond("jobs get-run", {
@@ -523,6 +555,22 @@ describe("jobs logs", () => {
       "-o",
       "json",
     ]);
+  });
+
+  it("falls back to logs when the notebook result is empty", async () => {
+    fake.respond("jobs get-run", {
+      run_id: 903,
+      state: { life_cycle_state: "TERMINATED", result_state: "SUCCESS" },
+      tasks: [
+        { task_key: "only", run_id: 9031, state: { result_state: "SUCCESS" } },
+      ],
+    });
+    fake.respond("jobs get-run-output 9031", {
+      notebook_output: { result: "" },
+      logs: "driver logs here",
+    });
+    const { out } = await run(["jobs", "logs", "903"]);
+    expect(out).toContain("driver logs here");
   });
 
   it("truncates long output to the last 50 lines with a marker", async () => {

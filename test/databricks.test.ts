@@ -140,6 +140,24 @@ describe("runDatabricks", () => {
     });
   });
 
+  it("decodes multibyte UTF-8 split across pipe-chunk boundaries", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "utf8-databricks-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ logs: "\\u00e9".repeat(120000) }));
+`,
+    );
+    chmodSync(bin, 0o755);
+    process.env.PATH = `${dir}:${prevPath ?? ""}`;
+    const result = (await runDatabricks(["jobs", "get-run-output"])) as {
+      logs: string;
+    };
+    expect(result.logs).not.toContain("�");
+    expect(result.logs).toHaveLength(120000);
+  });
+
   it("wraps malformed JSON stdout in an AxiError", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bad-json-databricks-"));
     const bin = join(dir, "databricks");

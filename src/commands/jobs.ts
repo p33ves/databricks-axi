@@ -110,16 +110,17 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
       help: ["Create one in the workspace UI: Workflows > Create job"],
     };
   }
+  const p = profileSuffix(flags.get("profile"));
   const help = [
-    "databricks-axi jobs view <job_id>",
-    "databricks-axi jobs runs <job_id>",
+    `databricks-axi jobs view <job_id>${p}`,
+    `databricks-axi jobs runs <job_id>${p}`,
   ];
   const out: AxiStructuredOutput = { jobs: rows, count: rows.length };
   // CLI >= 0.298 caps results client-side at --limit; a full page means
   // there may be more.
   if (rows.length >= limit) {
     out.has_more = true;
-    help.unshift(`databricks-axi jobs list --limit ${limit * 2}`);
+    help.unshift(`databricks-axi jobs list --limit ${limit * 2}${p}`);
   }
   out.help = help;
   return out;
@@ -145,9 +146,10 @@ async function jobsView(args: string[]): Promise<AxiRenderable> {
     task_key: task.task_key,
     type: taskType(task),
   }));
+  const p = profileSuffix(flags.get("profile"));
   out.help = [
-    `databricks-axi jobs run ${jobId}`,
-    `databricks-axi jobs runs ${jobId}`,
+    `databricks-axi jobs run ${jobId}${p}`,
+    `databricks-axi jobs runs ${jobId}${p}`,
   ];
   return out;
 }
@@ -171,6 +173,7 @@ async function jobsRun(args: string[]): Promise<AxiRenderable> {
   });
   const jobId = requireId(positional, "jobs run <job_id> [--wait]");
   const wait = flags.get("wait") === true;
+  const p = profileSuffix(flags.get("profile"));
   const argv = ["jobs", "run-now", jobId];
   if (!wait) {
     argv.push("--no-wait");
@@ -180,7 +183,7 @@ async function jobsRun(args: string[]): Promise<AxiRenderable> {
     ...(wait ? { timeoutMs: WAIT_TIMEOUT_MS } : {}),
     timeoutHelp: [
       "The run may have started despite the timeout — check before retrying:",
-      `databricks-axi jobs runs ${jobId}`,
+      `databricks-axi jobs runs ${jobId}${p}`,
     ],
   };
   const runObj = (await runJobsObject(argv, opts)) as {
@@ -191,19 +194,20 @@ async function jobsRun(args: string[]): Promise<AxiRenderable> {
   if (runObj.state) {
     out.state = compactState(runObj);
   }
-  out.help = [`databricks-axi jobs runs view ${runObj.run_id}`];
+  out.help = [`databricks-axi jobs runs view ${runObj.run_id}${p}`];
   return out;
 }
 
 async function jobsCancel(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, { profile: "value" });
   const runId = requireId(positional, "jobs cancel <run_id>");
+  const p = profileSuffix(flags.get("profile"));
   try {
     await runJobs(["jobs", "cancel-run", runId, "--no-wait"], {
       ...spawnOpts(flags),
       timeoutHelp: [
         "The cancel may have applied despite the timeout — check state:",
-        `databricks-axi jobs runs view ${runId}`,
+        `databricks-axi jobs runs view ${runId}${p}`,
       ],
     });
   } catch (error) {
@@ -211,7 +215,7 @@ async function jobsCancel(args: string[]): Promise<AxiRenderable> {
       return {
         run_id: runId,
         status: "run already terminated (no-op)",
-        help: [`databricks-axi jobs runs view ${runId}`],
+        help: [`databricks-axi jobs runs view ${runId}${p}`],
       };
     }
     throw error;
@@ -219,7 +223,7 @@ async function jobsCancel(args: string[]): Promise<AxiRenderable> {
   return {
     run_id: runId,
     status: "cancel requested",
-    help: [`databricks-axi jobs runs view ${runId}`],
+    help: [`databricks-axi jobs runs view ${runId}${p}`],
   };
 }
 
@@ -282,23 +286,24 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
           start_time: iso(r.start_time),
           duration_s: durationSeconds(r),
         }));
+  const p = profileSuffix(flags.get("profile"));
   if (rows.length === 0) {
     return {
       runs: [],
       status: "no runs found",
-      help: ["databricks-axi jobs run <job_id>"],
+      help: [`databricks-axi jobs run <job_id>${p}`],
     };
   }
-  const help = ["databricks-axi jobs runs view <run_id>"];
+  const help = [`databricks-axi jobs runs view <run_id>${p}`];
   const firstFailed = runs.find(isFailed);
   if (firstFailed) {
-    help.unshift(`databricks-axi jobs logs ${firstFailed.run_id}`);
+    help.unshift(`databricks-axi jobs logs ${firstFailed.run_id}${p}`);
   }
   const out: AxiStructuredOutput = { runs: rows, count: rows.length };
   if (rows.length >= limit) {
     out.has_more = true;
     help.unshift(
-      `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${limit * 2}`,
+      `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${limit * 2}${p}`,
     );
   }
   out.help = help;
@@ -313,6 +318,7 @@ async function runsView(args: string[]): Promise<AxiRenderable> {
     spawnOpts(flags),
   )) as RawRun;
   const state = compactState(runObj);
+  const p = profileSuffix(flags.get("profile"));
   return {
     run_id: runObj.run_id,
     job_id: runObj.job_id,
@@ -325,8 +331,8 @@ async function runsView(args: string[]): Promise<AxiRenderable> {
       duration_s: durationSeconds(task),
     })),
     help: isFailed(runObj)
-      ? [`databricks-axi jobs logs ${runId}`]
-      : [`databricks-axi jobs runs ${runObj.job_id ?? ""}`.trim()],
+      ? [`databricks-axi jobs logs ${runId}${p}`]
+      : [`databricks-axi jobs runs ${runObj.job_id ?? ""}`.trim() + p],
   };
 }
 
@@ -347,6 +353,7 @@ async function jobsLogs(args: string[]): Promise<AxiRenderable> {
   const runId = requireId(positional, "jobs logs <run_id> [--full]");
   const full = flags.get("full") === true;
   const opts = spawnOpts(flags);
+  const p = profileSuffix(flags.get("profile"));
   const runObj = (await runJobsObject(
     ["jobs", "get-run", runId],
     opts,
@@ -357,7 +364,7 @@ async function jobsLogs(args: string[]): Promise<AxiRenderable> {
       run_id: runObj.run_id,
       state: compactState(runObj),
       status: "run has no tasks (no output to fetch)",
-      help: [`databricks-axi jobs runs view ${runId}`],
+      help: [`databricks-axi jobs runs view ${runId}${p}`],
     };
   }
   // ponytail: sequential fan-out — runs have a handful of tasks; parallelize
@@ -394,7 +401,7 @@ async function jobsLogs(args: string[]): Promise<AxiRenderable> {
     run_id: runObj.run_id,
     state: compactState(runObj),
     tasks: entries,
-    help: [`databricks-axi jobs runs view ${runId}`],
+    help: [`databricks-axi jobs runs view ${runId}${p}`],
   };
 }
 
@@ -420,7 +427,7 @@ function taskLogEntry(
       traceClipped = t.truncated;
     }
   }
-  const text = output.notebook_output?.result ?? output.logs ?? "";
+  const text = output.notebook_output?.result || output.logs || "";
   if (text) {
     if (full) {
       entry.output = text;
@@ -523,6 +530,11 @@ function spawnOpts(flags: Flags): RunDatabricksOptions {
   return typeof profile === "string" ? { profile } : {};
 }
 
+/** Suffix for suggested follow-up commands so they hit the same workspace. */
+function profileSuffix(profile: unknown): string {
+  return typeof profile === "string" ? ` --profile ${profile}` : "";
+}
+
 /** runDatabricks, with jobs-flavored suggestions folded into NOT_FOUND. */
 async function runJobs(
   args: string[],
@@ -536,9 +548,10 @@ async function runJobs(
       error.code === "NOT_FOUND" &&
       error.suggestions.length === 0
     ) {
+      const p = profileSuffix(opts.profile);
       throw new AxiError(error.message, "NOT_FOUND", [
-        "databricks-axi jobs list",
-        "databricks-axi jobs runs",
+        `databricks-axi jobs list${p}`,
+        `databricks-axi jobs runs${p}`,
       ]);
     }
     throw error;
