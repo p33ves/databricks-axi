@@ -61,6 +61,9 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
   cap. A full page → `has_more: true` + a rerun-with-`--limit <2N>`
   suggestion, never auto-paginate unboundedly.
 - Legacy CLI 0.18.x is incompatible; the spawn layer version-guards >= 0.298.
+- int64 ids (`job_id`/`run_id`) can exceed 2^53, where `JSON.parse` silently
+  rounds; `runDatabricks` quotes 16+-digit `*_id` values so they stay exact
+  strings. Treat ids as `number | string` downstream.
 - The Go CLI emits plain-text stderr errors; map them to the structured
   taxonomy in `src/errors.ts`. Never leak raw stack traces or token-shaped
   strings.
