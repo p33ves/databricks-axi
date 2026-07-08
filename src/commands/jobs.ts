@@ -30,14 +30,14 @@ type Raw = Record<string, unknown>;
 type RunState = { result_state?: string; life_cycle_state?: string };
 type RawTask = {
   task_key?: string;
-  run_id?: number;
+  run_id?: number | string;
   state?: RunState;
   notebook_task?: { notebook_path?: string };
   spark_python_task?: { python_file?: string };
   execution_duration?: number;
 } & Raw;
 type RawJob = {
-  job_id?: number;
+  job_id?: number | string;
   creator_user_name?: string;
   settings?: {
     name?: string;
@@ -46,8 +46,8 @@ type RawJob = {
   };
 } & Raw;
 type RawRun = {
-  run_id?: number;
-  job_id?: number;
+  run_id?: number | string;
+  job_id?: number | string;
   state?: RunState;
   start_time?: number;
   end_time?: number;
@@ -184,7 +184,7 @@ async function jobsRun(args: string[]): Promise<AxiRenderable> {
     ],
   };
   const runObj = (await runJobsObject(argv, opts)) as {
-    run_id?: number;
+    run_id?: number | string;
     state?: RunState;
   };
   const out: AxiStructuredOutput = { run_id: runObj.run_id };
@@ -209,7 +209,7 @@ async function jobsCancel(args: string[]): Promise<AxiRenderable> {
   } catch (error) {
     if (isAlreadyTerminated(error)) {
       return {
-        run_id: Number(runId),
+        run_id: runId,
         status: "run already terminated (no-op)",
         help: [`databricks-axi jobs runs view ${runId}`],
       };
@@ -217,7 +217,7 @@ async function jobsCancel(args: string[]): Promise<AxiRenderable> {
     throw error;
   }
   return {
-    run_id: Number(runId),
+    run_id: runId,
     status: "cancel requested",
     help: [`databricks-axi jobs runs view ${runId}`],
   };

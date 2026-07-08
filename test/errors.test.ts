@@ -3,9 +3,9 @@ import { mapUpstreamError, redactSecrets } from "../src/errors.js";
 
 describe("redactSecrets", () => {
   it("redacts dapi tokens", () => {
-    expect(
-      redactSecrets("token dapi1234567890abcdef leaked"),
-    ).toBe("token [redacted] leaked");
+    expect(redactSecrets("token dapi1234567890abcdef leaked")).toBe(
+      "token [redacted] leaked",
+    );
   });
 
   it("redacts long hex runs", () => {
@@ -18,6 +18,12 @@ describe("redactSecrets", () => {
     expect(
       redactSecrets("bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9abcdefgh done"),
     ).toBe("bearer [redacted] done");
+  });
+
+  it("keeps long workspace paths readable", () => {
+    const text =
+      "Notebook /Workspace/Shared/my-long-notebook-name does not exist";
+    expect(redactSecrets(text)).toBe(text);
   });
 
   it("leaves normal text alone", () => {
@@ -72,9 +78,7 @@ describe("mapUpstreamError", () => {
   });
 
   it("redacts tokens before they reach the message", () => {
-    const err = mapUpstreamError(
-      "Error: 401 bad token dapi1234567890abcdef",
-    );
+    const err = mapUpstreamError("Error: 401 bad token dapi1234567890abcdef");
     expect(err.message).not.toContain("dapi1234");
     expect(err.message).toContain("[redacted]");
   });

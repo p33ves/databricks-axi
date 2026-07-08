@@ -59,7 +59,11 @@ export async function runDatabricks(
     return null;
   }
   try {
-    return JSON.parse(trimmed) as unknown;
+    // int64 ids (job_id/run_id) can exceed 2^53, where JSON.parse silently
+    // rounds; quote 16+-digit id values so they stay exact as strings.
+    return JSON.parse(
+      trimmed.replace(/"(\w*_id)"\s*:\s*(\d{16,})(?=\s*[,}])/g, '"$1":"$2"'),
+    ) as unknown;
   } catch {
     throw new AxiError(
       `databricks returned invalid JSON: ${redactSecrets(trimmed).slice(0, 120)}`,

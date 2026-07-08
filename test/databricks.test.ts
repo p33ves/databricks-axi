@@ -32,6 +32,16 @@ describe("runDatabricks", () => {
     expect(fake.calls()).toEqual([["jobs", "list", "-o", "json"]]);
   });
 
+  it("keeps 16+-digit int64 ids exact as strings", async () => {
+    const fake = useFake();
+    fake.respondRaw(
+      "jobs get-run",
+      '{"run_id":9223372036854775807,"job_id":123}',
+    );
+    const result = await runDatabricks(["jobs", "get-run"]);
+    expect(result).toEqual({ run_id: "9223372036854775807", job_id: 123 });
+  });
+
   it("prepends -p <profile>", async () => {
     const fake = useFake();
     fake.respond("-p dev jobs list", { jobs: [] });

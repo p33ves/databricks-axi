@@ -13,13 +13,20 @@ export type FakeDatabricks = {
   binDir: string;
   /** Replay `json` on stdout (exit 0) when argv starts with the tokens of `prefix`. */
   respond: (prefix: string, json: unknown) => void;
+  /** Replay a raw stdout string verbatim — for payloads JSON.stringify would mangle (int64 ids). */
+  respondRaw: (prefix: string, stdout: string) => void;
   /** Replay `stderr` text with a nonzero exit (default 1) — canned upstream errors. */
   respondError: (prefix: string, stderr: string, exitCode?: number) => void;
   /** Every recorded invocation, as raw argv arrays, in call order. */
   calls: () => string[][];
 };
 
-type CannedReply = { stdout?: unknown; stderr?: string; exitCode?: number };
+type CannedReply = {
+  stdout?: unknown;
+  stdoutRaw?: string;
+  stderr?: string;
+  exitCode?: number;
+};
 
 /**
  * Drops an executable `databricks` stub into a temp dir. The stub appends each
@@ -46,7 +53,8 @@ for (const [prefix, reply] of Object.entries(responses)) {
   const parts = prefix.split(" ");
   if (parts.every((part, i) => args[i] === part)) {
     if (reply.stderr) process.stderr.write(reply.stderr);
-    if (reply.stdout !== undefined) process.stdout.write(JSON.stringify(reply.stdout));
+    if (reply.stdoutRaw !== undefined) process.stdout.write(reply.stdoutRaw);
+    else if (reply.stdout !== undefined) process.stdout.write(JSON.stringify(reply.stdout));
     process.exit(reply.exitCode ?? 0);
   }
 }
@@ -69,6 +77,7 @@ process.exit(1);
   return {
     binDir: dir,
     respond: (prefix, json) => seed(prefix, { stdout: json }),
+    respondRaw: (prefix, stdout) => seed(prefix, { stdoutRaw: stdout }),
     respondError: (prefix, stderr, exitCode = 1) =>
       seed(prefix, { stderr, exitCode }),
     calls: () =>
