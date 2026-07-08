@@ -5,9 +5,18 @@ import {
   type RunDatabricksOptions,
 } from "../databricks.js";
 import { redactSecrets } from "../errors.js";
+import {
+  asList,
+  assertObject,
+  domainHelpers,
+  profileSuffix,
+  spawnOpts,
+  type AxiRenderable,
+  type AxiStructuredOutput,
+} from "./shared.js";
 
-type AxiStructuredOutput = Record<string, unknown>;
-type AxiRenderable = string | AxiStructuredOutput;
+const { usage, parseArgs, parseIntFlag, requireId, renderRows } =
+  domainHelpers("sql");
 
 export const SQL_HELP = `usage: databricks-axi sql <subcommand> [args] [flags]
 subcommands[6]:
@@ -28,6 +37,8 @@ notes:
   exec waits up to --timeout seconds (default 120), then exits 0 with the
   statement id — resume with sql statement view
   warehouse start/stop are async by default; --wait blocks up to ~20 min
+  never put secret values in the query text: it lands on child argv
+  (visible in ps) via the api substrate
 `;
 
 // Injectable so poll tests run at full speed.
@@ -106,11 +117,7 @@ async function listWarehouses(
   opts: RunDatabricksOptions,
 ): Promise<RawWarehouse[]> {
   const parsed = await runDatabricks(["warehouses", "list"], opts);
-  if (Array.isArray(parsed)) {
-    return parsed as RawWarehouse[];
-  }
-  const obj = (parsed ?? {}) as Record<string, unknown>;
-  return (obj["warehouses"] as RawWarehouse[] | undefined) ?? [];
+  return asList(parsed, "warehouses") as RawWarehouse[];
 }
 
 async function warehousesList(args: string[]): Promise<AxiRenderable> {
@@ -143,10 +150,10 @@ async function warehousesList(args: string[]): Promise<AxiRenderable> {
 async function warehousesView(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, { profile: "value" });
   const id = requireId(positional, "sql warehouses view <id>");
-  const w = (await runDatabricks(
-    ["warehouses", "get", id],
-    spawnOpts(flags),
-  )) as RawWarehouse;
+  const w = assertObject<RawWarehouse>(
+    await runDatabricks(["warehouses", "get", id], spawnOpts(flags)),
+    "warehouses get",
+  );
   const p = profileSuffix(flags.get("profile"));
   return {
     id: w.id,
@@ -210,8 +217,8 @@ async function sqlExec(args: string[]): Promise<AxiRenderable> {
   if (!query || positional.length > 1) {
     throw usage('Usage: databricks-axi sql exec "<query>" [--warehouse <id>]');
   }
-  const limit = parsePositiveInt(flags, "limit", DEFAULT_ROW_LIMIT);
-  const budgetS = parseNonNegativeInt(flags, "timeout", DEFAULT_BUDGET_S);
+  const limit = parseIntFlag(flags, "limit", DEFAULT_ROW_LIMIT);
+  const budgetS = parseIntFlag(flags, "timeout", DEFAULT_BUDGET_S, 0);
   const full = flags.get("full") === true;
   const opts = spawnOpts(flags);
   const p = profileSuffix(flags.get("profile"));
@@ -219,20 +226,23 @@ async function sqlExec(args: string[]): Promise<AxiRenderable> {
 
   const deadline = Date.now() + budgetS * 1000;
   const waitTimeoutS = Math.max(5, Math.min(budgetS, 50));
-  let stmt = (await runDatabricksApi(
-    "post",
-    STATEMENTS_PATH,
-    JSON.stringify({
-      statement: query,
-      warehouse_id: warehouseId,
-      wait_timeout: `${waitTimeoutS}s`,
-      on_wait_timeout: "CONTINUE",
-      disposition: "INLINE",
-      format: "JSON_ARRAY",
-      row_limit: limit,
-    }),
-    { ...opts, timeoutMs: SUBMIT_TIMEOUT_MS },
-  )) as RawStatement;
+  let stmt = assertObject<RawStatement>(
+    await runDatabricksApi(
+      "post",
+      STATEMENTS_PATH,
+      JSON.stringify({
+        statement: query,
+        warehouse_id: warehouseId,
+        wait_timeout: `${waitTimeoutS}s`,
+        on_wait_timeout: "CONTINUE",
+        disposition: "INLINE",
+        format: "JSON_ARRAY",
+        row_limit: limit,
+      }),
+      { ...opts, timeoutMs: SUBMIT_TIMEOUT_MS },
+    ),
+    "sql statement submit",
+  );
 
   while (isPendingState(stmt)) {
     if (Date.now() >= deadline) {
@@ -244,12 +254,15 @@ async function sqlExec(args: string[]): Promise<AxiRenderable> {
       };
     }
     await sqlPoll.sleep(POLL_INTERVAL_MS);
-    stmt = (await runDatabricksApi(
-      "get",
-      `${STATEMENTS_PATH}/${stmt.statement_id}`,
-      undefined,
-      opts,
-    )) as RawStatement;
+    stmt = assertObject<RawStatement>(
+      await runDatabricksApi(
+        "get",
+        `${STATEMENTS_PATH}/${stmt.statement_id}`,
+        undefined,
+        opts,
+      ),
+      "sql statement poll",
+    );
   }
   return renderTerminalStatement(stmt, { full, limit, opts, p });
 }
@@ -262,12 +275,10 @@ async function statementView(args: string[]): Promise<AxiRenderable> {
   const id = requireId(positional, "sql statement view <statement_id>");
   const opts = spawnOpts(flags);
   const p = profileSuffix(flags.get("profile"));
-  const stmt = (await runDatabricksApi(
-    "get",
-    `${STATEMENTS_PATH}/${id}`,
-    undefined,
-    opts,
-  )) as RawStatement;
+  const stmt = assertObject<RawStatement>(
+    await runDatabricksApi("get", `${STATEMENTS_PATH}/${id}`, undefined, opts),
+    "sql statement get",
+  );
   if (isPendingState(stmt)) {
     return {
       statement_id: stmt.statement_id ?? id,
@@ -337,12 +348,15 @@ async function renderTerminalStatement(
   const totalRows = manifest.total_row_count ?? rows.length;
   if (ctx.full && totalChunks > 1 && id) {
     for (let chunk = 1; chunk < totalChunks; chunk++) {
-      const next = (await runDatabricksApi(
-        "get",
-        `${STATEMENTS_PATH}/${id}/result/chunks/${chunk}`,
-        undefined,
-        ctx.opts,
-      )) as { data_array?: unknown[][] };
+      const next = assertObject<{ data_array?: unknown[][] }>(
+        await runDatabricksApi(
+          "get",
+          `${STATEMENTS_PATH}/${id}/result/chunks/${chunk}`,
+          undefined,
+          ctx.opts,
+        ),
+        "sql statement chunk fetch",
+      );
       rows = rows.concat(next.data_array ?? []);
     }
   }
@@ -352,135 +366,23 @@ async function renderTerminalStatement(
     rows,
     total_row_count: totalRows,
   };
+  const notes: string[] = [];
   if (!ctx.full && totalChunks > 1) {
-    out.truncated = `showing ${rows.length} of ${totalRows} rows — rerun with --full`;
-  } else if (manifest.truncated) {
-    // Server-side row_limit hit: --full can never exceed the submitted cap.
-    out.truncated = `result capped at ${totalRows} rows — rerun with --limit ${
-      (ctx.limit ?? totalRows) * 2
-    }`;
-  }
-  return out;
-}
-
-// --- shared helpers (jobs-pattern; extraction into a module is CP2) ---
-
-type FlagSpec = Record<string, "value" | "boolean">;
-type Flags = Map<string, string | boolean>;
-
-function parseArgs(
-  args: string[],
-  spec: FlagSpec,
-): { positional: string[]; flags: Flags } {
-  const positional: string[] = [];
-  const flags: Flags = new Map();
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (!arg.startsWith("--")) {
-      positional.push(arg);
-      continue;
-    }
-    const name = arg.slice(2);
-    const kind = spec[name];
-    if (!kind) {
-      const valid = Object.keys(spec)
-        .map((f) => `--${f}`)
-        .join(", ");
-      throw usage(`Unknown flag: --${name}`, [`Valid flags: ${valid}`]);
-    }
-    if (kind === "boolean") {
-      flags.set(name, true);
-      continue;
-    }
-    const value = args[++i];
-    if (value === undefined) {
-      throw usage(`Flag --${name} requires a value`);
-    }
-    flags.set(name, value);
-  }
-  return { positional, flags };
-}
-
-function usage(message: string, extraHelp: string[] = []): AxiError {
-  return new AxiError(message, "VALIDATION_ERROR", [
-    ...extraHelp,
-    "Run `databricks-axi sql --help`",
-  ]);
-}
-
-function parsePositiveInt(
-  flags: Flags,
-  name: string,
-  fallback: number,
-): number {
-  const value = parseNonNegativeInt(flags, name, fallback);
-  if (value < 1) {
-    throw usage(`--${name} must be a positive integer`);
-  }
-  return value;
-}
-
-function parseNonNegativeInt(
-  flags: Flags,
-  name: string,
-  fallback: number,
-): number {
-  const raw = flags.get(name);
-  if (raw === undefined) {
-    return fallback;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0) {
-    throw usage(
-      `--${name} must be a non-negative integer, got: ${String(raw)}`,
+    notes.push(
+      `showing ${rows.length} of ${totalRows} rows — rerun with --full`,
     );
   }
-  return value;
-}
-
-function requireId(positional: string[], usageText: string): string {
-  const id = positional[0];
-  if (!id || positional.length > 1) {
-    throw usage(`Usage: databricks-axi ${usageText}`);
+  if (manifest.truncated) {
+    // Server-side row_limit hit: --full can never exceed the submitted cap,
+    // so report what was actually delivered, not the true upstream total.
+    notes.push(
+      `result capped at ${rows.length} rows — rerun with --limit ${
+        (ctx.limit ?? rows.length) * 2
+      }`,
+    );
   }
-  return id;
-}
-
-function spawnOpts(flags: Flags): RunDatabricksOptions {
-  const profile = flags.get("profile");
-  return typeof profile === "string" ? { profile } : {};
-}
-
-/** Suffix for suggested follow-up commands so they hit the same workspace. */
-function profileSuffix(profile: unknown): string {
-  return typeof profile === "string" ? ` --profile ${profile}` : "";
-}
-
-/** Apply --fields (raw top-level keys) or the default field list. */
-function renderRows(
-  items: Record<string, unknown>[],
-  flags: Flags,
-  defaults: string[],
-): Record<string, unknown>[] {
-  const spec = flags.get("fields");
-  const fields =
-    typeof spec === "string"
-      ? spec
-          .split(",")
-          .map((f) => f.trim())
-          .filter(Boolean)
-      : defaults;
-  if (typeof spec === "string" && items.length > 0) {
-    const known = new Set(items.flatMap((item) => Object.keys(item)));
-    for (const field of fields) {
-      if (!known.has(field)) {
-        throw usage(`Unknown field: ${field}`, [
-          `Available fields: ${[...known].sort().join(", ")}`,
-        ]);
-      }
-    }
+  if (notes.length > 0) {
+    out.truncated = notes.join("; ");
   }
-  return items.map((item) =>
-    Object.fromEntries(fields.map((field) => [field, item[field] ?? ""])),
-  );
+  return out;
 }

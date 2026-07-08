@@ -1,10 +1,26 @@
 import { AxiError } from "axi-sdk-js";
 import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
+import {
+  asList,
+  assertObject,
+  domainHelpers,
+  profileSuffix,
+  spawnOpts,
+  type AxiRenderable,
+  type AxiStructuredOutput,
+} from "./shared.js";
 
-// axi-sdk-js 0.1.8 doesn't re-export its output types from the package
-// index; mirror the two one-line aliases locally until it does.
-type AxiStructuredOutput = Record<string, unknown>;
-type AxiRenderable = string | AxiStructuredOutput;
+const {
+  usage,
+  parseArgs,
+  parseIntFlag,
+  requireId: requireIdArg,
+  renderRows,
+} = domainHelpers("jobs");
+
+// Jobs ids are numeric — reject anything else before it reaches argv.
+const requireId = (positional: string[], usageText: string) =>
+  requireIdArg(positional, usageText, /^\d+$/);
 
 export const JOBS_HELP = `usage: databricks-axi jobs <subcommand> [args] [flags]
 subcommands[7]:
@@ -90,7 +106,7 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
   if (positional.length > 0) {
     throw usage(`jobs list takes no arguments, got: ${positional[0]}`);
   }
-  const limit = parseLimit(flags, 30);
+  const limit = parseIntFlag(flags, "limit", 30);
   const argv = ["jobs", "list", "--limit", String(limit)];
   const parsed = await runJobs(argv, spawnOpts(flags));
   const items = asList(parsed, "jobs");
@@ -267,7 +283,7 @@ function durationSeconds(item: {
 
 async function runsList(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);
-  const limit = parseLimit(flags, 20);
+  const limit = parseIntFlag(flags, "limit", 20);
   const argv = ["jobs", "list-runs", "--limit", String(limit)];
   let jobId: string | undefined;
   if (positional.length > 0) {
@@ -460,81 +476,6 @@ function tail(
   };
 }
 
-// --- shared helpers (used by every jobs subcommand) ---
-
-type FlagSpec = Record<string, "value" | "boolean">;
-type Flags = Map<string, string | boolean>;
-
-function parseArgs(
-  args: string[],
-  spec: FlagSpec,
-): { positional: string[]; flags: Flags } {
-  const positional: string[] = [];
-  const flags: Flags = new Map();
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (!arg.startsWith("--")) {
-      positional.push(arg);
-      continue;
-    }
-    const name = arg.slice(2);
-    const kind = spec[name];
-    if (!kind) {
-      const valid = Object.keys(spec)
-        .map((f) => `--${f}`)
-        .join(", ");
-      throw usage(`Unknown flag: --${name}`, [`Valid flags: ${valid}`]);
-    }
-    if (kind === "boolean") {
-      flags.set(name, true);
-      continue;
-    }
-    const value = args[++i];
-    if (value === undefined) {
-      throw usage(`Flag --${name} requires a value`);
-    }
-    flags.set(name, value);
-  }
-  return { positional, flags };
-}
-
-function usage(message: string, extraHelp: string[] = []): AxiError {
-  return new AxiError(message, "VALIDATION_ERROR", [
-    ...extraHelp,
-    "Run `databricks-axi jobs --help`",
-  ]);
-}
-
-function parseLimit(flags: Flags, fallback: number): number {
-  const raw = flags.get("limit");
-  if (raw === undefined) {
-    return fallback;
-  }
-  const limit = Number(raw);
-  if (!Number.isInteger(limit) || limit < 1) {
-    throw usage(`--limit must be a positive integer, got: ${String(raw)}`);
-  }
-  return limit;
-}
-
-function requireId(positional: string[], usageText: string): string {
-  const id = positional[0];
-  if (!id || !/^\d+$/.test(id) || positional.length > 1) {
-    throw usage(`Usage: databricks-axi ${usageText}`);
-  }
-  return id;
-}
-
-function spawnOpts(flags: Flags): RunDatabricksOptions {
-  const profile = flags.get("profile");
-  return typeof profile === "string" ? { profile } : {};
-}
-
-/** Suffix for suggested follow-up commands so they hit the same workspace. */
-function profileSuffix(profile: unknown): string {
-  return typeof profile === "string" ? ` --profile ${profile}` : "";
-}
-
 /** runDatabricks, with jobs-flavored suggestions folded into NOT_FOUND. */
 async function runJobs(
   args: string[],
@@ -564,50 +505,8 @@ async function runJobsObject(
   args: string[],
   opts: RunDatabricksOptions,
 ): Promise<Raw> {
-  const parsed = await runJobs(args, opts);
-  if (parsed === null || typeof parsed !== "object") {
-    throw new AxiError(
-      `databricks ${args.slice(0, 2).join(" ")} returned an empty response`,
-      "UPSTREAM_ERROR",
-      ["Retry, or check workspace availability"],
-    );
-  }
-  return parsed as Raw;
-}
-
-/**
- * The Go CLI prints either a bare item array (>= 0.298) or the response
- * object ({items, ...}) depending on version — tolerate both.
- */
-function asList(parsed: unknown, key: string): Raw[] {
-  if (Array.isArray(parsed)) {
-    return parsed as Raw[];
-  }
-  const obj = (parsed ?? {}) as Raw;
-  return (obj[key] as Raw[] | undefined) ?? [];
-}
-
-/** Apply --fields (raw top-level keys) or the default field list. */
-function renderRows(items: Raw[], flags: Flags, defaults: string[]): Raw[] {
-  const spec = flags.get("fields");
-  const fields =
-    typeof spec === "string"
-      ? spec
-          .split(",")
-          .map((f) => f.trim())
-          .filter(Boolean)
-      : defaults;
-  if (typeof spec === "string" && items.length > 0) {
-    const known = new Set(items.flatMap((item) => Object.keys(item)));
-    for (const field of fields) {
-      if (!known.has(field)) {
-        throw usage(`Unknown field: ${field}`, [
-          `Available fields: ${[...known].sort().join(", ")}`,
-        ]);
-      }
-    }
-  }
-  return items.map((item) =>
-    Object.fromEntries(fields.map((field) => [field, item[field] ?? ""])),
+  return assertObject<Raw>(
+    await runJobs(args, opts),
+    `databricks ${args.slice(0, 2).join(" ")}`,
   );
 }

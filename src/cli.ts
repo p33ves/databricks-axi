@@ -49,6 +49,13 @@ export const COMMANDS = {
   api: apiCommand,
 };
 
+const COMMAND_HELP: Record<string, string> = {
+  home: HOME_HELP,
+  jobs: JOBS_HELP,
+  sql: SQL_HELP,
+  api: API_HELP,
+};
+
 type CliStdout = { write: (chunk: string) => unknown };
 
 type MainOptions = {
@@ -65,16 +72,7 @@ export async function main(options: MainOptions = {}): Promise<void> {
     ...(options.stdout ? { stdout: options.stdout } : {}),
     home: homeCommand,
     commands: COMMANDS,
-    getCommandHelp: (command) =>
-      command === "home"
-        ? HOME_HELP
-        : command === "jobs"
-          ? JOBS_HELP
-          : command === "sql"
-            ? SQL_HELP
-            : command === "api"
-              ? API_HELP
-              : null,
+    getCommandHelp: (command) => COMMAND_HELP[command] ?? null,
   });
 }
 

@@ -7,6 +7,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach } from "vitest";
+import { main } from "../../src/cli.js";
 
 export type FakeDatabricks = {
   /** Prepend to PATH so `databricks` resolves to the stub. */
@@ -30,6 +32,40 @@ type CannedReply = {
   exitCode?: number;
   seq?: unknown[];
 };
+
+/**
+ * Standard CLI test rig: registers beforeEach/afterEach that put a fresh fake
+ * `databricks` first on PATH and reset exitCode. `t.fake` is the current
+ * test's fake; `t.run` invokes main() and captures stdout + exit code.
+ */
+export function setupCli() {
+  const rig = {
+    fake: undefined as unknown as FakeDatabricks,
+    run: async (argv: string[]): Promise<{ out: string; exitCode: number }> => {
+      let out = "";
+      await main({
+        argv,
+        stdout: { write: (c: string) => ((out += c), true) },
+      });
+      return {
+        out,
+        exitCode: process.exitCode === undefined ? 0 : Number(process.exitCode),
+      };
+    },
+  };
+  let prevPath: string | undefined;
+  beforeEach(() => {
+    rig.fake = installFakeDatabricks();
+    prevPath = process.env.PATH;
+    process.env.PATH = `${rig.fake.binDir}:${prevPath ?? ""}`;
+    process.exitCode = undefined;
+  });
+  afterEach(() => {
+    process.env.PATH = prevPath;
+    process.exitCode = undefined;
+  });
+  return rig;
+}
 
 /**
  * Drops an executable `databricks` stub into a temp dir. The stub appends each

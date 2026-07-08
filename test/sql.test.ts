@@ -1,36 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { main } from "../src/cli.js";
 import { sqlPoll } from "../src/commands/sql.js";
-import {
-  installFakeDatabricks,
-  type FakeDatabricks,
-} from "./helpers/fake-databricks.js";
+import { setupCli } from "./helpers/fake-databricks.js";
 
-let fake: FakeDatabricks;
-let prevPath: string | undefined;
+const t = setupCli();
 const realSleep = sqlPoll.sleep;
 
 beforeEach(() => {
-  fake = installFakeDatabricks();
-  prevPath = process.env.PATH;
-  process.env.PATH = `${fake.binDir}:${prevPath ?? ""}`;
-  process.exitCode = undefined;
   sqlPoll.sleep = async () => {};
 });
 afterEach(() => {
-  process.env.PATH = prevPath;
-  process.exitCode = undefined;
   sqlPoll.sleep = realSleep;
 });
-
-async function run(argv: string[]): Promise<{ out: string; exitCode: number }> {
-  let out = "";
-  await main({ argv, stdout: { write: (c: string) => ((out += c), true) } });
-  return {
-    out,
-    exitCode: process.exitCode === undefined ? 0 : Number(process.exitCode),
-  };
-}
 
 // Shapes pinned against a live Free Edition workspace on 2026-07-07.
 const WH_ID = "43dc9c412f8e5b4c";
@@ -79,7 +59,7 @@ function succeededStmt(overrides: Record<string, unknown> = {}) {
 }
 
 function submittedBody(): Record<string, unknown> {
-  const post = fake.calls().find((argv) => argv.includes("--json"));
+  const post = t.fake.calls().find((argv) => argv.includes("--json"));
   expect(post).toBeDefined();
   const json = post![post!.indexOf("--json") + 1];
   return JSON.parse(json) as Record<string, unknown>;
@@ -87,30 +67,30 @@ function submittedBody(): Record<string, unknown> {
 
 describe("sql warehouses", () => {
   it("lists with default fields and a serverless size marker", async () => {
-    fake.respond("warehouses list", [WAREHOUSE]);
-    const { out, exitCode } = await run(["sql", "warehouses"]);
+    t.fake.respond("warehouses list", [WAREHOUSE]);
+    const { out, exitCode } = await t.run(["sql", "warehouses"]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()).toEqual([["warehouses", "list", "-o", "json"]]);
+    expect(t.fake.calls()).toEqual([["warehouses", "list", "-o", "json"]]);
     expect(out).toContain("warehouses[1]{id,name,state,size}:");
     expect(out).toContain("2X-Small (serverless)");
   });
 
   it("suggests starting STOPPED warehouses", async () => {
-    fake.respond("warehouses list", [WAREHOUSE]);
-    const { out } = await run(["sql", "warehouses"]);
+    t.fake.respond("warehouses list", [WAREHOUSE]);
+    const { out } = await t.run(["sql", "warehouses"]);
     expect(out).toContain(`sql warehouses start ${WH_ID}`);
   });
 
   it("renders a definitive empty state", async () => {
-    fake.respond("warehouses list", []);
-    const { out, exitCode } = await run(["sql", "warehouses"]);
+    t.fake.respond("warehouses list", []);
+    const { out, exitCode } = await t.run(["sql", "warehouses"]);
     expect(exitCode).toBe(0);
     expect(out).toContain("no SQL warehouses in this workspace");
   });
 
   it("rejects unknown --fields keys listing the known ones", async () => {
-    fake.respond("warehouses list", [WAREHOUSE]);
-    const { out, exitCode } = await run([
+    t.fake.respond("warehouses list", [WAREHOUSE]);
+    const { out, exitCode } = await t.run([
       "sql",
       "warehouses",
       "--fields",
@@ -122,26 +102,41 @@ describe("sql warehouses", () => {
   });
 
   it("views one warehouse without jdbc_url", async () => {
-    fake.respond("warehouses get", { ...WAREHOUSE, state: "RUNNING" });
-    const { out, exitCode } = await run(["sql", "warehouses", "view", WH_ID]);
+    t.fake.respond("warehouses get", { ...WAREHOUSE, state: "RUNNING" });
+    const { out, exitCode } = await t.run(["sql", "warehouses", "view", WH_ID]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()).toEqual([["warehouses", "get", WH_ID, "-o", "json"]]);
+    expect(t.fake.calls()).toEqual([
+      ["warehouses", "get", WH_ID, "-o", "json"],
+    ]);
     expect(out).toContain("auto_stop_mins: 10");
     expect(out).not.toContain("jdbc");
     expect(out).toContain(`sql warehouses stop ${WH_ID}`);
   });
 
   it("suggests start when the viewed warehouse is stopped", async () => {
-    fake.respond("warehouses get", WAREHOUSE);
-    const { out } = await run(["sql", "warehouses", "view", WH_ID]);
+    t.fake.respond("warehouses get", WAREHOUSE);
+    const { out } = await t.run(["sql", "warehouses", "view", WH_ID]);
     expect(out).toContain(`sql warehouses start ${WH_ID}`);
   });
 
+  it("maps an empty warehouses get response to a structured UPSTREAM_ERROR", async () => {
+    t.fake.respondRaw("warehouses get", "");
+    const { out, exitCode } = await t.run(["sql", "warehouses", "view", WH_ID]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: UPSTREAM_ERROR");
+    expect(out).toContain("empty response");
+  });
+
   it("starts async by default (upstream no-op friendly)", async () => {
-    fake.respondRaw("warehouses start", "");
-    const { out, exitCode } = await run(["sql", "warehouses", "start", WH_ID]);
+    t.fake.respondRaw("warehouses start", "");
+    const { out, exitCode } = await t.run([
+      "sql",
+      "warehouses",
+      "start",
+      WH_ID,
+    ]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()).toEqual([
+    expect(t.fake.calls()).toEqual([
       ["warehouses", "start", WH_ID, "--no-wait", "-o", "json"],
     ]);
     expect(out).toContain("start requested");
@@ -149,38 +144,57 @@ describe("sql warehouses", () => {
   });
 
   it("stops async by default", async () => {
-    fake.respondRaw("warehouses stop", "");
-    const { out, exitCode } = await run(["sql", "warehouses", "stop", WH_ID]);
+    t.fake.respondRaw("warehouses stop", "");
+    const { out, exitCode } = await t.run(["sql", "warehouses", "stop", WH_ID]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()).toEqual([
+    expect(t.fake.calls()).toEqual([
       ["warehouses", "stop", WH_ID, "--no-wait", "-o", "json"],
     ]);
     expect(out).toContain("stop requested");
   });
 
   it("omits --no-wait with --wait", async () => {
-    fake.respondRaw("warehouses start", "");
-    await run(["sql", "warehouses", "start", WH_ID, "--wait"]);
-    expect(fake.calls()).toEqual([
+    t.fake.respondRaw("warehouses start", "");
+    await t.run(["sql", "warehouses", "start", WH_ID, "--wait"]);
+    expect(t.fake.calls()).toEqual([
       ["warehouses", "start", WH_ID, "-o", "json"],
     ]);
   });
 
   it("maps a genuine 403 to PERMISSION_DENIED, exit 1", async () => {
-    fake.respondError(
+    t.fake.respondError(
       "warehouses start",
       "Error: PERMISSION_DENIED: no manage permission\n",
     );
-    const { out, exitCode } = await run(["sql", "warehouses", "start", WH_ID]);
+    const { out, exitCode } = await t.run([
+      "sql",
+      "warehouses",
+      "start",
+      WH_ID,
+    ]);
     expect(exitCode).toBe(1);
     expect(out).toContain("PERMISSION_DENIED");
   });
 });
 
 describe("sql exec", () => {
+  it("maps an empty submit response to a structured UPSTREAM_ERROR", async () => {
+    t.fake.respondRaw("api post", "");
+    const { out, exitCode } = await t.run([
+      "sql",
+      "exec",
+      "SELECT 1",
+      "--warehouse",
+      WH_ID,
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: UPSTREAM_ERROR");
+    expect(out).toContain("empty response");
+  });
+
   it("submits inline and renders columns, rows and total_row_count", async () => {
-    fake.respond("api post", succeededStmt());
-    const { out, exitCode } = await run([
+    t.fake.respond("api post", succeededStmt());
+    const { out, exitCode } = await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -205,8 +219,8 @@ describe("sql exec", () => {
   });
 
   it("clamps wait_timeout to the --timeout budget", async () => {
-    fake.respond("api post", succeededStmt());
-    await run([
+    t.fake.respond("api post", succeededStmt());
+    await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -219,11 +233,11 @@ describe("sql exec", () => {
   });
 
   it("floors wait_timeout at the API's 5s minimum", async () => {
-    fake.respond("api post", {
+    t.fake.respond("api post", {
       statement_id: STMT_ID,
       status: { state: "RUNNING" },
     });
-    await run([
+    await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -236,8 +250,8 @@ describe("sql exec", () => {
   });
 
   it("passes --limit as row_limit", async () => {
-    fake.respond("api post", succeededStmt());
-    await run([
+    t.fake.respond("api post", succeededStmt());
+    await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -250,42 +264,42 @@ describe("sql exec", () => {
   });
 
   it("auto-picks the only warehouse when --warehouse is omitted", async () => {
-    fake.respond("warehouses list", [WAREHOUSE]);
-    fake.respond("api post", succeededStmt());
-    const { exitCode } = await run(["sql", "exec", "SELECT 1"]);
+    t.fake.respond("warehouses list", [WAREHOUSE]);
+    t.fake.respond("api post", succeededStmt());
+    const { exitCode } = await t.run(["sql", "exec", "SELECT 1"]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()[0]).toEqual(["warehouses", "list", "-o", "json"]);
+    expect(t.fake.calls()[0]).toEqual(["warehouses", "list", "-o", "json"]);
     expect(submittedBody()["warehouse_id"]).toBe(WH_ID);
   });
 
   it("exits 1 NOT_FOUND with zero warehouses", async () => {
-    fake.respond("warehouses list", []);
-    const { out, exitCode } = await run(["sql", "exec", "SELECT 1"]);
+    t.fake.respond("warehouses list", []);
+    const { out, exitCode } = await t.run(["sql", "exec", "SELECT 1"]);
     expect(exitCode).toBe(1);
     expect(out).toContain("NOT_FOUND");
   });
 
   it("exits 2 listing id: name pairs with multiple warehouses", async () => {
-    fake.respond("warehouses list", [
+    t.fake.respond("warehouses list", [
       WAREHOUSE,
       { ...WAREHOUSE, id: "aaaabbbbccccdddd", name: "Other" },
     ]);
-    const { out, exitCode } = await run(["sql", "exec", "SELECT 1"]);
+    const { out, exitCode } = await t.run(["sql", "exec", "SELECT 1"]);
     expect(exitCode).toBe(2);
     expect(out).toContain(`${WH_ID}: Starter Warehouse`);
     expect(out).toContain("aaaabbbbccccdddd: Other");
   });
 
   it("polls until terminal and renders the result", async () => {
-    fake.respond("api post", {
+    t.fake.respond("api post", {
       statement_id: STMT_ID,
       status: { state: "PENDING" },
     });
-    fake.respondSeq(`api get ${STMT_PATH}`, [
+    t.fake.respondSeq(`api get ${STMT_PATH}`, [
       { statement_id: STMT_ID, status: { state: "RUNNING" } },
       succeededStmt(),
     ]);
-    const { out, exitCode } = await run([
+    const { out, exitCode } = await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -293,17 +307,17 @@ describe("sql exec", () => {
       WH_ID,
     ]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()).toHaveLength(3);
-    expect(fake.calls()[1]).toEqual(["api", "get", STMT_PATH, "-o", "json"]);
+    expect(t.fake.calls()).toHaveLength(3);
+    expect(t.fake.calls()[1]).toEqual(["api", "get", STMT_PATH, "-o", "json"]);
     expect(out).toContain("total_row_count: 2");
   });
 
   it("exits 0 with a resume hint when the --timeout budget expires", async () => {
-    fake.respond("api post", {
+    t.fake.respond("api post", {
       statement_id: STMT_ID,
       status: { state: "RUNNING" },
     });
-    const { out, exitCode } = await run([
+    const { out, exitCode } = await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -313,14 +327,14 @@ describe("sql exec", () => {
       "0",
     ]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()).toHaveLength(1);
+    expect(t.fake.calls()).toHaveLength(1);
     expect(out).toContain(STMT_ID);
     expect(out).toContain("state: RUNNING");
     expect(out).toContain(`sql statement view ${STMT_ID}`);
   });
 
   it("maps FAILED to SQL_ERROR exit 1 with the upstream message", async () => {
-    fake.respond("api post", {
+    t.fake.respond("api post", {
       statement_id: STMT_ID,
       status: {
         error: {
@@ -332,7 +346,7 @@ describe("sql exec", () => {
         state: "FAILED",
       },
     });
-    const { out, exitCode } = await run([
+    const { out, exitCode } = await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -345,11 +359,11 @@ describe("sql exec", () => {
   });
 
   it("marks a server-side row cap with a --limit hint", async () => {
-    fake.respond(
+    t.fake.respond(
       "api post",
       succeededStmt({ manifest: { truncated: true, total_row_count: 2 } }),
     );
-    const { out } = await run([
+    const { out } = await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -362,12 +376,55 @@ describe("sql exec", () => {
     expect(out).toContain("--limit 4");
   });
 
+  it("reports rows actually delivered, not the true upstream total, when capped", async () => {
+    // total_row_count (50000) is the true upstream total; only 2 rows came
+    // back inline because row_limit capped delivery — the message must say 2.
+    t.fake.respond(
+      "api post",
+      succeededStmt({ manifest: { truncated: true, total_row_count: 50000 } }),
+    );
+    const { out } = await t.run([
+      "sql",
+      "exec",
+      "SELECT 1",
+      "--warehouse",
+      WH_ID,
+      "--limit",
+      "2",
+    ]);
+    expect(out).toContain("capped at 2 rows");
+    expect(out).toContain("--limit 4");
+    expect(out).not.toContain("capped at 50000");
+  });
+
+  it("shows both hints when a result is chunked and row-capped", async () => {
+    t.fake.respond(
+      "api post",
+      succeededStmt({
+        manifest: { total_chunk_count: 2, total_row_count: 3, truncated: true },
+      }),
+    );
+    const { out } = await t.run([
+      "sql",
+      "exec",
+      "SELECT 1",
+      "--warehouse",
+      WH_ID,
+      "--limit",
+      "2",
+    ]);
+    expect(out).toContain("showing 2 of 3 rows");
+    expect(out).toContain("--full");
+    expect(out).toContain("capped at 2 rows");
+    expect(out).toContain("--limit 4");
+  });
+
   it("marks extra chunks with a --full hint", async () => {
-    fake.respond(
+    t.fake.respond(
       "api post",
       succeededStmt({ manifest: { total_chunk_count: 2, total_row_count: 3 } }),
     );
-    const { out } = await run([
+    const { out } = await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -379,17 +436,17 @@ describe("sql exec", () => {
   });
 
   it("fetches remaining chunks with --full", async () => {
-    fake.respond(
+    t.fake.respond(
       "api post",
       succeededStmt({ manifest: { total_chunk_count: 2, total_row_count: 3 } }),
     );
-    fake.respond(`api get ${STMT_PATH}/result/chunks/1`, {
+    t.fake.respond(`api get ${STMT_PATH}/result/chunks/1`, {
       chunk_index: 1,
       data_array: [["3", "z"]],
       row_count: 1,
       row_offset: 2,
     });
-    const { out, exitCode } = await run([
+    const { out, exitCode } = await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -398,7 +455,7 @@ describe("sql exec", () => {
       "--full",
     ]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()[1]).toEqual([
+    expect(t.fake.calls()[1]).toEqual([
       "api",
       "get",
       `${STMT_PATH}/result/chunks/1`,
@@ -410,13 +467,13 @@ describe("sql exec", () => {
   });
 
   it("requires a query", async () => {
-    const { exitCode } = await run(["sql", "exec"]);
+    const { exitCode } = await t.run(["sql", "exec"]);
     expect(exitCode).toBe(2);
-    expect(fake.calls()).toEqual([]);
+    expect(t.fake.calls()).toEqual([]);
   });
 
   it("rejects a non-integer --timeout", async () => {
-    const { exitCode } = await run([
+    const { exitCode } = await t.run([
       "sql",
       "exec",
       "SELECT 1",
@@ -424,32 +481,42 @@ describe("sql exec", () => {
       "abc",
     ]);
     expect(exitCode).toBe(2);
-    expect(fake.calls()).toEqual([]);
+    expect(t.fake.calls()).toEqual([]);
   });
 });
 
 describe("sql statement view", () => {
   it("renders a terminal statement's results", async () => {
-    fake.respond(`api get ${STMT_PATH}`, succeededStmt());
-    const { out, exitCode } = await run(["sql", "statement", "view", STMT_ID]);
+    t.fake.respond(`api get ${STMT_PATH}`, succeededStmt());
+    const { out, exitCode } = await t.run([
+      "sql",
+      "statement",
+      "view",
+      STMT_ID,
+    ]);
     expect(exitCode).toBe(0);
-    expect(fake.calls()).toEqual([["api", "get", STMT_PATH, "-o", "json"]]);
+    expect(t.fake.calls()).toEqual([["api", "get", STMT_PATH, "-o", "json"]]);
     expect(out).toContain("total_row_count: 2");
   });
 
   it("shows state and a rerun hint while non-terminal", async () => {
-    fake.respond(`api get ${STMT_PATH}`, {
+    t.fake.respond(`api get ${STMT_PATH}`, {
       statement_id: STMT_ID,
       status: { state: "RUNNING" },
     });
-    const { out, exitCode } = await run(["sql", "statement", "view", STMT_ID]);
+    const { out, exitCode } = await t.run([
+      "sql",
+      "statement",
+      "view",
+      STMT_ID,
+    ]);
     expect(exitCode).toBe(0);
     expect(out).toContain("state: RUNNING");
     expect(out).toContain(`sql statement view ${STMT_ID}`);
   });
 
   it("rejects unknown sql subcommands", async () => {
-    const { exitCode } = await run(["sql", "frobnicate"]);
+    const { exitCode } = await t.run(["sql", "frobnicate"]);
     expect(exitCode).toBe(2);
   });
 });
