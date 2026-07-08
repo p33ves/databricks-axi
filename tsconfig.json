@@ -6,6 +6,8 @@
     "outDir": "dist",
     "rootDir": ".",
     "strict": true,
+    // TS 6.0 changed the default from all node_modules/@types to []; keep node explicit
+    "types": ["node"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": true,

@@ -73,6 +73,9 @@ canned JSON with `respond(prefix, json)`, assert exact argv with `calls()`.
 - Exit codes: 0 success (incl. no-ops), 1 upstream error, 2 usage error.
   Errors are structured TOON on stdout (`code`, `error`, `help`).
 - No interactive prompts, ever. Fail loud on unknown flags.
+- TypeScript 6 defaults `types` to `[]` (was: all `node_modules/@types`);
+  `tsconfig.json` pins `"types": ["node"]`, so a new `@types/*` package must
+  be added there or it is silently ignored.
 
 ## Generated files — never hand-edit
 
