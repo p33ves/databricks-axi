@@ -26,10 +26,6 @@ export const HERMES_TAGS = [
 ];
 export const HERMES_CATEGORY = "data";
 
-function yamlDoubleQuote(value: string): string {
-  return JSON.stringify(value);
-}
-
 /**
  * Extract the `commands[N]:` block from the top-level help so the skill's
  * command list can never drift from what `databricks-axi --help` prints.
@@ -50,7 +46,7 @@ export function extractCommandsBlock(): string {
 export function createSkillMarkdown(): string {
   return `---
 name: databricks-axi
-description: ${yamlDoubleQuote(SKILL_DESCRIPTION)}
+description: ${JSON.stringify(SKILL_DESCRIPTION)}
 user-invocable: false
 author: ${SKILL_AUTHOR}
 metadata:
@@ -63,14 +59,17 @@ metadata:
 
 ${DESCRIPTION}
 
-You do not need databricks-axi installed globally - invoke it with \`npx -y databricks-axi <command>\`.
-If databricks-axi output shows a follow-up command starting with \`databricks-axi\`, run it as \`npx -y databricks-axi ...\` instead.
+If \`databricks-axi\` already resolves on PATH, invoke it directly - a local
+install may be newer than what's published to npm. Only fall back to
+\`npx -y databricks-axi <command>\` if it does not resolve. Follow-up commands
+in a response's output are written as bare \`databricks-axi ...\` - invoke
+those the same way you invoked the command that produced them.
 
 databricks-axi requires the official [\`databricks\` CLI](https://docs.databricks.com/dev-tools/cli/) (version 0.298 or newer) installed and authenticated. If a command fails with an authentication error, ask the user to run \`databricks auth login --host <workspace-url>\` themselves.
 
 ## Status
 
-Pre-release scaffold: command domains are landing incrementally. Run \`npx -y databricks-axi --help\` for the currently available commands.
+Pre-release scaffold: command domains are landing incrementally. Run \`databricks-axi --help\` (per the invocation note above) for the currently available commands.
 
 ## Commands
 
@@ -78,7 +77,7 @@ Pre-release scaffold: command domains are landing incrementally. Run \`npx -y da
 ${extractCommandsBlock()}
 \`\`\`
 
-Run \`npx -y databricks-axi --help\` for global flags, or \`npx -y databricks-axi <command> --help\` for per-command usage.
+Run \`databricks-axi --help\` for global flags, or \`databricks-axi <command> --help\` for per-command usage (per the invocation note above).
 
 ## Tips
 

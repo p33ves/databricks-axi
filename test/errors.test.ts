@@ -26,6 +26,14 @@ describe("redactSecrets", () => {
     expect(redactSecrets(text)).toBe(text);
   });
 
+  it("keeps a statement UUID and SQLSTATE readable in a SQL error message", () => {
+    // The two identifier shapes sql.ts actually surfaces in SQL_ERROR text:
+    // a 36-char statement id (under the 40-char floor) and a 5-char SQLSTATE.
+    const text =
+      "[42601] Syntax error near 'foo' (statement 01234567-89ab-cdef-0123-456789abcdef)";
+    expect(redactSecrets(text)).toBe(text);
+  });
+
   it("leaves normal text alone", () => {
     expect(redactSecrets("Error: Job 123 does not exist.")).toBe(
       "Error: Job 123 does not exist.",
