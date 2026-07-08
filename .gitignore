@@ -5,3 +5,4 @@ docs/superpowers/
 .claude/
 .cache/
 .databricks*
+.npm/
