@@ -19,23 +19,24 @@ Agent ergonomics is measurable. The benchmark (methodology follows the
 [axi benchmark](https://axi.md)) runs 7 real-world Databricks tasks —
 failed-run triage, job triggering, SQL row counts, schema lookups, error
 recovery, warehouse checks, capability discovery — through 3 interface
-setups, 3 repeats each (the warehouse-cycling task runs once per condition
-since it mutates shared cluster state), with `claude-sonnet-5` as the agent
-and an LLM judge scoring task success against seeded fixtures (53 runs
-total, v0.3.0, 2026-07-08).
+setups, 5 repeats each (the warehouse-cycling task runs once per condition
+since it mutates shared cluster state), with `claude-sonnet-5` as the agent.
+Task success is scored against seeded fixtures — deterministically where the
+answer is machine-checkable, by an LLM judge otherwise (87 runs total,
+v0.3.0, 2026-07-08; durations are API-reported medians).
 
 databricks-axi posts the lowest input tokens, cost, and turns, passing every
 run:
 
 | Condition                    | Avg Input Tokens | Avg Cost/Task | Median Duration | Avg Turns | Success  |
 | ---------------------------- | ---------------- | ------------- | --------------- | --------- | -------- |
-| **databricks-axi**           | **85,538**       | **$0.153**    | **12s**         | **2.9**   | **100%** |
-| databricks CLI (raw)         | 118,060          | $0.175        | 16s             | 4.0       | 100%     |
-| Databricks managed MCP (SQL) | 224,234          | $0.310        | 15s             | 5.1       | 100%     |
+| **databricks-axi**           | **87,826**       | **$0.155**    | **10s**         | **3.0**   | **100%** |
+| databricks CLI (raw)         | 122,549          | $0.177        | 17s             | 4.2       | 100%     |
+| Databricks managed MCP (SQL) | 226,298          | $0.306        | 13s             | 5.2       | 100%     |
 
 Against the raw `databricks` CLI — the very CLI this tool wraps — that is
-28% fewer input tokens, 27% fewer turns, and 13% lower cost. Against the
-managed MCP server it is 51% cheaper with 62% fewer input tokens — and the
+28% fewer input tokens, 29% fewer turns, and 12% lower cost. Against the
+managed MCP server it is 49% cheaper with 61% fewer input tokens — and the
 MCP server sits out the two job-mutating tasks entirely (no official MCP
 surface can trigger a job run). One databricks-axi run was re-executed after
 an environmental auth-token expiry unrelated to the tool.
