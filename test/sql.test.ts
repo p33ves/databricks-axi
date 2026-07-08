@@ -204,6 +204,37 @@ describe("sql exec", () => {
     expect(out).toContain("total_row_count: 2");
   });
 
+  it("clamps wait_timeout to the --timeout budget", async () => {
+    fake.respond("api post", succeededStmt());
+    await run([
+      "sql",
+      "exec",
+      "SELECT 1",
+      "--warehouse",
+      WH_ID,
+      "--timeout",
+      "10",
+    ]);
+    expect(submittedBody()["wait_timeout"]).toBe("10s");
+  });
+
+  it("floors wait_timeout at the API's 5s minimum", async () => {
+    fake.respond("api post", {
+      statement_id: STMT_ID,
+      status: { state: "RUNNING" },
+    });
+    await run([
+      "sql",
+      "exec",
+      "SELECT 1",
+      "--warehouse",
+      WH_ID,
+      "--timeout",
+      "0",
+    ]);
+    expect(submittedBody()["wait_timeout"]).toBe("5s");
+  });
+
   it("passes --limit as row_limit", async () => {
     fake.respond("api post", succeededStmt());
     await run([

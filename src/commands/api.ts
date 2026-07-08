@@ -65,7 +65,7 @@ export async function apiCommand(args: string[]): Promise<AxiRenderable> {
   const parsed = await runDatabricksApi(method.toLowerCase(), path, body, {
     ...(profile ? { profile } : {}),
   });
-  const bytes = JSON.stringify(parsed)?.length ?? 0;
+  const bytes = Buffer.byteLength(JSON.stringify(parsed) ?? "", "utf8");
   if (bytes > MAX_RENDER_BYTES) {
     return {
       truncated: `response is ${bytes} bytes (render cap 1MB) — narrow the request`,

@@ -122,4 +122,13 @@ describe("api", () => {
     expect(out).toMatch(/truncated:.*\d+ bytes/);
     expect(out.length).toBeLessThan(100_000);
   });
+
+  it("counts UTF-8 bytes, not UTF-16 length, against the render cap", async () => {
+    // 600k 2-byte chars: .length is ~600k (under cap) but UTF-8 bytes are ~1.2MB (over cap).
+    fake.respond("api get", { blob: "é".repeat(600_000) });
+    const { out, exitCode } = await run(["api", "get", "/api/2.0/x"]);
+    expect(exitCode).toBe(0);
+    expect(out).toMatch(/truncated:.*\d+ bytes/);
+    expect(out).not.toContain("blob");
+  });
 });

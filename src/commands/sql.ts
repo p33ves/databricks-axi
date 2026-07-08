@@ -218,13 +218,14 @@ async function sqlExec(args: string[]): Promise<AxiRenderable> {
   const warehouseId = await resolveWarehouse(flags.get("warehouse"), opts);
 
   const deadline = Date.now() + budgetS * 1000;
+  const waitTimeoutS = Math.max(5, Math.min(budgetS, 50));
   let stmt = (await runDatabricksApi(
     "post",
     STATEMENTS_PATH,
     JSON.stringify({
       statement: query,
       warehouse_id: warehouseId,
-      wait_timeout: "50s",
+      wait_timeout: `${waitTimeoutS}s`,
       on_wait_timeout: "CONTINUE",
       disposition: "INLINE",
       format: "JSON_ARRAY",
