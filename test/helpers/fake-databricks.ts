@@ -13,6 +13,8 @@ export type FakeDatabricks = {
   binDir: string;
   /** Replay `json` on stdout (exit 0) when argv starts with the tokens of `prefix`. */
   respond: (prefix: string, json: unknown) => void;
+  /** Replay one JSON payload per call, in order; the last one sticks. */
+  respondSeq: (prefix: string, jsons: unknown[]) => void;
   /** Replay a raw stdout string verbatim — for payloads JSON.stringify would mangle (int64 ids). */
   respondRaw: (prefix: string, stdout: string) => void;
   /** Replay `stderr` text with a nonzero exit (default 1) — canned upstream errors. */
@@ -26,6 +28,7 @@ type CannedReply = {
   stdoutRaw?: string;
   stderr?: string;
   exitCode?: number;
+  seq?: unknown[];
 };
 
 /**
@@ -47,19 +50,34 @@ const { appendFileSync, readFileSync } = require("node:fs");
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify(args) + "\\n");
 const responses = JSON.parse(readFileSync(${JSON.stringify(responsesFile)}, "utf8"));
+// process.exitCode (not process.exit) so large stdout payloads flush fully.
+let matched = false;
 for (const [prefix, reply] of Object.entries(responses)) {
   // Token-wise match: "jobs get" matches ["jobs","get",...] but never
   // ["jobs","get-run",...], unlike a joined-string startsWith.
   const parts = prefix.split(" ");
   if (parts.every((part, i) => args[i] === part)) {
+    matched = true;
+    if (reply.seq !== undefined) {
+      // Sequential replies: consume one per call, the last one sticks.
+      process.stdout.write(JSON.stringify(reply.seq[0]));
+      if (reply.seq.length > 1) {
+        responses[prefix] = { seq: reply.seq.slice(1) };
+        require("node:fs").writeFileSync(${JSON.stringify(responsesFile)}, JSON.stringify(responses));
+      }
+      break;
+    }
     if (reply.stderr) process.stderr.write(reply.stderr);
     if (reply.stdoutRaw !== undefined) process.stdout.write(reply.stdoutRaw);
     else if (reply.stdout !== undefined) process.stdout.write(JSON.stringify(reply.stdout));
-    process.exit(reply.exitCode ?? 0);
+    process.exitCode = reply.exitCode ?? 0;
+    break;
   }
 }
-process.stderr.write("fake-databricks: no canned response for: " + args.join(" ") + "\\n");
-process.exit(1);
+if (!matched) {
+  process.stderr.write("fake-databricks: no canned response for: " + args.join(" ") + "\\n");
+  process.exitCode = 1;
+}
 `;
   const bin = join(dir, "databricks");
   writeFileSync(bin, script);
@@ -77,6 +95,7 @@ process.exit(1);
   return {
     binDir: dir,
     respond: (prefix, json) => seed(prefix, { stdout: json }),
+    respondSeq: (prefix, jsons) => seed(prefix, { seq: jsons }),
     respondRaw: (prefix, stdout) => seed(prefix, { stdoutRaw: stdout }),
     respondError: (prefix, stderr, exitCode = 1) =>
       seed(prefix, { stderr, exitCode }),

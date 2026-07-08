@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel). Other domains (clusters, SQL, catalog, workspace, fs, pipelines, serving, api, setup) land incrementally - run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), sql (warehouses, exec, statement view), api (raw REST passthrough). Other domains (clusters, catalog, workspace, fs, pipelines, serving, setup) land incrementally - run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, jobs]
+    tags: [databricks, spark, jobs, sql, warehouse, query]
     category: data
 ---
 
@@ -25,7 +25,7 @@ Pre-release scaffold: command domains are landing incrementally. Run `npx -y dat
 ## Commands
 
 ```
-commands[8]:
+commands[13]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -34,6 +34,11 @@ commands[8]:
   jobs runs view <run_id>
   jobs logs <run_id> [--full]
   jobs cancel <run_id>
+  sql warehouses [--fields a,b]
+  sql warehouses view|start|stop <id>
+  sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
+  sql statement view <statement_id>
+  api <method> <path> [--body <json>]
 ```
 
 Run `npx -y databricks-axi --help` for global flags, or `npx -y databricks-axi <command> --help` for per-command usage.

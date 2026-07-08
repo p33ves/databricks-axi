@@ -5,8 +5,9 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 // that don't exist yet) - extend as command domains land.
 export const SKILL_DESCRIPTION =
   "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs " +
-  "(list, view, run, runs, logs, cancel). Other domains (clusters, SQL, " +
-  "catalog, workspace, fs, pipelines, serving, api, setup) land " +
+  "(list, view, run, runs, logs, cancel), sql (warehouses, exec, " +
+  "statement view), api (raw REST passthrough). Other domains (clusters, " +
+  "catalog, workspace, fs, pipelines, serving, setup) land " +
   "incrementally - run `databricks-axi --help` for the current surface.";
 
 export const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
@@ -15,7 +16,14 @@ export const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
 // Harnesses that don't know these fields (e.g. Claude Code) ignore them.
 // Scoped like SKILL_DESCRIPTION: topical only, no unimplemented domains —
 // re-add sql/unity-catalog as those domains land.
-export const HERMES_TAGS = ["databricks", "spark", "jobs"];
+export const HERMES_TAGS = [
+  "databricks",
+  "spark",
+  "jobs",
+  "sql",
+  "warehouse",
+  "query",
+];
 export const HERMES_CATEGORY = "data";
 
 function yamlDoubleQuote(value: string): string {

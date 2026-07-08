@@ -9,9 +9,9 @@ Wraps the official [`databricks` CLI](https://docs.databricks.com/dev-tools/cli/
 — auth, transport, and API coverage stay upstream; this tool reshapes the
 experience for agents.
 
-> **Status: pre-release.** The `jobs` domain is implemented; remaining
-> domains are landing incrementally — run `npx -y databricks-axi --help`
-> for what's available today.
+> **Status: pre-release.** The `jobs` and `sql` domains and the `api`
+> passthrough are implemented; remaining domains are landing incrementally —
+> run `npx -y databricks-axi --help` for what's available today.
 
 ## Requirements
 
@@ -44,13 +44,13 @@ v1 command surface (see the AXI standard for the principles each follows):
 | `home`      | ambient context dashboard                    |
 | `jobs`      | list, view, run, runs, logs, cancel ✅       |
 | `clusters`  | list, view, start, stop                      |
-| `sql`       | warehouses, exec, statement view             |
+| `sql`       | warehouses, exec, statement view ✅          |
 | `catalog`   | catalogs, schemas, tables, table view        |
 | `workspace` | ls, view                                     |
 | `fs`        | ls, cat                                      |
 | `pipelines` | list, view, start, stop, events              |
 | `serving`   | list, view                                   |
-| `api`       | raw REST passthrough                         |
+| `api`       | raw REST passthrough ✅                      |
 | `setup`     | hooks install (Claude Code, Codex, OpenCode) |
 
 ## Development
