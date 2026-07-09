@@ -46,4 +46,6 @@ Working from a fork requires no-mistakes >= 1.30.1.
 - Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`).
 - `skills/databricks-axi/SKILL.md` is generated — edit `src/skill.ts` /
   `src/cli.ts` and run `pnpm run build:skill`. CI fails on a stale copy.
+- Never hand-bump `package.json`'s `version` — release-please sets it in its
+  own release PR from your conventional commits.
 - Everything else: see [AGENTS.md](AGENTS.md).
