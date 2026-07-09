@@ -246,6 +246,12 @@ describe("catalog tables", () => {
     expect(exitCode).toBe(2);
     expect(t.fake.calls()).toEqual([]);
   });
+
+  it("rejects a leading-dash schema segment smuggled as a separate argv token", async () => {
+    const { exitCode } = await t.run(["catalog", "tables", "workspace.-y"]);
+    expect(exitCode).toBe(2);
+    expect(t.fake.calls()).toEqual([]);
+  });
 });
 
 describe("catalog table view", () => {

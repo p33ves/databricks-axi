@@ -163,7 +163,7 @@ async function tablesList(args: string[]): Promise<AxiRenderable> {
   const ref = requireId(
     positional,
     "catalog tables <catalog>.<schema>",
-    /^[^.-][^.]*\..+$/,
+    /^[^.-][^.]*\.[^.-].*$/,
   );
   const dot = ref.indexOf(".");
   const catalog = ref.slice(0, dot);
