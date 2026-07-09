@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runAxiCli } from "axi-sdk-js";
 import { apiCommand, API_HELP } from "./commands/api.js";
+import { catalogCommand, CATALOG_HELP } from "./commands/catalog.js";
 import { homeCommand } from "./commands/home.js";
 import { jobsCommand, JOBS_HELP } from "./commands/jobs.js";
 import { sqlCommand, SQL_HELP } from "./commands/sql.js";
@@ -12,7 +13,7 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[13]:
+commands[17]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -25,6 +26,10 @@ commands[13]:
   sql warehouses view|start|stop <id>
   sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
   sql statement view <statement_id>
+  catalog catalogs [--limit N] [--fields a,b]
+  catalog schemas <catalog> [--limit N] [--fields a,b]
+  catalog tables <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog table view <catalog>.<schema>.<table>
   api <method> <path> [--body <json>]
 flags[3]:
   --help, -v/-V/--version, --profile <name>
@@ -46,6 +51,7 @@ export const COMMANDS = {
   home: homeCommand,
   jobs: jobsCommand,
   sql: sqlCommand,
+  catalog: catalogCommand,
   api: apiCommand,
 };
 
@@ -53,6 +59,7 @@ const COMMAND_HELP: Record<string, string> = {
   home: HOME_HELP,
   jobs: JOBS_HELP,
   sql: SQL_HELP,
+  catalog: CATALOG_HELP,
   api: API_HELP,
 };
 
