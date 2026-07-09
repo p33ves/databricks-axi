@@ -95,6 +95,10 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 - `CHANGELOG.md` (release-please, simple mode — the bot's release PR is the
   only place it changes; no `.release-please-manifest.json` exists because
   manifest mode would need it hand-committed first, which the guard forbids)
+- `package.json`'s `version` field — release-please computes it from
+  conventional commits and bumps it in its own release PR; never hand-bump
+  it in a feature commit. `guard-generated-files.yml` fails human PRs that
+  change it.
 
 ## Development lifecycle
 
