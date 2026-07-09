@@ -6,9 +6,9 @@ canonical; CLAUDE.md defers here.
 ## What this is
 
 AXI-compliant wrapper around the official `databricks` CLI (Go, >= 0.298;
-v1.x is fine — the guard only rejects 0.x below 0.298).
-The [AXI standard](https://github.com/kunchenguid/axi) defines 10 principles —
-they are requirements, not suggestions.
+v1.x is fine; the guard only rejects 0.x below 0.298).
+The [AXI standard](https://github.com/kunchenguid/axi) defines 10 principles.
+They are requirements, not suggestions.
 
 ## Commands
 
@@ -30,7 +30,7 @@ these instead of auto-detecting): `pnpm test`,
 `bin/databricks-axi.ts` → `src/cli.ts` (`runAxiCli` from axi-sdk-js) →
 `src/commands/<domain>.ts`. Support modules: `src/databricks.ts`
 (spawn wrapper), `src/errors.ts` (taxonomy), `src/commands/shared.ts`
-(`domainHelpers(domain)` — the shared `parseArgs`/`parseIntFlag`/`requireId`/
+(`domainHelpers(domain)`: the shared `parseArgs`/`parseIntFlag`/`requireId`/
 `renderRows`, built on `node:util`'s `parseArgs` in strict mode); planned:
 `src/suggestions.ts`, `src/context.ts`, `src/fields.ts`. Internal logic stays
 on JSON; TOON conversion happens only at the output boundary.
@@ -41,7 +41,7 @@ Tests mirror `src/` under `test/`. Domain tests call `setupCli()` from
 stdout/exit code); seed canned JSON with `respond(prefix, json)`, assert
 exact argv with `calls()`.
 
-## Sharp edges (learned the hard way — do not rediscover)
+## Sharp edges (learned the hard way; do not rediscover)
 
 - The official CLI has **no statement-execution subcommand**
   (databricks/cli#3896). `sql exec` must poll
@@ -49,7 +49,7 @@ exact argv with `calls()`.
   passthrough; `wait_timeout` <= 50s per call; INLINE results cap ~25MB.
   Watch #3896: if `databricks query sql` ships upstream, `sql exec` can
   delegate instead of polling.
-- There is **no `clusters stop` upstream** — the terminate verb is
+- There is **no `clusters stop` upstream**; the terminate verb is
   `databricks clusters delete` (keeps config, restartable). Never
   `permanent-delete`, which destroys the cluster. Our `clusters stop` maps to
   `clusters delete`.
@@ -61,7 +61,7 @@ exact argv with `calls()`.
   upstream.
 - Don't assume that pattern carries to every domain: `sql warehouses
 start/stop` on an already-in-state warehouse exits 0 silently upstream
-  (pinned live 2026-07-07) — no `INVALID_STATE` no-op mapping needed there.
+  (pinned live 2026-07-07); no `INVALID_STATE` no-op mapping needed there.
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =
   `jobs get-run` → per-task `get-run-output` fan-out.
 - CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
@@ -84,18 +84,18 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
   `tsconfig.json` pins `"types": ["node"]`, so a new `@types/*` package must
   be added there or it is silently ignored.
 - Flag parsing (`domainHelpers(domain).parseArgs`) is `node:util`'s
-  `parseArgs` in strict mode, not a hand-rolled loop — usage-error wording
+  `parseArgs` in strict mode, not a hand-rolled loop. Usage-error wording
   follows node's own messages (`Unknown option '--x'`, `argument missing`),
   and `--flag=value` works alongside `--flag value`. Don't hand-write flag
   parsing in a new domain; call `domainHelpers`.
 
-## Generated files — never hand-edit
+## Generated files (never hand-edit)
 
 - `skills/databricks-axi/SKILL.md` (regenerate: `pnpm run build:skill`)
-- `CHANGELOG.md` (release-please, simple mode — the bot's release PR is the
+- `CHANGELOG.md` (release-please, simple mode; the bot's release PR is the
   only place it changes; no `.release-please-manifest.json` exists because
   manifest mode would need it hand-committed first, which the guard forbids)
-- `package.json`'s `version` field — release-please computes it from
+- `package.json`'s `version` field: release-please computes it from
   conventional commits and bumps it in its own release PR; never hand-bump
   it in a feature commit. `guard-generated-files.yml` fails human PRs that
   change it.
@@ -111,6 +111,6 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 
 ## Shipping (required)
 
-Commit on a feature branch, then `git push no-mistakes` — never push to
+Commit on a feature branch, then `git push no-mistakes`; never push to
 `origin` directly. See CONTRIBUTING.md. Evidence artifacts for shipped
 changes live under `.no-mistakes/evidence/`.
