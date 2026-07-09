@@ -17,31 +17,44 @@ experience for agents.
 ## Benchmarks
 
 Agent ergonomics is measurable. The benchmark (methodology follows the
-[axi benchmark](https://axi.md)) runs 7 real-world Databricks tasks —
-failed-run triage, job triggering, SQL row counts, schema lookups, error
-recovery, warehouse checks, capability discovery — through 3 interface
-setups, 5 repeats each (the warehouse-cycling task runs once, not five
-times, in the two conditions that run it, since it mutates shared cluster
-state), with `claude-sonnet-5` as the agent.
-Task success is scored against seeded fixtures — deterministically where the
-answer is machine-checkable, by an LLM judge otherwise (87 runs total,
-v0.3.0, 2026-07-08; durations are API-reported medians).
+[axi benchmark](https://axi.md)) runs 8 real-world Databricks tasks —
+failed-run triage, job triggering, SQL row counts, schema lookups, table
+listing, error recovery, warehouse checks, capability discovery — through 4
+interface setups, 3 repeats each, with `claude-sonnet-5` as the agent. The
+four setups are the raw `databricks` CLI, databricks-axi, and two Databricks
+MCP servers: the workspace-managed SQL server and Databricks Field
+Engineering's [ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit)
+full-surface server (~40 tools). Task success is scored against seeded
+fixtures — deterministically where the answer is machine-checkable, by an LLM
+judge otherwise (90 runs total, v0.4.0, 2026-07-09; durations are
+API-reported medians).
 
-databricks-axi posts the lowest input tokens, cost, and turns, passing every
-run:
+Over the six tasks every setup runs, databricks-axi posts the lowest input
+tokens, cost, turns, and duration, passing every run:
 
 | Condition                    | Avg Input Tokens | Avg Cost/Task | Median Duration | Avg Turns | Success  |
 | ---------------------------- | ---------------- | ------------- | --------------- | --------- | -------- |
-| **databricks-axi**           | **87,826**       | **$0.155**    | **10s**         | **3.0**   | **100%** |
-| databricks CLI (raw)         | 122,549          | $0.177        | 17s             | 4.2       | 100%     |
-| Databricks managed MCP (SQL) | 226,298          | $0.306        | 13s             | 5.2       | 100%     |
+| **databricks-axi**           | **84,506**       | **$0.140**    | **7s**          | **2.9**   | **100%** |
+| databricks CLI (raw)         | 115,447          | $0.167        | 12s             | 3.9       | 100%     |
+| Databricks managed MCP (SQL) | 197,535          | $0.268        | 10s             | 4.7       | 100%     |
+| Databricks ai-dev-kit MCP    | 201,346          | $0.348        | 15s             | 4.8       | 100%     |
 
-Against the raw `databricks` CLI — the very CLI this tool wraps — that is
-28% fewer input tokens, 29% fewer turns, and 12% lower cost. Against the
-managed MCP server it is 49% cheaper with 61% fewer input tokens — and the
-MCP server sits out the two job-mutating tasks entirely (no official MCP
-surface can trigger a job run). One databricks-axi run was re-executed after
-an environmental auth-token expiry unrelated to the tool.
+Against the raw `databricks` CLI — the very CLI this tool wraps — that is 27%
+fewer input tokens, 26% fewer turns, and 16% lower cost. Against the MCP
+servers the gap is far wider: **57–58% fewer input tokens** and 48–60% lower
+cost. The reason is structural — an MCP server loads its tool schemas into the
+agent's context on every session (3 tools for the managed SQL server, ~40 for
+ai-dev-kit), while databricks-axi exposes the same jobs / warehouse / catalog /
+SQL surface as a single CLI the agent already knows how to read. The managed
+SQL server also cannot perform the two job- and warehouse-mutating tasks at all
+(no SQL surface can trigger a job run), and pays a further penalty doing what it
+can — e.g. +214% duration to triage a failed job run by querying `system`
+tables instead of the jobs API.
+
+All 90 runs passed. One run (`home-orientation` / ai-dev-kit) was an LLM-judge
+false-negative — the transcript showed a live tool call returning real
+workspace data — and was re-graded to pass with the correction recorded
+alongside the raw judge verdict.
 
 ## Requirements
 
