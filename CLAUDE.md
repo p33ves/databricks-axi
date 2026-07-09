@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Read [AGENTS.md](AGENTS.md) first — it is the canonical conventions doc
+Read [AGENTS.md](AGENTS.md) first. It is the canonical conventions doc
 (commands, architecture, sharp edges, shipping rules).
 
 Claude-specific notes:
