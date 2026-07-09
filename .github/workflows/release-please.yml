@@ -1,0 +1,26 @@
+name: release-please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      # Simple mode (release-type, no config/manifest files): manifest mode
+      # would need .release-please-manifest.json committed first, which the
+      # generated-files guard only lets release-please itself do.
+      #
+      # The release PR is authored by github-actions[bot] (exempt from the
+      # guard and no-mistakes checks, which skip). GITHUB_TOKEN-created PRs
+      # do not trigger the pull_request-based required checks (build-and-test,
+      # CodeQL) — close and reopen the release PR once to run them.
+      - uses: googleapis/release-please-action@v4
+        with:
+          release-type: node

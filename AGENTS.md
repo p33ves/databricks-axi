@@ -92,7 +92,9 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 ## Generated files — never hand-edit
 
 - `skills/databricks-axi/SKILL.md` (regenerate: `pnpm run build:skill`)
-- later: `CHANGELOG.md`, `.release-please-manifest.json` (release-please)
+- `CHANGELOG.md` (release-please, simple mode — the bot's release PR is the
+  only place it changes; no `.release-please-manifest.json` exists because
+  manifest mode would need it hand-committed first, which the guard forbids)
 
 ## Development lifecycle
 
