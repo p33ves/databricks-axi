@@ -124,6 +124,25 @@ describe("catalog schemas", () => {
     const { exitCode } = await t.run(["catalog", "schemas"]);
     expect(exitCode).toBe(2);
   });
+
+  it("rejects unknown --fields keys", async () => {
+    t.fake.respond("schemas list", SCHEMAS);
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "schemas",
+      "workspace",
+      "--fields",
+      "bogus",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown field: bogus");
+  });
+
+  it("rejects a leading-dash catalog smuggled past `--`", async () => {
+    const { exitCode } = await t.run(["catalog", "schemas", "--", "-x"]);
+    expect(exitCode).toBe(2);
+    expect(t.fake.calls()).toEqual([]);
+  });
 });
 
 describe("catalog tables", () => {
@@ -206,6 +225,25 @@ describe("catalog tables", () => {
     const { out, exitCode } = await t.run(["catalog", "tables", "workspace"]);
     expect(exitCode).toBe(2);
     expect(out).toContain("<catalog>.<schema>");
+    expect(t.fake.calls()).toEqual([]);
+  });
+
+  it("rejects unknown --fields keys", async () => {
+    t.fake.respond("tables list", TABLES);
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "tables",
+      "workspace.default",
+      "--fields",
+      "bogus",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown field: bogus");
+  });
+
+  it("rejects a leading-dash dotted arg smuggled past `--`", async () => {
+    const { exitCode } = await t.run(["catalog", "tables", "--", "-x.y"]);
+    expect(exitCode).toBe(2);
     expect(t.fake.calls()).toEqual([]);
   });
 });
