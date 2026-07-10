@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/p33ves/databricks-axi/compare/v0.4.0...v0.5.0) (2026-07-10)
+
+
+### Features
+
+* **workspace,fs:** add read-only workspace and fs commands ([#19](https://github.com/p33ves/databricks-axi/issues/19)) ([cad1baf](https://github.com/p33ves/databricks-axi/commit/cad1bafef90c970e8609d95eb8df540c2c3250ba))
+
+
+### Bug Fixes
+
+* **security:** redact job log output and route API bodies off argv ([#15](https://github.com/p33ves/databricks-axi/issues/15)) ([1c6e388](https://github.com/p33ves/databricks-axi/commit/1c6e3881f8b0e064685806991295dbb64add6164))
+
 ## [0.4.0](https://github.com/p33ves/databricks-axi/compare/v0.3.0...v0.4.0) (2026-07-09)
 
 
