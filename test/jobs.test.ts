@@ -502,6 +502,21 @@ describe("jobs logs", () => {
     expect(out).toContain("[redacted]");
   });
 
+  it("redacts a dkea token immediately preceded by a word character in real CLI stdout", async () => {
+    t.fake.respond("jobs get-run", RUN_WITH_TASKS);
+    t.fake.respond("jobs get-run-output 9021", {
+      notebook_output: { result: "extract ok" },
+    });
+    t.fake.respond("jobs get-run-output 9022", {
+      error: "auth failed for prefix_dkeaAbc12345XYZ",
+      error_trace: "Traceback: token prefix_dkeaAbc12345XYZ rejected",
+    });
+    const { out, exitCode } = await t.run(["jobs", "logs", "902"]);
+    expect(exitCode).toBe(0);
+    expect(out).not.toContain("dkeaAbc12345XYZ");
+    expect(out).toContain("prefix_[redacted]");
+  });
+
   it("skips tasks without a run_id instead of fetching 'undefined'", async () => {
     t.fake.respond("jobs get-run", {
       run_id: 904,
