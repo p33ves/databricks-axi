@@ -193,7 +193,8 @@ function spawnCollect(
 }
 
 // ponytail: version guard runs only on the failure path — a pre-flight
-// `databricks -v` would tax every happy-path invocation for nothing.
+// `databricks -v` would tax every happy-path invocation for nothing; revisit
+// if users report confusing errors from old CLIs before any command fails.
 async function diagnoseFailure(stderr: string): Promise<AxiError> {
   if (
     /unknown (command|flag|shorthand)|no such (option|command)/i.test(stderr)
