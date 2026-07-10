@@ -100,7 +100,7 @@ export async function runDatabricksApi(
     await writeFile(file, body, { mode: 0o600 });
     return await runDatabricks(["api", method, path, "--json", `@${file}`], opts);
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
