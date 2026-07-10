@@ -45,6 +45,21 @@ export function asList(parsed: unknown, key: string): AxiStructuredOutput[] {
   return (obj[key] as AxiStructuredOutput[] | undefined) ?? [];
 }
 
+/** Parent directory of a slash-separated workspace/dbfs path ("/" at the root). */
+export function parentPath(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx <= 0 ? "/" : path.slice(0, idx);
+}
+
+/**
+ * True if decoded text looks like it isn't actually text: Node's UTF-8
+ * decoder swaps invalid byte sequences for U+FFFD, and NUL bytes are a
+ * reliable binary tell that survive decoding untouched either way.
+ */
+export function looksBinary(text: string): boolean {
+  return text.includes("\uFFFD") || text.includes("\u0000");
+}
+
 /** Helpers whose usage errors point at `databricks-axi <domain> --help`. */
 export function domainHelpers(domain: string) {
   const usage = (message: string, extraHelp: string[] = []): AxiError =>

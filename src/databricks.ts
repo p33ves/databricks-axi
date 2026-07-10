@@ -9,12 +9,17 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const MIN_MINOR_VERSION = 298; // databricks CLI floor: 0.298 (pre-0.298 pagination flags differ)
 const INSTALL_HELP =
   "Install it: https://docs.databricks.com/dev-tools/cli/install";
+const RAW_OUTPUT_CAP_BYTES = 5 * 1024 * 1024; // fs cat / raw mode: stream + abort, never buffer unbounded
 
 export type RunDatabricksOptions = {
   profile?: string;
   timeoutMs?: number;
   /** TIMEOUT suggestions — mutations pass a state check, not "retry". */
   timeoutHelp?: string[];
+  /** Skip `-o json`, JSON.parse, and the int64 id-quoting regex; return raw
+   * stdout text as-is. Only fs cat uses this — file content is data, not
+   * a structured response. */
+  raw?: boolean;
 };
 
 type SpawnResult = {
@@ -23,12 +28,14 @@ type SpawnResult = {
   stderr: string;
   enoent: boolean;
   timedOut: boolean;
+  tooLarge: boolean;
 };
 
 /**
- * Run the official databricks CLI and return its parsed JSON output.
- * Array argv only (never a shell), stdin ignored, hard timeout, always
- * `-o json`. All failures surface as AxiError.
+ * Run the official databricks CLI and return its parsed JSON output (or, in
+ * raw mode, the verbatim stdout string). Array argv only (never a shell),
+ * stdin ignored, hard timeout, always `-o json` unless raw. All failures
+ * surface as AxiError.
  */
 export async function runDatabricks(
   args: string[],
@@ -37,11 +44,14 @@ export async function runDatabricks(
   const argv = [
     ...(opts.profile ? ["-p", opts.profile] : []),
     ...args,
-    "-o",
-    "json",
+    ...(opts.raw ? [] : ["-o", "json"]),
   ];
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const result = await spawnCollect(argv, timeoutMs);
+  const result = await spawnCollect(
+    argv,
+    timeoutMs,
+    opts.raw ? RAW_OUTPUT_CAP_BYTES : undefined,
+  );
   if (result.enoent) {
     throw new AxiError("databricks CLI not found on PATH", "CLI_MISSING", [
       INSTALL_HELP,
@@ -54,8 +64,20 @@ export async function runDatabricks(
       opts.timeoutHelp ?? ["Retry, or check workspace availability"],
     );
   }
+  if (result.tooLarge) {
+    throw new AxiError(
+      `databricks ${args[0] ?? ""} output exceeded the ${RAW_OUTPUT_CAP_BYTES / (1024 * 1024)}MB raw-output cap`,
+      "TOO_LARGE",
+      [
+        "Narrow the request — a smaller file, or a line-range/head tool upstream",
+      ],
+    );
+  }
   if (result.code !== 0) {
     throw await diagnoseFailure(result.stderr);
+  }
+  if (opts.raw) {
+    return result.stdout;
   }
   const trimmed = result.stdout.trim();
   if (!trimmed) {
@@ -107,35 +129,66 @@ export async function runDatabricksApi(
   }
 }
 
-function spawnCollect(argv: string[], timeoutMs: number): Promise<SpawnResult> {
+/**
+ * `maxBytes`, when set, streams stdout as Buffer chunks and SIGKILLs the
+ * child the moment the running total exceeds the cap — never buffers an
+ * unbounded response in memory. Chunks are concatenated and decoded once at
+ * the end (also sidesteps multi-byte UTF-8 sequences split across pipe
+ * reads, which incremental string decoding would otherwise mangle).
+ */
+function spawnCollect(
+  argv: string[],
+  timeoutMs: number,
+  maxBytes?: number,
+): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const child = spawn("databricks", argv, {
       stdio: ["ignore", "pipe", "pipe"],
     });
-    let stdout = "";
+    const stdoutChunks: Buffer[] = [];
+    let stdoutBytes = 0;
     let stderr = "";
     let timedOut = false;
+    let tooLarge = false;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
     }, timeoutMs);
-    child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => (stdout += chunk));
+    child.stdout.on("data", (chunk: Buffer) => {
+      if (tooLarge) {
+        return;
+      }
+      stdoutBytes += chunk.length;
+      if (maxBytes !== undefined && stdoutBytes > maxBytes) {
+        tooLarge = true;
+        child.kill("SIGKILL");
+        return;
+      }
+      stdoutChunks.push(chunk);
+    });
     child.stderr.on("data", (chunk: string) => (stderr += chunk));
     child.on("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       resolve({
         code: null,
-        stdout,
+        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
         stderr: stderr || error.message,
         enoent: error.code === "ENOENT",
         timedOut,
+        tooLarge,
       });
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ code, stdout, stderr, enoent: false, timedOut });
+      resolve({
+        code,
+        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+        stderr,
+        enoent: false,
+        timedOut,
+        tooLarge,
+      });
     });
   });
 }

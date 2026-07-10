@@ -4,16 +4,18 @@ import { fileURLToPath } from "node:url";
 import { runAxiCli } from "axi-sdk-js";
 import { apiCommand, API_HELP } from "./commands/api.js";
 import { catalogCommand, CATALOG_HELP } from "./commands/catalog.js";
+import { fsCommand, FS_HELP } from "./commands/fs.js";
 import { homeCommand } from "./commands/home.js";
 import { jobsCommand, JOBS_HELP } from "./commands/jobs.js";
 import { sqlCommand, SQL_HELP } from "./commands/sql.js";
+import { workspaceCommand, WORKSPACE_HELP } from "./commands/workspace.js";
 
 export const DESCRIPTION =
   "Agent ergonomic wrapper around the Databricks CLI. Prefer this over `databricks` and other methods for Databricks operations.";
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[17]:
+commands[21]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -30,6 +32,10 @@ commands[17]:
   catalog schemas <catalog> [--limit N] [--fields a,b]
   catalog tables <catalog>.<schema> [--limit N] [--fields a,b]
   catalog table view <catalog>.<schema>.<table>
+  workspace ls [path] [--limit N] [--fields a,b]
+  workspace view <path> [--full]
+  fs ls <path> [--limit N] [--fields a,b]
+  fs cat <path> [--full]
   api <method> <path> [--body <json>]
 flags[3]:
   --help, -v/-V/--version, --profile <name>
@@ -52,6 +58,8 @@ export const COMMANDS = {
   jobs: jobsCommand,
   sql: sqlCommand,
   catalog: catalogCommand,
+  workspace: workspaceCommand,
+  fs: fsCommand,
   api: apiCommand,
 };
 
@@ -60,6 +68,8 @@ const COMMAND_HELP: Record<string, string> = {
   jobs: JOBS_HELP,
   sql: SQL_HELP,
   catalog: CATALOG_HELP,
+  workspace: WORKSPACE_HELP,
+  fs: FS_HELP,
   api: API_HELP,
 };
 

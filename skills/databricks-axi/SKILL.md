@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), sql (warehouses, exec, statement view), catalog (catalogs, schemas, tables, table view), api (raw REST passthrough). Other domains (clusters, workspace, fs, pipelines, serving, setup) land incrementally - run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), sql (warehouses, exec, statement view), catalog (catalogs, schemas, tables, table view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), api (raw REST passthrough). Other domains (clusters, pipelines, serving, setup) land incrementally - run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, jobs, sql, warehouse, query, catalog, schema, table, unity]
+    tags: [databricks, spark, jobs, sql, warehouse, query, catalog, schema, table, unity, notebook, dbfs, volume, file]
     category: data
 ---
 
@@ -28,7 +28,7 @@ Pre-release scaffold: command domains are landing incrementally. Run `databricks
 ## Commands
 
 ```
-commands[17]:
+commands[21]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -45,6 +45,10 @@ commands[17]:
   catalog schemas <catalog> [--limit N] [--fields a,b]
   catalog tables <catalog>.<schema> [--limit N] [--fields a,b]
   catalog table view <catalog>.<schema>.<table>
+  workspace ls [path] [--limit N] [--fields a,b]
+  workspace view <path> [--full]
+  fs ls <path> [--limit N] [--fields a,b]
+  fs cat <path> [--full]
   api <method> <path> [--body <json>]
 ```
 

@@ -32,10 +32,17 @@ export function mapUpstreamError(stderr: string): AxiError {
   ) {
     return new AxiError(firstLine, "AUTH_ERROR", AUTH_HELP);
   }
+  if (/Public DBFS root is disabled/i.test(text)) {
+    // Platform restriction on Free Edition-style workspaces, not a missing
+    // object — steer toward paths that are actually readable.
+    return new AxiError(firstLine, "PERMISSION_DENIED", [
+      "Public DBFS root access is disabled here — try dbfs:/databricks-datasets or a /Volumes/<catalog>/<schema>/<volume> path instead",
+    ]);
+  }
   if (/\b403\b|PERMISSION_DENIED/i.test(text)) {
     return new AxiError(firstLine, "PERMISSION_DENIED");
   }
-  if (/RESOURCE_DOES_NOT_EXIST|\b404\b|does not exist/i.test(text)) {
+  if (/RESOURCE_DOES_NOT_EXIST|\b404\b|does(?: not|n't) exist/i.test(text)) {
     return new AxiError(firstLine, "NOT_FOUND");
   }
   if (/INVALID_STATE/.test(text)) {

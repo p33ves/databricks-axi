@@ -91,6 +91,21 @@ describe("mapUpstreamError", () => {
     );
   });
 
+  it("maps the workspace CLI's contraction 'doesn't exist' to NOT_FOUND", () => {
+    expect(
+      mapUpstreamError("Error: Path (/Shared/nope) doesn't exist.").code,
+    ).toBe("NOT_FOUND");
+  });
+
+  it("maps the disabled public DBFS root to PERMISSION_DENIED with a path hint", () => {
+    const err = mapUpstreamError(
+      "Error: Public DBFS root is disabled. Access is denied on path: /foo",
+    );
+    expect(err.code).toBe("PERMISSION_DENIED");
+    expect(err.suggestions.join(" ")).toContain("dbfs:/databricks-datasets");
+    expect(err.suggestions.join(" ")).toContain("/Volumes");
+  });
+
   it("maps INVALID_STATE through", () => {
     expect(
       mapUpstreamError("Error: INVALID_STATE: Run is TERMINATED").code,
