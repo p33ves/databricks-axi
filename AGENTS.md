@@ -59,10 +59,17 @@ is deleted.
 - `jobs run-now` and `clusters start` **block by default** (20-min timeout).
   Mutations are async by default here: pass `--no-wait` upstream, return the
   id + a follow-up suggestion.
-- `INVALID_STATE` on start/stop means already-running/stopped → exit-0 no-op.
-  Note `clusters start` on a non-TERMINATED cluster is already a no-op
-  upstream.
-- Don't assume that pattern carries to every domain: `sql warehouses
+- `INVALID_STATE` on `jobs cancel` means already-terminated → exit-0 no-op.
+  That mapping does **not** carry to `clusters start`: a non-TERMINATED
+  cluster is **not** an upstream no-op — it exits 1 with `Error: Cluster
+<id> is in unexpected state Running.` (also `Pending.`), which maps to
+  `UPSTREAM_ERROR`, not `INVALID_STATE`. Catch it by the `/is in unexpected
+state/i` message regex, not the error code, and convert to an exit-0
+  no-op. `clusters stop` (`clusters delete`) has no such conversion:
+  upstream is silently idempotent there (exit 0, empty output on an
+  already-terminated cluster), so `stop` always returns exit-0 without
+  inspecting the error.
+- Don't assume the no-op pattern carries to every domain: `sql warehouses
 start/stop` on an already-in-state warehouse exits 0 silently upstream
   (pinned live 2026-07-07); no `INVALID_STATE` no-op mapping needed there.
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =

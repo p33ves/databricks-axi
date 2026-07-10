@@ -5,11 +5,11 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 // that don't exist yet) - extend as command domains land.
 export const SKILL_DESCRIPTION =
   "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs " +
-  "(list, view, run, runs, logs, cancel), sql (warehouses, exec, " +
-  "statement view), catalog (catalogs, schemas, tables, table view), " +
-  "workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume " +
-  "files), api (raw REST passthrough). Other domains (clusters, " +
-  "pipelines, serving, setup) land incrementally - run " +
+  "(list, view, run, runs, logs, cancel), clusters (list, view, start, " +
+  "stop), sql (warehouses, exec, statement view), catalog (catalogs, " +
+  "schemas, tables, table view), workspace (ls, view notebooks/directories), " +
+  "fs (ls, cat DBFS/volume files), api (raw REST passthrough). Other " +
+  "domains (pipelines, serving, setup) land incrementally - run " +
   "`databricks-axi --help` for the current surface.";
 
 export const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
@@ -22,6 +22,10 @@ export const HERMES_TAGS = [
   "databricks",
   "spark",
   "jobs",
+  "cluster",
+  "compute",
+  "start",
+  "stop",
   "sql",
   "warehouse",
   "query",
