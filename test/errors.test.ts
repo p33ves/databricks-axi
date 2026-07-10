@@ -20,6 +20,12 @@ describe("redactSecrets", () => {
     );
   });
 
+  it("redacts a dkea token immediately preceded by a word character", () => {
+    expect(redactSecrets("prefix_dkeaAbc12345XYZ leaked")).toBe(
+      "prefix_[redacted] leaked",
+    );
+  });
+
   it("redacts long hex runs", () => {
     expect(redactSecrets("id 0123456789abcdef0123456789abcdef end")).toBe(
       "id [redacted] end",
