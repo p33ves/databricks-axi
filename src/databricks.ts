@@ -98,7 +98,10 @@ export async function runDatabricksApi(
   const file = join(dir, "body.json");
   try {
     await writeFile(file, body, { mode: 0o600 });
-    return await runDatabricks(["api", method, path, "--json", `@${file}`], opts);
+    return await runDatabricks(
+      ["api", method, path, "--json", `@${file}`],
+      opts,
+    );
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }

@@ -447,7 +447,9 @@ function taskLogEntry(
       traceClipped = t.truncated;
     }
   }
-  const text = redactSecrets(output.notebook_output?.result || output.logs || "");
+  const text = redactSecrets(
+    output.notebook_output?.result || output.logs || "",
+  );
   if (text) {
     if (full) {
       entry.output = text;
