@@ -12,7 +12,8 @@ export type TruncateResult = {
 export const MAX_VIEW_CHARS = 100_000;
 
 /**
- * Line-based truncation shared by workspace view and fs cat. `head` keeps
+ * Line-based truncation shared by workspace view, fs cat, and jobs logs.
+ * `head` keeps
  * the first N lines (notebooks: imports/markdown preamble is what
  * summarization needs); `tail` keeps the last N (logs: the failure is at
  * the end). Exact-boundary input (totalLines === lines) is never marked

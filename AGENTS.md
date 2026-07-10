@@ -41,6 +41,9 @@ dropped at CP2 (2026-07-10) as needless splitting. `src/context.ts` is still
 planned for home. Internal logic stays on JSON; TOON conversion happens only
 at the output boundary. Don't re-inline the list envelope or a private
 NOT_FOUND wrapper in a new domain; call `listResult`/`runWithNotFoundHelp`.
+(`fs ls` is the deliberate exception to `listResult`: upstream `fs` has no
+`--limit`, so it knows the true total and reports exact truncation instead
+of `has_more`.)
 
 Tests mirror `src/` under `test/`. Domain tests call `setupCli()` from
 `test/helpers/fake-databricks.ts` for the standard rig (fresh fake
