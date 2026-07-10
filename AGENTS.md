@@ -129,6 +129,6 @@ Commit on a feature branch, then `git push no-mistakes`; never push to
 changes live under `.no-mistakes/evidence/`.
 
 After any merge to `main` lands, check whether the `release-please` run on
-`main` failed. If it did, invoke the `release-manager` agent — its
+`main` failed. If it did, invoke the `release-manager` agent: its
 post-merge self-heal runbook handles the expected "Actions not permitted to
 create or approve pull requests" failure without needing to be asked.
