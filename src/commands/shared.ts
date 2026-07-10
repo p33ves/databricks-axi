@@ -1,6 +1,6 @@
 import { parseArgs as nodeParseArgs } from "node:util";
 import { AxiError } from "axi-sdk-js";
-import type { RunDatabricksOptions } from "../databricks.js";
+import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
 
 // axi-sdk-js 0.1.8 doesn't re-export its output types from the package
 // index; mirror the two one-line aliases locally until it does.
@@ -58,6 +58,26 @@ export function parentPath(path: string): string {
  */
 export function looksBinary(text: string): boolean {
   return text.includes("\uFFFD") || text.includes("\u0000");
+}
+
+/** runDatabricks, folding domain-flavored suggestions into bare NOT_FOUND. */
+export async function runWithNotFoundHelp(
+  args: string[],
+  opts: RunDatabricksOptions,
+  notFoundHelp: string[],
+): Promise<unknown> {
+  try {
+    return await runDatabricks(args, opts);
+  } catch (error) {
+    if (
+      error instanceof AxiError &&
+      error.code === "NOT_FOUND" &&
+      error.suggestions.length === 0
+    ) {
+      throw new AxiError(error.message, "NOT_FOUND", notFoundHelp);
+    }
+    throw error;
+  }
 }
 
 /** Helpers whose usage errors point at `databricks-axi <domain> --help`. */

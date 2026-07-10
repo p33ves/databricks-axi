@@ -1,6 +1,4 @@
-import { AxiError } from "axi-sdk-js";
-import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
-import { truncate } from "../truncate.js";
+import { MAX_VIEW_CHARS, truncate } from "../truncate.js";
 import {
   asList,
   assertObject,
@@ -8,6 +6,7 @@ import {
   looksBinary,
   parentPath,
   profileSuffix,
+  runWithNotFoundHelp,
   spawnOpts,
   type AxiRenderable,
   type AxiStructuredOutput,
@@ -88,7 +87,7 @@ async function workspaceList(args: string[]): Promise<AxiRenderable> {
   const path = rawPath ?? "/";
   const limit = parseIntFlag(flags, "limit", DEFAULT_LIST_LIMIT);
   const p = profileSuffix(flags.get("profile"));
-  const parsed = await runWorkspace(
+  const parsed = await runWithNotFoundHelp(
     ["workspace", "list", path, "--limit", String(limit)],
     spawnOpts(flags),
     [`databricks-axi workspace ls${p}`],
@@ -96,7 +95,11 @@ async function workspaceList(args: string[]): Promise<AxiRenderable> {
   const items = asList(parsed, "objects") as RawObject[];
   const rows = renderRows(items, flags, ["path", "object_type", "language"]);
   if (rows.length === 0) {
-    return { objects: [], status: "directory is empty" };
+    return {
+      objects: [],
+      status: "directory is empty",
+      help: [`databricks-axi workspace ls${p}`],
+    };
   }
   const help: string[] = [];
   const notebook = items.find((o) => o.object_type === "NOTEBOOK");
@@ -130,7 +133,7 @@ async function workspaceView(args: string[]): Promise<AxiRenderable> {
   const p = profileSuffix(flags.get("profile"));
   const parent = parentPath(path);
   const obj = assertObject<RawExport>(
-    await runWorkspace(
+    await runWithNotFoundHelp(
       ["workspace", "export", path, "--format", "SOURCE"],
       spawnOpts(flags),
       [`databricks-axi workspace ls ${parent}${p}`],
@@ -142,7 +145,9 @@ async function workspaceView(args: string[]): Promise<AxiRenderable> {
   // Directory paths export as a ZIP archive (upstream supports DBC/SOURCE/
   // AUTO on dirs); the local-magic-number check is cheaper than a
   // get-status pre-flight for the common (file) case.
-  if (buf.subarray(0, 2).toString("latin1") === "PK") {
+  // Full local-file-header / end-of-central-directory signatures, not just
+  // "PK", so a source file that merely starts with those letters passes.
+  if (buf[0] === 0x50 && buf[1] === 0x4b && (buf[2] === 3 || buf[2] === 5)) {
     return {
       path,
       size,
@@ -152,11 +157,18 @@ async function workspaceView(args: string[]): Promise<AxiRenderable> {
   }
   const text = buf.toString("utf8");
   if (looksBinary(text)) {
-    return { path, size, content: `<binary, ${size} bytes — not rendered>` };
+    return {
+      path,
+      size,
+      content: `<binary, ${size} bytes — not rendered>`,
+      help: [`databricks-axi workspace ls ${parent}${p}`],
+    };
   }
-  const t = full
-    ? { text, truncated: false, totalLines: text.split("\n").length }
-    : truncate(text, { lines: HEAD_LINES, mode: "head" });
+  const t = truncate(text, {
+    lines: full ? Infinity : HEAD_LINES,
+    mode: "head",
+    maxChars: full ? Infinity : MAX_VIEW_CHARS,
+  });
   const out: AxiStructuredOutput = {
     path,
     language: languageFromFileType(obj.file_type),
@@ -164,7 +176,9 @@ async function workspaceView(args: string[]): Promise<AxiRenderable> {
     content: t.text,
   };
   if (t.truncated) {
-    out.truncated = `showing first ${HEAD_LINES} of ${t.totalLines} lines — rerun with --full`;
+    out.truncated = t.clipped
+      ? `content clipped at ${MAX_VIEW_CHARS} chars — rerun with --full`
+      : `showing first ${HEAD_LINES} of ${t.totalLines} lines — rerun with --full`;
   }
   out.help = [`databricks-axi workspace ls ${parent}${p}`];
   return out;
@@ -175,24 +189,4 @@ function languageFromFileType(fileType: string | undefined): string {
     return "";
   }
   return LANGUAGE_BY_EXT[fileType.toLowerCase()] ?? fileType.toUpperCase();
-}
-
-/** runDatabricks, with workspace-flavored suggestions folded into NOT_FOUND. */
-async function runWorkspace(
-  args: string[],
-  opts: RunDatabricksOptions,
-  notFoundHelp: string[],
-): Promise<unknown> {
-  try {
-    return await runDatabricks(args, opts);
-  } catch (error) {
-    if (
-      error instanceof AxiError &&
-      error.code === "NOT_FOUND" &&
-      error.suggestions.length === 0
-    ) {
-      throw new AxiError(error.message, "NOT_FOUND", notFoundHelp);
-    }
-    throw error;
-  }
 }

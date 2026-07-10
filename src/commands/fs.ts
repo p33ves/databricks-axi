@@ -1,12 +1,11 @@
-import { AxiError } from "axi-sdk-js";
-import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
-import { truncate } from "../truncate.js";
+import { MAX_VIEW_CHARS, truncate } from "../truncate.js";
 import {
   asList,
   domainHelpers,
   looksBinary,
   parentPath,
   profileSuffix,
+  runWithNotFoundHelp,
   spawnOpts,
   type AxiRenderable,
   type AxiStructuredOutput,
@@ -60,7 +59,7 @@ function parentDbfsDir(scopedPath: string): string {
   return match[1] + parentPath(match[2]);
 }
 
-function humanSize(bytes: unknown): string {
+export function humanSize(bytes: unknown): string {
   const n = typeof bytes === "number" ? bytes : Number(bytes);
   if (!Number.isFinite(n) || n < 0) {
     return "";
@@ -108,7 +107,7 @@ async function fsList(args: string[]): Promise<AxiRenderable> {
   const p = profileSuffix(flags.get("profile"));
   // No upstream --limit on the fs group (and no pagination at all) — it
   // returns everything in one shot, so the cap is purely client-side.
-  const parsed = await runFs(
+  const parsed = await runWithNotFoundHelp(
     ["fs", "ls", scoped, "--absolute", "-l"],
     spawnOpts(flags),
     [`databricks-axi fs ls ${parentDbfsDir(scoped)}${p}`],
@@ -117,7 +116,11 @@ async function fsList(args: string[]): Promise<AxiRenderable> {
   const total = items.length;
   const limited = items.slice(0, limit);
   if (limited.length === 0) {
-    return { entries: [], status: `${path} is empty` };
+    return {
+      entries: [],
+      status: `${path} is empty`,
+      help: [`databricks-axi fs ls ${parentDbfsDir(scoped)}${p}`],
+    };
   }
   // Human-readable size is a formatting transform on the flattened items,
   // applied before renderRows so --fields size also picks up "1.2MB" (no
@@ -154,7 +157,7 @@ async function fsCat(args: string[]): Promise<AxiRenderable> {
   const full = flags.get("full") === true;
   const scoped = withScheme(path);
   const p = profileSuffix(flags.get("profile"));
-  const text = (await runFs(
+  const text = (await runWithNotFoundHelp(
     ["fs", "cat", scoped],
     { ...spawnOpts(flags), raw: true },
     [`databricks-axi fs ls ${parentDbfsDir(scoped)}${p}`],
@@ -163,35 +166,26 @@ async function fsCat(args: string[]): Promise<AxiRenderable> {
   // for text files, approximate for binary ones (which we don't render
   // anyway, so the count is informational only).
   const size = Buffer.byteLength(text, "utf8");
+  const help = [`databricks-axi fs ls ${parentDbfsDir(scoped)}${p}`];
   if (looksBinary(text)) {
-    return { path, size, content: `<binary, ${size} bytes — not rendered>` };
+    return {
+      path,
+      size,
+      content: `<binary, ${size} bytes — not rendered>`,
+      help,
+    };
   }
-  const t = full
-    ? { text, truncated: false, totalLines: text.split("\n").length }
-    : truncate(text, { lines: HEAD_LINES, mode: "head" });
+  const t = truncate(text, {
+    lines: full ? Infinity : HEAD_LINES,
+    mode: "head",
+    maxChars: full ? Infinity : MAX_VIEW_CHARS,
+  });
   const out: AxiStructuredOutput = { path, size, content: t.text };
   if (t.truncated) {
-    out.truncated = `showing first ${HEAD_LINES} of ${t.totalLines} lines — rerun with --full`;
+    out.truncated = t.clipped
+      ? `content clipped at ${MAX_VIEW_CHARS} chars — rerun with --full`
+      : `showing first ${HEAD_LINES} of ${t.totalLines} lines — rerun with --full`;
   }
+  out.help = help;
   return out;
-}
-
-/** runDatabricks, with fs-flavored suggestions folded into NOT_FOUND. */
-async function runFs(
-  args: string[],
-  opts: RunDatabricksOptions,
-  notFoundHelp: string[],
-): Promise<unknown> {
-  try {
-    return await runDatabricks(args, opts);
-  } catch (error) {
-    if (
-      error instanceof AxiError &&
-      error.code === "NOT_FOUND" &&
-      error.suggestions.length === 0
-    ) {
-      throw new AxiError(error.message, "NOT_FOUND", notFoundHelp);
-    }
-    throw error;
-  }
 }

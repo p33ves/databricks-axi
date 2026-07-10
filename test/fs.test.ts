@@ -1,4 +1,8 @@
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { humanSize } from "../src/commands/fs.js";
 import { setupCli } from "./helpers/fake-databricks.js";
 
 const t = setupCli();
@@ -198,6 +202,43 @@ describe("fs cat", () => {
     expect(out).toContain("not rendered");
   });
 
+  it("treats NUL bytes as binary too", async () => {
+    t.fake.respondRaw("fs cat", "PNG\u0000\u0000junk");
+    const { out } = await t.run(["fs", "cat", "/raw.bin"]);
+    expect(out).toContain("not rendered");
+  });
+
+  it("clips a low-newline file at the char cap despite few lines", async () => {
+    t.fake.respondRaw("fs cat", "x".repeat(150_000));
+    const { out } = await t.run(["fs", "cat", "/minified.js"]);
+    expect(out).toContain("content clipped at 100000 chars");
+    expect(out.length).toBeLessThan(110_000);
+  });
+
+  it("surfaces the spawn-layer TOO_LARGE error for a >5MB file", async () => {
+    // The rig's stub replays canned strings; an actual >5MB stream needs a
+    // dedicated child that outruns the cap.
+    const dir = mkdtempSync(join(tmpdir(), "huge-fs-cat-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+const chunk = "a".repeat(1024 * 1024);
+for (let i = 0; i < 8; i++) process.stdout.write(chunk);
+`,
+    );
+    chmodSync(bin, 0o755);
+    const prev = process.env.PATH;
+    process.env.PATH = `${dir}:${prev ?? ""}`;
+    try {
+      const { out, exitCode } = await t.run(["fs", "cat", "/huge.bin"]);
+      expect(exitCode).toBe(1);
+      expect(out).toContain("TOO_LARGE");
+    } finally {
+      process.env.PATH = prev;
+    }
+  });
+
   it("rejects json output for raw fs cat the same way upstream does", async () => {
     t.fake.respondError("fs cat", "Error: json output not supported");
     const { out, exitCode } = await t.run(["fs", "cat", "/x"]);
@@ -248,5 +289,16 @@ describe("fs dispatch", () => {
     const { out, exitCode } = await t.run(["fs", "--help"]);
     expect(exitCode).toBe(0);
     expect(out).toContain("usage: databricks-axi fs");
+  });
+});
+
+describe("humanSize", () => {
+  it("formats across the unit ladder and rejects junk", () => {
+    expect(humanSize(10)).toBe("10B");
+    expect(humanSize(1024)).toBe("1.0KB");
+    expect(humanSize(1024 ** 3)).toBe("1.0GB");
+    expect(humanSize(1024 ** 5)).toBe("1024.0TB");
+    expect(humanSize(-1)).toBe("");
+    expect(humanSize(undefined)).toBe("");
   });
 });

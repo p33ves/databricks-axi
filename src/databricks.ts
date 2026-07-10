@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AxiError } from "axi-sdk-js";
-import { mapUpstreamError, redactSecrets } from "./errors.js";
+import { mapUpstreamError } from "./errors.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MIN_MINOR_VERSION = 298; // databricks CLI floor: 0.298 (pre-0.298 pagination flags differ)
@@ -90,10 +90,9 @@ export async function runDatabricks(
       trimmed.replace(/"(\w*_id)"\s*:\s*(\d{16,})(?=\s*[,}])/g, '"$1":"$2"'),
     ) as unknown;
   } catch {
-    throw new AxiError(
-      `databricks returned invalid JSON: ${redactSecrets(trimmed).slice(0, 120)}`,
-      "UPSTREAM_ERROR",
-    );
+    // stdout can carry exported file content (workspace view) — never echo
+    // any of it into an error message, even redacted.
+    throw new AxiError("databricks returned invalid JSON", "UPSTREAM_ERROR");
   }
 }
 
