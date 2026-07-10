@@ -14,6 +14,12 @@ describe("redactSecrets", () => {
     );
   });
 
+  it("redacts dkea OAuth tokens containing - and _", () => {
+    expect(redactSecrets("token dkeaAbc12-XY_890z rejected")).toBe(
+      "token [redacted] rejected",
+    );
+  });
+
   it("redacts long hex runs", () => {
     expect(redactSecrets("id 0123456789abcdef0123456789abcdef end")).toBe(
       "id [redacted] end",
