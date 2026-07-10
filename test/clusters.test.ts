@@ -145,6 +145,18 @@ describe("clusters view", () => {
     expect(out).toContain("num_workers: 2-8");
   });
 
+  it("falls back to num_workers when autoscale is missing max_workers", async () => {
+    t.fake.respond("clusters get", {
+      cluster_id: "1234-567890-abc123",
+      state: "RUNNING",
+      num_workers: 2,
+      autoscale: { min_workers: 2 },
+    });
+    const { out } = await t.run(["clusters", "view", "1234-567890-abc123"]);
+    expect(out).toContain("num_workers: 2");
+    expect(out).not.toContain("undefined");
+  });
+
   it("falls back to num_workers when autoscale is present but empty", async () => {
     t.fake.respond("clusters get", {
       cluster_id: "1234-567890-abc123",

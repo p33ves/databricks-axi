@@ -1,10 +1,11 @@
 import { AxiError } from "axi-sdk-js";
-import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
+import type { RunDatabricksOptions } from "../databricks.js";
 import {
   asList,
   assertObject,
   domainHelpers,
   profileSuffix,
+  runWithNotFoundHelp,
   spawnOpts,
   type AxiRenderable,
   type AxiStructuredOutput,
@@ -140,7 +141,8 @@ async function clustersView(args: string[]): Promise<AxiRenderable> {
   out.spark_version = cluster.spark_version;
   out.node_type_id = cluster.node_type_id;
   out.num_workers =
-    cluster.autoscale?.min_workers != null
+    cluster.autoscale?.min_workers != null &&
+    cluster.autoscale.max_workers != null
       ? `${cluster.autoscale.min_workers}-${cluster.autoscale.max_workers}`
       : cluster.num_workers;
   out.autotermination_minutes = cluster.autotermination_minutes;
@@ -244,23 +246,11 @@ async function clustersStop(args: string[]): Promise<AxiRenderable> {
 }
 
 /** runDatabricks, folding clusters-flavored suggestions into bare NOT_FOUND. */
-async function runClusters(
+function runClusters(
   args: string[],
   opts: RunDatabricksOptions,
 ): Promise<unknown> {
-  try {
-    return await runDatabricks(args, opts);
-  } catch (error) {
-    if (
-      error instanceof AxiError &&
-      error.code === "NOT_FOUND" &&
-      error.suggestions.length === 0
-    ) {
-      const p = profileSuffix(opts.profile);
-      throw new AxiError(error.message, "NOT_FOUND", [
-        `databricks-axi clusters list${p}`,
-      ]);
-    }
-    throw error;
-  }
+  return runWithNotFoundHelp(args, opts, [
+    `databricks-axi clusters list${profileSuffix(opts.profile)}`,
+  ]);
 }
