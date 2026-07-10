@@ -1,8 +1,8 @@
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runDatabricks } from "../src/databricks.js";
+import { runDatabricks, runDatabricksApi } from "../src/databricks.js";
 import {
   installFakeDatabricks,
   type FakeDatabricks,
@@ -61,6 +61,17 @@ describe("runDatabricks", () => {
     await expect(runDatabricks(["jobs", "get", "999"])).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  it("deletes the --json body temp file after the call", async () => {
+    const fake = useFake();
+    fake.respond("api post", { ok: true });
+    await runDatabricksApi("post", "/api/2.0/x", '{"a":1}');
+    const argv = fake.calls()[0];
+    const ref = argv[argv.indexOf("--json") + 1];
+    expect(ref).toMatch(/^@/);
+    expect(existsSync(ref.slice(1))).toBe(false);
+    expect(fake.bodies()).toEqual(['{"a":1}']);
   });
 
   it("throws CLI_MISSING when databricks is not on PATH", async () => {

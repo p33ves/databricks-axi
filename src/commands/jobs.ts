@@ -1,5 +1,6 @@
 import { AxiError } from "axi-sdk-js";
 import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
+import { redactSecrets } from "../errors.js";
 import {
   asList,
   assertObject,
@@ -431,19 +432,22 @@ function taskLogEntry(
     state: compactState(task),
   };
   let traceClipped = false;
+  // Upstream log/trace text goes straight into agent context — redact
+  // token-shaped strings before assembly (same rule as sql error detail).
   if (output.error) {
-    entry.error = output.error;
+    entry.error = redactSecrets(output.error);
   }
   if (output.error_trace) {
+    const trace = redactSecrets(output.error_trace);
     if (full) {
-      entry.error_trace = output.error_trace;
+      entry.error_trace = trace;
     } else {
-      const t = tail(output.error_trace, LOG_TAIL_LINES);
+      const t = tail(trace, LOG_TAIL_LINES);
       entry.error_trace = t.text;
       traceClipped = t.truncated;
     }
   }
-  const text = output.notebook_output?.result || output.logs || "";
+  const text = redactSecrets(output.notebook_output?.result || output.logs || "");
   if (text) {
     if (full) {
       entry.output = text;

@@ -8,6 +8,12 @@ describe("redactSecrets", () => {
     );
   });
 
+  it("redacts dkea OAuth tokens too short for the generic rules", () => {
+    expect(redactSecrets("token dkeaAbc12345XYZ leaked")).toBe(
+      "token [redacted] leaked",
+    );
+  });
+
   it("redacts long hex runs", () => {
     expect(redactSecrets("id 0123456789abcdef0123456789abcdef end")).toBe(
       "id [redacted] end",

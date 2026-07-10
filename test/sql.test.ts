@@ -59,9 +59,8 @@ function succeededStmt(overrides: Record<string, unknown> = {}) {
 }
 
 function submittedBody(): Record<string, unknown> {
-  const post = t.fake.calls().find((argv) => argv.includes("--json"));
-  expect(post).toBeDefined();
-  const json = post![post!.indexOf("--json") + 1];
+  const [json] = t.fake.bodies();
+  expect(json).toBeDefined();
   return JSON.parse(json) as Record<string, unknown>;
 }
 
