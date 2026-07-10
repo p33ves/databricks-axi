@@ -29,11 +29,21 @@ these instead of auto-detecting): `pnpm test`,
 
 `bin/databricks-axi.ts` → `src/cli.ts` (`runAxiCli` from axi-sdk-js) →
 `src/commands/<domain>.ts`. Support modules: `src/databricks.ts`
-(spawn wrapper), `src/errors.ts` (taxonomy), `src/commands/shared.ts`
+(spawn wrapper), `src/errors.ts` (taxonomy), `src/truncate.ts` (line/char
+truncation for view/cat/logs), `src/commands/shared.ts`
 (`domainHelpers(domain)`: the shared `parseArgs`/`parseIntFlag`/`requireId`/
-`renderRows`, built on `node:util`'s `parseArgs` in strict mode); planned:
-`src/suggestions.ts`, `src/context.ts`, `src/fields.ts`. Internal logic stays
-on JSON; TOON conversion happens only at the output boundary.
+`renderRows`, built on `node:util`'s `parseArgs` in strict mode; plus
+`listResult` for the empty-state/count/has_more list envelope and
+`runWithNotFoundHelp` for domain-flavored NOT_FOUND suggestions). Field
+selection, suggestions, and pagination rendering live in `shared.ts`; the
+separate `fields.ts`/`suggestions.ts` files from the original design were
+dropped at CP2 (2026-07-10) as needless splitting. `src/context.ts` is still
+planned for home. Internal logic stays on JSON; TOON conversion happens only
+at the output boundary. Don't re-inline the list envelope or a private
+NOT_FOUND wrapper in a new domain; call `listResult`/`runWithNotFoundHelp`.
+(`fs ls` is the deliberate exception to `listResult`: upstream `fs` has no
+`--limit`, so it knows the true total and reports exact truncation instead
+of `has_more`.)
 
 Tests mirror `src/` under `test/`. Domain tests call `setupCli()` from
 `test/helpers/fake-databricks.ts` for the standard rig (fresh fake

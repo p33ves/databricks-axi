@@ -1,11 +1,15 @@
 import { AxiError } from "axi-sdk-js";
-import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
+import type { RunDatabricksOptions } from "../databricks.js";
 import { redactSecrets } from "../errors.js";
+import { truncate } from "../truncate.js";
 import {
   asList,
   assertObject,
   domainHelpers,
+  LIST_FLAGS,
+  listResult,
   profileSuffix,
+  runWithNotFoundHelp,
   spawnOpts,
   type AxiRenderable,
   type AxiStructuredOutput,
@@ -96,12 +100,6 @@ export async function jobsCommand(args: string[]): Promise<AxiRenderable> {
 
 // --- subcommands ---
 
-const LIST_FLAGS = {
-  profile: "value",
-  limit: "value",
-  fields: "value",
-} as const;
-
 async function jobsList(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);
   if (positional.length > 0) {
@@ -120,27 +118,18 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
     "name",
     "creator_user_name",
   ]);
-  if (rows.length === 0) {
-    return {
-      jobs: [],
+  const p = profileSuffix(flags.get("profile"));
+  return listResult("jobs", rows, limit, {
+    rerun: `databricks-axi jobs list --limit ${limit * 2}${p}`,
+    empty: {
       status: "no jobs in this workspace",
       help: ["Create one in the workspace UI: Workflows > Create job"],
-    };
-  }
-  const p = profileSuffix(flags.get("profile"));
-  const help = [
-    `databricks-axi jobs view <job_id>${p}`,
-    `databricks-axi jobs runs <job_id>${p}`,
-  ];
-  const out: AxiStructuredOutput = { jobs: rows, count: rows.length };
-  // CLI >= 0.298 caps results client-side at --limit; a full page means
-  // there may be more.
-  if (rows.length >= limit) {
-    out.has_more = true;
-    help.unshift(`databricks-axi jobs list --limit ${limit * 2}${p}`);
-  }
-  out.help = help;
-  return out;
+    },
+    help: [
+      `databricks-axi jobs view <job_id>${p}`,
+      `databricks-axi jobs runs <job_id>${p}`,
+    ],
+  });
 }
 
 async function jobsView(args: string[]): Promise<AxiRenderable> {
@@ -304,27 +293,19 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
           duration_s: durationSeconds(r),
         }));
   const p = profileSuffix(flags.get("profile"));
-  if (rows.length === 0) {
-    return {
-      runs: [],
-      status: "no runs found",
-      help: [`databricks-axi jobs run <job_id>${p}`],
-    };
-  }
   const help = [`databricks-axi jobs runs view <run_id>${p}`];
   const firstFailed = runs.find(isFailed);
   if (firstFailed) {
     help.unshift(`databricks-axi jobs logs ${firstFailed.run_id}${p}`);
   }
-  const out: AxiStructuredOutput = { runs: rows, count: rows.length };
-  if (rows.length >= limit) {
-    out.has_more = true;
-    help.unshift(
-      `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${limit * 2}${p}`,
-    );
-  }
-  out.help = help;
-  return out;
+  return listResult("runs", rows, limit, {
+    rerun: `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${limit * 2}${p}`,
+    empty: {
+      status: "no runs found",
+      help: [`databricks-axi jobs run <job_id>${p}`],
+    },
+    help,
+  });
 }
 
 async function runsView(args: string[]): Promise<AxiRenderable> {
@@ -442,7 +423,7 @@ function taskLogEntry(
     if (full) {
       entry.error_trace = trace;
     } else {
-      const t = tail(trace, LOG_TAIL_LINES);
+      const t = truncate(trace, { lines: LOG_TAIL_LINES, mode: "tail" });
       entry.error_trace = t.text;
       traceClipped = t.truncated;
     }
@@ -454,10 +435,10 @@ function taskLogEntry(
     if (full) {
       entry.output = text;
     } else {
-      const t = tail(text, LOG_TAIL_LINES);
+      const t = truncate(text, { lines: LOG_TAIL_LINES, mode: "tail" });
       entry.output = t.text;
       if (t.truncated) {
-        entry.truncated = `showing last ${LOG_TAIL_LINES} of ${t.total} lines — rerun with --full`;
+        entry.truncated = `showing last ${LOG_TAIL_LINES} of ${t.totalLines} lines — rerun with --full`;
       }
     }
   }
@@ -467,42 +448,13 @@ function taskLogEntry(
   return entry;
 }
 
-function tail(
-  text: string,
-  maxLines: number,
-): { text: string; truncated: boolean; total: number } {
-  const lines = text.split("\n");
-  if (lines.length <= maxLines) {
-    return { text, truncated: false, total: lines.length };
-  }
-  return {
-    text: lines.slice(-maxLines).join("\n"),
-    truncated: true,
-    total: lines.length,
-  };
-}
-
 /** runDatabricks, with jobs-flavored suggestions folded into NOT_FOUND. */
-async function runJobs(
-  args: string[],
-  opts: RunDatabricksOptions,
-): Promise<unknown> {
-  try {
-    return await runDatabricks(args, opts);
-  } catch (error) {
-    if (
-      error instanceof AxiError &&
-      error.code === "NOT_FOUND" &&
-      error.suggestions.length === 0
-    ) {
-      const p = profileSuffix(opts.profile);
-      throw new AxiError(error.message, "NOT_FOUND", [
-        `databricks-axi jobs list${p}`,
-        `databricks-axi jobs runs${p}`,
-      ]);
-    }
-    throw error;
-  }
+function runJobs(args: string[], opts: RunDatabricksOptions): Promise<unknown> {
+  const p = profileSuffix(opts.profile);
+  return runWithNotFoundHelp(args, opts, [
+    `databricks-axi jobs list${p}`,
+    `databricks-axi jobs runs${p}`,
+  ]);
 }
 
 /** runJobs for endpoints whose result gets dereferenced — empty stdout

@@ -4,6 +4,8 @@ import {
   asList,
   assertObject,
   domainHelpers,
+  LIST_FLAGS,
+  listResult,
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
@@ -78,11 +80,7 @@ export async function clustersCommand(args: string[]): Promise<AxiRenderable> {
 // --- subcommands ---
 
 async function clustersList(args: string[]): Promise<AxiRenderable> {
-  const { positional, flags } = parseArgs(args, {
-    profile: "value",
-    limit: "value",
-    fields: "value",
-  });
+  const { positional, flags } = parseArgs(args, LIST_FLAGS);
   if (positional.length > 0) {
     throw usage(`clusters list takes no arguments, got: ${positional[0]}`);
   }
@@ -98,28 +96,20 @@ async function clustersList(args: string[]): Promise<AxiRenderable> {
     "state",
   ]);
   const p = profileSuffix(flags.get("profile"));
-  if (rows.length === 0) {
-    return {
-      clusters: [],
-      status:
-        "no clusters in this workspace — serverless/Free Edition workspaces never show clusters here",
-      help: ["Create one in the workspace UI: Compute > Create compute"],
-    };
-  }
   const help = [`databricks-axi clusters view <cluster_id>${p}`];
   const terminated = items.find((c) => c.state === "TERMINATED");
   if (terminated) {
     help.push(`databricks-axi clusters start ${terminated.cluster_id}${p}`);
   }
-  const out: AxiStructuredOutput = { clusters: rows, count: rows.length };
-  // CLI >= 0.298 caps results client-side at --limit; a full page means
-  // there may be more.
-  if (rows.length >= limit) {
-    out.has_more = true;
-    help.unshift(`databricks-axi clusters list --limit ${limit * 2}${p}`);
-  }
-  out.help = help;
-  return out;
+  return listResult("clusters", rows, limit, {
+    rerun: `databricks-axi clusters list --limit ${limit * 2}${p}`,
+    empty: {
+      status:
+        "no clusters in this workspace — serverless/Free Edition workspaces never show clusters here",
+      help: ["Create one in the workspace UI: Compute > Create compute"],
+    },
+    help,
+  });
 }
 
 async function clustersView(args: string[]): Promise<AxiRenderable> {

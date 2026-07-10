@@ -1,10 +1,12 @@
-import { AxiError } from "axi-sdk-js";
-import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
+import { runDatabricks } from "../databricks.js";
 import {
   asList,
   assertObject,
   domainHelpers,
+  LIST_FLAGS,
+  listResult,
   profileSuffix,
+  runWithNotFoundHelp,
   spawnOpts,
   type AxiRenderable,
   type AxiStructuredOutput,
@@ -66,37 +68,6 @@ export async function catalogCommand(args: string[]): Promise<AxiRenderable> {
 
 // --- subcommands ---
 
-const LIST_FLAGS = {
-  profile: "value",
-  limit: "value",
-  fields: "value",
-} as const;
-
-/** Shared list-result tail: empty state, count envelope, and the
- * full-page has_more + rerun-with-double-limit suggestion. */
-function listResult(
-  key: string,
-  rows: AxiStructuredOutput[],
-  limit: number,
-  rerunCmd: string,
-  empty: { status: string; help: string[] },
-  nextHelp: string,
-): AxiRenderable {
-  if (rows.length === 0) {
-    return { [key]: [], status: empty.status, help: empty.help };
-  }
-  const help = [nextHelp];
-  const out: AxiStructuredOutput = { [key]: rows, count: rows.length };
-  // CLI >= 0.298 caps results client-side at --limit; a full page means
-  // there may be more.
-  if (rows.length >= limit) {
-    out.has_more = true;
-    help.unshift(rerunCmd);
-  }
-  out.help = help;
-  return out;
-}
-
 async function catalogsList(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);
   if (positional.length > 0) {
@@ -113,19 +84,16 @@ async function catalogsList(args: string[]): Promise<AxiRenderable> {
     "catalog_type",
   ]);
   const p = profileSuffix(flags.get("profile"));
-  return listResult(
-    "catalogs",
-    rows,
-    limit,
-    `databricks-axi catalog catalogs --limit ${limit * 2}${p}`,
-    {
+  return listResult("catalogs", rows, limit, {
+    rerun: `databricks-axi catalog catalogs --limit ${limit * 2}${p}`,
+    empty: {
       status: "no catalogs visible to this principal",
       help: [
         "Free Edition workspaces have a `workspace` catalog (not `main`) — check permissions if none appear",
       ],
     },
-    `databricks-axi catalog schemas <name>${p}`,
-  );
+    help: [`databricks-axi catalog schemas <name>${p}`],
+  });
 }
 
 async function schemasList(args: string[]): Promise<AxiRenderable> {
@@ -135,7 +103,7 @@ async function schemasList(args: string[]): Promise<AxiRenderable> {
   const catalog = requireId(positional, "catalog schemas <catalog>", /^[^-]/);
   const limit = parseIntFlag(flags, "limit", 30);
   const p = profileSuffix(flags.get("profile"));
-  const parsed = await runCatalog(
+  const parsed = await runWithNotFoundHelp(
     ["schemas", "list", catalog, "--limit", String(limit)],
     spawnOpts(flags),
     [`databricks-axi catalog catalogs${p}`],
@@ -143,17 +111,14 @@ async function schemasList(args: string[]): Promise<AxiRenderable> {
   // Upstream `name` is already the bare schema name (full_name carries the
   // redundant catalog.schema).
   const rows = renderRows(asList(parsed, "schemas"), flags, ["name", "owner"]);
-  return listResult(
-    "schemas",
-    rows,
-    limit,
-    `databricks-axi catalog schemas ${catalog} --limit ${limit * 2}${p}`,
-    {
+  return listResult("schemas", rows, limit, {
+    rerun: `databricks-axi catalog schemas ${catalog} --limit ${limit * 2}${p}`,
+    empty: {
       status: `no schemas in catalog ${catalog}`,
       help: [`databricks-axi catalog catalogs${p}`],
     },
-    `databricks-axi catalog tables ${catalog}.<name>${p}`,
-  );
+    help: [`databricks-axi catalog tables ${catalog}.<name>${p}`],
+  });
 }
 
 async function tablesList(args: string[]): Promise<AxiRenderable> {
@@ -170,7 +135,7 @@ async function tablesList(args: string[]): Promise<AxiRenderable> {
   const schema = ref.slice(dot + 1);
   const limit = parseIntFlag(flags, "limit", 30);
   const p = profileSuffix(flags.get("profile"));
-  const parsed = await runCatalog(
+  const parsed = await runWithNotFoundHelp(
     [
       "tables",
       "list",
@@ -191,17 +156,14 @@ async function tablesList(args: string[]): Promise<AxiRenderable> {
     "table_type",
     "data_source_format",
   ]);
-  return listResult(
-    "tables",
-    rows,
-    limit,
-    `databricks-axi catalog tables ${ref} --limit ${limit * 2}${p}`,
-    {
+  return listResult("tables", rows, limit, {
+    rerun: `databricks-axi catalog tables ${ref} --limit ${limit * 2}${p}`,
+    empty: {
       status: `no tables in ${ref}`,
       help: [`databricks-axi catalog schemas ${catalog}${p}`],
     },
-    `databricks-axi catalog table view ${ref}.<name>${p}`,
-  );
+    help: [`databricks-axi catalog table view ${ref}.<name>${p}`],
+  });
 }
 
 async function tableView(args: string[]): Promise<AxiRenderable> {
@@ -214,7 +176,7 @@ async function tableView(args: string[]): Promise<AxiRenderable> {
   const parent = fullName.slice(0, fullName.lastIndexOf("."));
   const p = profileSuffix(flags.get("profile"));
   const table = assertObject<RawTable>(
-    await runCatalog(["tables", "get", fullName], spawnOpts(flags), [
+    await runWithNotFoundHelp(["tables", "get", fullName], spawnOpts(flags), [
       `databricks-axi catalog tables ${parent}${p}`,
     ]),
     "databricks tables get",
@@ -237,25 +199,4 @@ async function tableView(args: string[]): Promise<AxiRenderable> {
     `databricks-axi catalog tables ${parent}${p}`,
   ];
   return out;
-}
-
-/** runDatabricks, folding the parent-level browse suggestion into NOT_FOUND
- * (missing catalog → list catalogs, missing schema → list schemas, ...). */
-async function runCatalog(
-  args: string[],
-  opts: RunDatabricksOptions,
-  notFoundHelp: string[],
-): Promise<unknown> {
-  try {
-    return await runDatabricks(args, opts);
-  } catch (error) {
-    if (
-      error instanceof AxiError &&
-      error.code === "NOT_FOUND" &&
-      error.suggestions.length === 0
-    ) {
-      throw new AxiError(error.message, "NOT_FOUND", notFoundHelp);
-    }
-    throw error;
-  }
 }
