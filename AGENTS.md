@@ -102,12 +102,18 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 
 ## Development lifecycle
 
-| Stage    | Role                    | Scope                                                                        |
-| -------- | ----------------------- | ---------------------------------------------------------------------------- |
-| Design   | architecture reviewer   | validates specs/design changes; researches best practice; never touches code |
-| Build    | domain implementer      | implements one command domain, TDD against the fake stub                     |
-| Review   | AXI compliance reviewer | reviews code against the 10 AXI principles + spec drift                      |
-| Validate | benchmarker             | measures vs raw `databricks` CLI and MCP; hybrid-graded task success         |
+| Stage        | Role                    | Scope                                                                |
+| ------------ | ----------------------- | -------------------------------------------------------------------- |
+| Design draft | domain architect        | drafts spec, researches upstream feasibility; never touches code     |
+| Design gate  | spec reviewer           | independently re-verifies feasibility, GO/NO-GO before build starts  |
+| Build        | domain implementer      | implements one command domain, TDD against the fake stub             |
+| Review       | AXI compliance reviewer | reviews code against the 10 AXI principles + spec drift              |
+| Validate     | benchmarker             | measures vs raw `databricks` CLI and MCP; hybrid-graded task success |
+| Ship         | release manager         | release-please runbook, ship gate                                    |
+
+Cross-cutting (not tied to one lifecycle stage): security auditor
+(leak/credential audit, per-domain before ship and at CP4), docs
+maintainer (README/AGENTS.md/CONTRIBUTING.md accuracy and style).
 
 ## Shipping (required)
 
