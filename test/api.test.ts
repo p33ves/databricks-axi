@@ -21,7 +21,7 @@ describe("api", () => {
     expect(out).toContain("abc,RUNNING");
   });
 
-  it("places --body on argv as upstream --json", async () => {
+  it("sends inline --body via a temp file, never argv", async () => {
     t.fake.respond("api post", { statement_id: "s1" });
     const body = '{"statement":"SELECT 1"}';
     const { exitCode } = await t.run([
@@ -33,8 +33,17 @@ describe("api", () => {
     ]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["api", "post", "/api/2.0/sql/statements", "--json", body, "-o", "json"],
+      [
+        "api",
+        "post",
+        "/api/2.0/sql/statements",
+        "--json",
+        expect.stringMatching(/^@.+body\.json$/) as unknown as string,
+        "-o",
+        "json",
+      ],
     ]);
+    expect(t.fake.bodies()).toEqual([body]);
   });
 
   it("passes --profile through as -p", async () => {

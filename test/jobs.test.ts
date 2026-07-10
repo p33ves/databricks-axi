@@ -486,6 +486,37 @@ describe("jobs logs", () => {
     expect(out.indexOf("transform")).toBeLessThan(out.indexOf("extract"));
   });
 
+  it("redacts token-shaped strings in error, trace, and log output", async () => {
+    t.fake.respond("jobs get-run", RUN_WITH_TASKS);
+    t.fake.respond("jobs get-run-output 9021", {
+      logs: "exported DATABRICKS_TOKEN=dapi1234567890abcdef ok",
+    });
+    t.fake.respond("jobs get-run-output 9022", {
+      error: "auth failed for dapi1234567890abcdef",
+      error_trace: "Traceback: token dkeaAbc12345XYZ rejected",
+    });
+    const { out, exitCode } = await t.run(["jobs", "logs", "902"]);
+    expect(exitCode).toBe(0);
+    expect(out).not.toContain("dapi1234567890abcdef");
+    expect(out).not.toContain("dkeaAbc12345XYZ");
+    expect(out).toContain("[redacted]");
+  });
+
+  it("redacts a dkea token immediately preceded by a word character in real CLI stdout", async () => {
+    t.fake.respond("jobs get-run", RUN_WITH_TASKS);
+    t.fake.respond("jobs get-run-output 9021", {
+      notebook_output: { result: "extract ok" },
+    });
+    t.fake.respond("jobs get-run-output 9022", {
+      error: "auth failed for prefix_dkeaAbc12345XYZ",
+      error_trace: "Traceback: token prefix_dkeaAbc12345XYZ rejected",
+    });
+    const { out, exitCode } = await t.run(["jobs", "logs", "902"]);
+    expect(exitCode).toBe(0);
+    expect(out).not.toContain("dkeaAbc12345XYZ");
+    expect(out).toContain("prefix_[redacted]");
+  });
+
   it("skips tasks without a run_id instead of fetching 'undefined'", async () => {
     t.fake.respond("jobs get-run", {
       run_id: 904,

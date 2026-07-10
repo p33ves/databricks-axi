@@ -23,6 +23,8 @@ export type FakeDatabricks = {
   respondError: (prefix: string, stderr: string, exitCode?: number) => void;
   /** Every recorded invocation, as raw argv arrays, in call order. */
   calls: () => string[][];
+  /** Contents of `--json @path` temp-file bodies, in call order. */
+  bodies: () => string[];
 };
 
 type CannedReply = {
@@ -85,6 +87,14 @@ export function installFakeDatabricks(): FakeDatabricks {
 const { appendFileSync, readFileSync } = require("node:fs");
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify(args) + "\\n");
+// Temp-file bodies vanish after the call — capture them now for bodies().
+const ji = args.indexOf("--json");
+if (ji >= 0 && args[ji + 1] && args[ji + 1].startsWith("@")) {
+  try {
+    const content = readFileSync(args[ji + 1].slice(1), "utf8");
+    appendFileSync(${JSON.stringify(join(dir, "bodies.jsonl"))}, JSON.stringify(content) + "\\n");
+  } catch {} // nonexistent @path (user passthrough) — not a temp-file body
+}
 const responses = JSON.parse(readFileSync(${JSON.stringify(responsesFile)}, "utf8"));
 // process.exitCode (not process.exit) so large stdout payloads flush fully.
 let matched = false;
@@ -142,6 +152,14 @@ if (!matched) {
             .split("\n")
             .filter(Boolean)
             .map((line) => JSON.parse(line) as string[])
+        : [],
+    bodies: () =>
+      existsSync(join(dir, "bodies.jsonl"))
+        ? readFileSync(join(dir, "bodies.jsonl"), "utf8")
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => JSON.parse(line) as string)
         : [],
   };
 }

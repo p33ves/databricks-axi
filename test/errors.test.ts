@@ -8,6 +8,24 @@ describe("redactSecrets", () => {
     );
   });
 
+  it("redacts dkea OAuth tokens too short for the generic rules", () => {
+    expect(redactSecrets("token dkeaAbc12345XYZ leaked")).toBe(
+      "token [redacted] leaked",
+    );
+  });
+
+  it("redacts dkea OAuth tokens containing - and _", () => {
+    expect(redactSecrets("token dkeaAbc12-XY_890z rejected")).toBe(
+      "token [redacted] rejected",
+    );
+  });
+
+  it("redacts a dkea token immediately preceded by a word character", () => {
+    expect(redactSecrets("prefix_dkeaAbc12345XYZ leaked")).toBe(
+      "prefix_[redacted] leaked",
+    );
+  });
+
   it("redacts long hex runs", () => {
     expect(redactSecrets("id 0123456789abcdef0123456789abcdef end")).toBe(
       "id [redacted] end",

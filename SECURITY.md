@@ -17,4 +17,7 @@ safe proof-of-concept details.
   `databricks` CLI.
 - Child processes are spawned with array argv (never a shell).
 - Secret values are stdin-only, never accepted as flags, never echoed.
-- Error output redacts token-shaped strings.
+- REST passthrough bodies never land on child argv (visible in `ps`):
+  inline bodies are written to a private (0600) temp file and passed as
+  `--json @path`, deleted after the call.
+- Error and job log output redact token-shaped strings.

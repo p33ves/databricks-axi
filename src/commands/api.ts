@@ -17,8 +17,8 @@ examples:
 notes:
   prefer the domain commands (jobs, sql, ...) when one exists
   --body also accepts @path/to/file.json (passed through unvalidated)
-  never send secret values through api: --body lands on process argv and
-  responses land on stdout
+  inline --body is sent via a private temp file, never process argv
+  never send secret values through api: responses land on stdout
 `;
 
 const METHODS = new Set(["get", "post", "put", "patch", "delete", "head"]);

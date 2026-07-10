@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { AxiError } from "axi-sdk-js";
 import { mapUpstreamError, redactSecrets } from "./errors.js";
 
@@ -73,9 +76,11 @@ export async function runDatabricks(
 }
 
 /**
- * REST passthrough over the CLI's `api` subcommand. Rule for all callers:
- * `body` lands on child argv (visible in `ps`) — secret-bearing bodies are
- * forbidden (the secrets domain uses upstream's stdin mechanism instead).
+ * REST passthrough over the CLI's `api` subcommand. Inline bodies never
+ * land on child argv (visible in `ps`): they go through a 0600 temp file
+ * as upstream's `--json @path`. Bodies already in `@path` form pass
+ * through untouched. Responses still land on stdout — callers must not
+ * hit endpoints that echo secret values.
  */
 export async function runDatabricksApi(
   method: string,
@@ -83,10 +88,23 @@ export async function runDatabricksApi(
   body?: string,
   opts: RunDatabricksOptions = {},
 ): Promise<unknown> {
-  return runDatabricks(
-    ["api", method, path, ...(body !== undefined ? ["--json", body] : [])],
-    opts,
-  );
+  if (body === undefined || body.startsWith("@")) {
+    return runDatabricks(
+      ["api", method, path, ...(body !== undefined ? ["--json", body] : [])],
+      opts,
+    );
+  }
+  const dir = await mkdtemp(join(tmpdir(), "axi-"));
+  const file = join(dir, "body.json");
+  try {
+    await writeFile(file, body, { mode: 0o600 });
+    return await runDatabricks(
+      ["api", method, path, "--json", `@${file}`],
+      opts,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function spawnCollect(argv: string[], timeoutMs: number): Promise<SpawnResult> {

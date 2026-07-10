@@ -11,6 +11,7 @@ const AUTH_HELP = [
 export function redactSecrets(text: string): string {
   return text
     .replace(/dapi[0-9a-f]{16,}/gi, "[redacted]")
+    .replace(/dkea[A-Za-z0-9_-]{8,}/gi, "[redacted]") // OAuth tokens — no \b: it doesn't match after a preceding _, letting the whole token through unredacted
     .replace(/\b[0-9a-f]{32,}\b/gi, "[redacted]")
     .replace(/\b[A-Za-z0-9+=_-]{40,}\b/g, "[redacted]"); // no "/" so workspace paths stay readable
 }
