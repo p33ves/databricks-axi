@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/p33ves/databricks-axi/compare/v0.6.0...v0.6.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* **shared:** dedup list-result and NOT_FOUND helpers, correct jobs logs tail counting ([#23](https://github.com/p33ves/databricks-axi/issues/23)) ([e4e349a](https://github.com/p33ves/databricks-axi/commit/e4e349a547e48451ced3314185f3cf8b1b0f95fa))
+
 ## [0.6.0](https://github.com/p33ves/databricks-axi/compare/v0.5.0...v0.6.0) (2026-07-10)
 
 
