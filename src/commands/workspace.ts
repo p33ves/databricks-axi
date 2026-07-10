@@ -3,6 +3,7 @@ import {
   asList,
   assertObject,
   domainHelpers,
+  listResult,
   looksBinary,
   parentPath,
   profileSuffix,
@@ -94,13 +95,6 @@ async function workspaceList(args: string[]): Promise<AxiRenderable> {
   );
   const items = asList(parsed, "objects") as RawObject[];
   const rows = renderRows(items, flags, ["path", "object_type", "language"]);
-  if (rows.length === 0) {
-    return {
-      objects: [],
-      status: "directory is empty",
-      help: [`databricks-axi workspace ls${p}`],
-    };
-  }
   const help: string[] = [];
   const notebook = items.find((o) => o.object_type === "NOTEBOOK");
   if (notebook?.path) {
@@ -110,17 +104,17 @@ async function workspaceList(args: string[]): Promise<AxiRenderable> {
   if (dir?.path) {
     help.push(`databricks-axi workspace ls ${dir.path}${p}`);
   }
-  const out: AxiStructuredOutput = { objects: rows, count: rows.length };
-  // CLI >= 0.298 caps results client-side at --limit; a full page means
-  // there may be more.
-  if (rows.length >= limit) {
-    out.has_more = true;
-    help.unshift(
-      `databricks-axi workspace ls ${path} --limit ${limit * 2}${p}`,
-    );
-  }
-  out.help = help;
-  return out;
+  return listResult(
+    "objects",
+    rows,
+    limit,
+    `databricks-axi workspace ls ${path} --limit ${limit * 2}${p}`,
+    {
+      status: "directory is empty",
+      help: [`databricks-axi workspace ls${p}`],
+    },
+    help,
+  );
 }
 
 async function workspaceView(args: string[]): Promise<AxiRenderable> {

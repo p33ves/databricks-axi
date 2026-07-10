@@ -60,6 +60,31 @@ export function looksBinary(text: string): boolean {
   return text.includes("\uFFFD") || text.includes("\u0000");
 }
 
+/** Shared list-result tail: empty state, count envelope, and the
+ * full-page has_more + rerun-with-double-limit suggestion. */
+export function listResult(
+  key: string,
+  rows: AxiStructuredOutput[],
+  limit: number,
+  rerunCmd: string,
+  empty: { status: string; help: string[] },
+  help: string[],
+): AxiRenderable {
+  if (rows.length === 0) {
+    return { [key]: [], status: empty.status, help: empty.help };
+  }
+  const allHelp = [...help];
+  const out: AxiStructuredOutput = { [key]: rows, count: rows.length };
+  // CLI >= 0.298 caps results client-side at --limit; a full page means
+  // there may be more.
+  if (rows.length >= limit) {
+    out.has_more = true;
+    allHelp.unshift(rerunCmd);
+  }
+  out.help = allHelp;
+  return out;
+}
+
 /** runDatabricks, folding domain-flavored suggestions into bare NOT_FOUND. */
 export async function runWithNotFoundHelp(
   args: string[],
