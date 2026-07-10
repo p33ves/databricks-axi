@@ -14,6 +14,38 @@ experience for agents.
 > incrementally. Run `npx -y databricks-axi --help` to see what's available
 > today.
 
+## Why databricks-axi
+
+An agent working with Databricks today has three options, and each has a
+real cost. The raw `databricks` CLI returns human-shaped text: bare
+confirmations, inconsistent formatting, no hint at what to do next. The
+agent has to parse prose and often re-run a command just to see what
+happened. Databricks' workspace-managed SQL MCP server returns structured
+output, but it is a small server that still loads a full tool schema into
+context every session, and it is confined to SQL: it cannot trigger a job
+run or touch anything outside that surface, so it ends up querying `system`
+tables to triage a failed job instead of just asking the jobs API.
+Databricks Field Engineering's ai-dev-kit MCP server covers the full
+surface, close to 40 tools, but pays for that coverage with the largest
+schema load of any option here.
+
+AXI is a set of interface design principles for CLIs meant to be driven by
+agents rather than humans: structured output, minimal schemas that expand
+only on request, and ambient context so a command answers "what should I do
+next" as well as "what happened." The premise is that a CLI built this way
+can match an MCP server's structure and reliability without paying an MCP
+server's schema tax on every session.
+
+databricks-axi applies those principles to the official `databricks` CLI
+instead of replacing it. Auth, transport, and API coverage stay upstream;
+this tool only reshapes output and interaction: TOON instead of raw text,
+structured errors instead of stack traces, contextual next steps instead of
+silence, and enough ambient context that the agent doesn't need a
+follow-up question to know where it is. Because the jobs and SQL surfaces
+live behind the same CLI, triaging a failed run stays a jobs-API call, no
+`system`-table workaround needed. See Benchmarks below for how that plays
+out in tokens, cost, and turns.
+
 ## Benchmarks
 
 Agent ergonomics is measurable. The benchmark follows the
