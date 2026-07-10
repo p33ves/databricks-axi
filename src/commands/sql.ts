@@ -37,8 +37,6 @@ notes:
   exec waits up to --timeout seconds (default 120), then exits 0 with the
   statement id — resume with sql statement view
   warehouse start/stop are async by default; --wait blocks up to ~20 min
-  never put secret values in the query text: it lands on child argv
-  (visible in ps) via the api substrate
 `;
 
 // Injectable so poll tests run at full speed.

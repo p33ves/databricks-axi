@@ -39,7 +39,10 @@ Tests mirror `src/` under `test/`. Domain tests call `setupCli()` from
 `test/helpers/fake-databricks.ts` for the standard rig (fresh fake
 `databricks` on PATH each test, `t.run(argv)` to invoke the CLI and capture
 stdout/exit code); seed canned JSON with `respond(prefix, json)`, assert
-exact argv with `calls()`.
+exact argv with `calls()`. Inline `--json` bodies never land on argv (see
+below), so `calls()` only shows the `@path` reference; assert the actual
+body content with `bodies()`, which the stub captures before the temp file
+is deleted.
 
 ## Sharp edges (learned the hard way; do not rediscover)
 
@@ -77,6 +80,10 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 - Spawn with array argv only, `stdin: 'ignore'`, hard timeout, always
   `-o json`. Auth prompts must never hang an agent.
 - Secret values: stdin-only, never argv, never stdout.
+- `runDatabricksApi` never puts an inline body on child argv (visible in
+  `ps`): it writes to a 0600 temp file and passes `--json @path`, deleting
+  the file after the call. A body already given as `@path` passes through
+  untouched (the `api` command's documented file-passthrough).
 - Exit codes: 0 success (incl. no-ops), 1 upstream error, 2 usage error.
   Errors are structured TOON on stdout (`code`, `error`, `help`).
 - No interactive prompts, ever. Fail loud on unknown flags.
