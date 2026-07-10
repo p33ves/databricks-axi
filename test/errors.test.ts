@@ -60,6 +60,19 @@ describe("redactSecrets", () => {
 });
 
 describe("mapUpstreamError", () => {
+  it("classifies past the Profile/Host/Auth-type trailer (live CLI shape)", () => {
+    const stderr = [
+      "Error: Public DBFS root is disabled. Access is denied on path: /nope-xyz",
+      "",
+      "Profile:   DEFAULT",
+      "Host:      https://example.cloud.databricks.com",
+      "Auth type: OAuth (databricks-cli)",
+    ].join("\n");
+    const err = mapUpstreamError(stderr);
+    expect(err.code).toBe("PERMISSION_DENIED");
+    expect(err.suggestions[0]).toContain("databricks-datasets");
+  });
+
   it("maps 401-shaped stderr to AUTH_ERROR with login help", () => {
     const err = mapUpstreamError("Error: failed request: 401 Unauthorized");
     expect(err.code).toBe("AUTH_ERROR");
@@ -89,6 +102,21 @@ describe("mapUpstreamError", () => {
     expect(mapUpstreamError("Error: Job 999 does not exist.").code).toBe(
       "NOT_FOUND",
     );
+  });
+
+  it("maps the workspace CLI's contraction 'doesn't exist' to NOT_FOUND", () => {
+    expect(
+      mapUpstreamError("Error: Path (/Shared/nope) doesn't exist.").code,
+    ).toBe("NOT_FOUND");
+  });
+
+  it("maps the disabled public DBFS root to PERMISSION_DENIED with a path hint", () => {
+    const err = mapUpstreamError(
+      "Error: Public DBFS root is disabled. Access is denied on path: /foo",
+    );
+    expect(err.code).toBe("PERMISSION_DENIED");
+    expect(err.suggestions.join(" ")).toContain("dbfs:/databricks-datasets");
+    expect(err.suggestions.join(" ")).toContain("/Volumes");
   });
 
   it("maps INVALID_STATE through", () => {

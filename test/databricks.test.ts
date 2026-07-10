@@ -182,4 +182,50 @@ process.stdout.write(JSON.stringify({ logs: "\\u00e9".repeat(120000) }));
       code: "UPSTREAM_ERROR",
     });
   });
+
+  it("raw mode skips -o json and returns verbatim stdout, unparsed", async () => {
+    const fake = useFake();
+    fake.respondRaw("fs cat", '{"not": "parsed"} trailing text');
+    const result = await runDatabricks(["fs", "cat", "dbfs:/x"], {
+      raw: true,
+    });
+    expect(result).toBe('{"not": "parsed"} trailing text');
+    expect(fake.calls()).toEqual([["fs", "cat", "dbfs:/x"]]);
+  });
+
+  it("raw mode skips the int64 id-quoting regex", async () => {
+    const fake = useFake();
+    fake.respondRaw("fs cat", '"job_id":9223372036854775807');
+    const result = await runDatabricks(["fs", "cat", "dbfs:/x"], {
+      raw: true,
+    });
+    expect(result).toBe('"job_id":9223372036854775807');
+  });
+
+  it("streams raw output and SIGKILLs past the 5MB cap instead of buffering it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "huge-databricks-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+const chunk = "a".repeat(1024 * 1024);
+for (let i = 0; i < 8; i++) process.stdout.write(chunk);
+`,
+    );
+    chmodSync(bin, 0o755);
+    process.env.PATH = `${dir}:${prevPath ?? ""}`;
+    await expect(
+      runDatabricks(["fs", "cat", "dbfs:/big"], { raw: true }),
+    ).rejects.toMatchObject({ code: "TOO_LARGE" });
+  });
+
+  it("does not cap non-raw JSON output at 5MB", async () => {
+    const fake = useFake();
+    const bigArray = Array.from({ length: 1 }, () =>
+      "x".repeat(6 * 1024 * 1024),
+    );
+    fake.respond("jobs list", { jobs: bigArray });
+    const result = await runDatabricks(["jobs", "list"]);
+    expect(result).toEqual({ jobs: bigArray });
+  });
 });

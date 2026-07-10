@@ -95,6 +95,35 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
   follows node's own messages (`Unknown option '--x'`, `argument missing`),
   and `--flag=value` works alongside `--flag value`. Don't hand-write flag
   parsing in a new domain; call `domainHelpers`.
+- `fs` bare absolute paths (`/Volumes/...`, `/databricks-datasets/...`) read
+  the _local_ filesystem upstream, not DBFS — `withScheme` in
+  `src/commands/fs.ts` prepends `dbfs:` to any schemeless absolute path
+  (live-verified). `workspace` paths need no such prefix.
+- `fs cat` runs `runDatabricks` in `raw: true` mode: no `-o json`, no
+  `JSON.parse`, no int64 `*_id` quoting — file content is data, not a
+  structured response, and is deliberately never redacted (matches the
+  `sql` rule that only error/log text is a redaction surface). Raw mode
+  streams stdout and SIGKILLs the child past a 5MB cap (`TOO_LARGE`), since
+  file content is unbounded and must never be buffered whole.
+- `workspace view` always exports with `--format SOURCE`; language and size
+  come from the export payload itself (base64 `content` + `file_type`), no
+  separate `get-status` call. A directory path exports as a ZIP archive
+  upstream — detected by the full local-file-header/EOCD signature (not
+  just a `"PK"` prefix, which a source file could start with) and rendered
+  as an exit-0 note pointing at `workspace ls`, not an error.
+- `workspace view` / `fs cat` output is head-truncated at 200 lines _and_
+  clamped at 100k chars (`src/truncate.ts`) — line limits alone don't bound
+  a minified one-liner. `--full` is the unbounded escape hatch. The invalid
+  upstream-JSON error never echoes any stdout snippet (even redacted),
+  since stdout can carry exported file content.
+- `mapUpstreamError` strips a trailing `Profile:`/`Host:`/`Auth type:` block
+  before classification — its `Auth type: OAuth (...)` line otherwise trips
+  the `AUTH_ERROR` branch on every auth mode, not just real auth failures.
+- `NOT_FOUND` matching covers both "does not exist" and the contraction
+  "doesn't exist" (real upstream string, seen from `fs`/`workspace`).
+  "Public DBFS root is disabled" is a Free Edition platform restriction, not
+  a missing-object 403/404 — it gets its own `PERMISSION_DENIED` branch with
+  a hint toward paths that are actually readable.
 
 ## Generated files (never hand-edit)
 

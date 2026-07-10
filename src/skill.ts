@@ -6,8 +6,9 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 export const SKILL_DESCRIPTION =
   "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs " +
   "(list, view, run, runs, logs, cancel), sql (warehouses, exec, " +
-  "statement view), catalog (catalogs, schemas, tables, table view), api " +
-  "(raw REST passthrough). Other domains (clusters, workspace, fs, " +
+  "statement view), catalog (catalogs, schemas, tables, table view), " +
+  "workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume " +
+  "files), api (raw REST passthrough). Other domains (clusters, " +
   "pipelines, serving, setup) land incrementally - run " +
   "`databricks-axi --help` for the current surface.";
 
@@ -28,6 +29,10 @@ export const HERMES_TAGS = [
   "schema",
   "table",
   "unity",
+  "notebook",
+  "dbfs",
+  "volume",
+  "file",
 ];
 export const HERMES_CATEGORY = "data";
 

@@ -21,8 +21,12 @@ export function redactSecrets(text: string): string {
  * Returns (never throws) so callers decide whether to throw or inspect.
  */
 export function mapUpstreamError(stderr: string): AxiError {
+  // Some CLI errors carry a "Profile:/Host:/Auth type:" trailer whose
+  // "OAuth (...)" line would trip the AUTH_ERROR branch below on every
+  // auth mode — strip it before classification (live-verified shape).
+  const withoutTrailer = stderr.replace(/\n\s*Profile:\s[\s\S]*$/, "");
   const text =
-    redactSecrets(stderr.trim()) ||
+    redactSecrets(withoutTrailer.trim()) ||
     "databricks CLI failed with no error output";
   const firstLine = text.split("\n", 1)[0] ?? text;
   if (
@@ -32,10 +36,17 @@ export function mapUpstreamError(stderr: string): AxiError {
   ) {
     return new AxiError(firstLine, "AUTH_ERROR", AUTH_HELP);
   }
+  if (/Public DBFS root is disabled/i.test(text)) {
+    // Platform restriction on Free Edition-style workspaces, not a missing
+    // object — steer toward paths that are actually readable.
+    return new AxiError(firstLine, "PERMISSION_DENIED", [
+      "Public DBFS root access is disabled here — try dbfs:/databricks-datasets or a /Volumes/<catalog>/<schema>/<volume> path instead",
+    ]);
+  }
   if (/\b403\b|PERMISSION_DENIED/i.test(text)) {
     return new AxiError(firstLine, "PERMISSION_DENIED");
   }
-  if (/RESOURCE_DOES_NOT_EXIST|\b404\b|does not exist/i.test(text)) {
+  if (/RESOURCE_DOES_NOT_EXIST|\b404\b|does(?: not|n't) exist/i.test(text)) {
     return new AxiError(firstLine, "NOT_FOUND");
   }
   if (/INVALID_STATE/.test(text)) {

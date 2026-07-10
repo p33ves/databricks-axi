@@ -1,6 +1,6 @@
 import { parseArgs as nodeParseArgs } from "node:util";
 import { AxiError } from "axi-sdk-js";
-import type { RunDatabricksOptions } from "../databricks.js";
+import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
 
 // axi-sdk-js 0.1.8 doesn't re-export its output types from the package
 // index; mirror the two one-line aliases locally until it does.
@@ -43,6 +43,41 @@ export function asList(parsed: unknown, key: string): AxiStructuredOutput[] {
   }
   const obj = (parsed ?? {}) as AxiStructuredOutput;
   return (obj[key] as AxiStructuredOutput[] | undefined) ?? [];
+}
+
+/** Parent directory of a slash-separated workspace/dbfs path ("/" at the root). */
+export function parentPath(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx <= 0 ? "/" : path.slice(0, idx);
+}
+
+/**
+ * True if decoded text looks like it isn't actually text: Node's UTF-8
+ * decoder swaps invalid byte sequences for U+FFFD, and NUL bytes are a
+ * reliable binary tell that survive decoding untouched either way.
+ */
+export function looksBinary(text: string): boolean {
+  return text.includes("\uFFFD") || text.includes("\u0000");
+}
+
+/** runDatabricks, folding domain-flavored suggestions into bare NOT_FOUND. */
+export async function runWithNotFoundHelp(
+  args: string[],
+  opts: RunDatabricksOptions,
+  notFoundHelp: string[],
+): Promise<unknown> {
+  try {
+    return await runDatabricks(args, opts);
+  } catch (error) {
+    if (
+      error instanceof AxiError &&
+      error.code === "NOT_FOUND" &&
+      error.suggestions.length === 0
+    ) {
+      throw new AxiError(error.message, "NOT_FOUND", notFoundHelp);
+    }
+    throw error;
+  }
 }
 
 /** Helpers whose usage errors point at `databricks-axi <domain> --help`. */
