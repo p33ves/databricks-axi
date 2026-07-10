@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), sql (warehouses, exec, statement view), catalog (catalogs, schemas, tables, table view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), api (raw REST passthrough). Other domains (clusters, pipelines, serving, setup) land incrementally - run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement view), catalog (catalogs, schemas, tables, table view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), api (raw REST passthrough). Other domains (pipelines, serving, setup) land incrementally - run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, jobs, sql, warehouse, query, catalog, schema, table, unity, notebook, dbfs, volume, file]
+    tags: [databricks, spark, jobs, cluster, compute, start, stop, sql, warehouse, query, catalog, schema, table, unity, notebook, dbfs, volume, file]
     category: data
 ---
 
@@ -28,7 +28,7 @@ Pre-release scaffold: command domains are landing incrementally. Run `databricks
 ## Commands
 
 ```
-commands[21]:
+commands[25]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -37,6 +37,10 @@ commands[21]:
   jobs runs view <run_id>
   jobs logs <run_id> [--full]
   jobs cancel <run_id>
+  clusters list [--limit N] [--fields a,b]
+  clusters view <cluster_id>
+  clusters start <cluster_id> [--wait]
+  clusters stop <cluster_id> [--wait]
   sql warehouses [--fields a,b]
   sql warehouses view|start|stop <id>
   sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]

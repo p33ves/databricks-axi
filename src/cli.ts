@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { runAxiCli } from "axi-sdk-js";
 import { apiCommand, API_HELP } from "./commands/api.js";
 import { catalogCommand, CATALOG_HELP } from "./commands/catalog.js";
+import { clustersCommand, CLUSTERS_HELP } from "./commands/clusters.js";
 import { fsCommand, FS_HELP } from "./commands/fs.js";
 import { homeCommand } from "./commands/home.js";
 import { jobsCommand, JOBS_HELP } from "./commands/jobs.js";
@@ -15,7 +16,7 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[21]:
+commands[25]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -24,6 +25,10 @@ commands[21]:
   jobs runs view <run_id>
   jobs logs <run_id> [--full]
   jobs cancel <run_id>
+  clusters list [--limit N] [--fields a,b]
+  clusters view <cluster_id>
+  clusters start <cluster_id> [--wait]
+  clusters stop <cluster_id> [--wait]
   sql warehouses [--fields a,b]
   sql warehouses view|start|stop <id>
   sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
@@ -56,6 +61,7 @@ examples:
 export const COMMANDS = {
   home: homeCommand,
   jobs: jobsCommand,
+  clusters: clustersCommand,
   sql: sqlCommand,
   catalog: catalogCommand,
   workspace: workspaceCommand,
@@ -66,6 +72,7 @@ export const COMMANDS = {
 const COMMAND_HELP: Record<string, string> = {
   home: HOME_HELP,
   jobs: JOBS_HELP,
+  clusters: CLUSTERS_HELP,
   sql: SQL_HELP,
   catalog: CATALOG_HELP,
   workspace: WORKSPACE_HELP,
