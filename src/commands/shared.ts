@@ -60,26 +60,36 @@ export function looksBinary(text: string): boolean {
   return text.includes("\uFFFD") || text.includes("\u0000");
 }
 
+/** The flag spec every list-shaped subcommand shares. */
+export const LIST_FLAGS = {
+  profile: "value",
+  limit: "value",
+  fields: "value",
+} as const;
+
 /** Shared list-result tail: empty state, count envelope, and the
  * full-page has_more + rerun-with-double-limit suggestion. */
 export function listResult(
   key: string,
   rows: AxiStructuredOutput[],
   limit: number,
-  rerunCmd: string,
-  empty: { status: string; help: string[] },
-  help: string[],
+  opts: {
+    /** Rerun-with-double-limit suggestion, prepended on a full page. */
+    rerun: string;
+    empty: { status: string; help: string[] };
+    help: string[];
+  },
 ): AxiRenderable {
   if (rows.length === 0) {
-    return { [key]: [], status: empty.status, help: empty.help };
+    return { [key]: [], status: opts.empty.status, help: opts.empty.help };
   }
-  const allHelp = [...help];
+  const allHelp = [...opts.help];
   const out: AxiStructuredOutput = { [key]: rows, count: rows.length };
   // CLI >= 0.298 caps results client-side at --limit; a full page means
   // there may be more.
   if (rows.length >= limit) {
     out.has_more = true;
-    allHelp.unshift(rerunCmd);
+    allHelp.unshift(opts.rerun);
   }
   out.help = allHelp;
   return out;

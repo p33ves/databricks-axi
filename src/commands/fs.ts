@@ -2,6 +2,7 @@ import { MAX_VIEW_CHARS, truncate } from "../truncate.js";
 import {
   asList,
   domainHelpers,
+  LIST_FLAGS,
   looksBinary,
   parentPath,
   profileSuffix,
@@ -92,12 +93,6 @@ export async function fsCommand(args: string[]): Promise<AxiRenderable> {
 }
 
 // --- subcommands ---
-
-const LIST_FLAGS = {
-  profile: "value",
-  limit: "value",
-  fields: "value",
-} as const;
 
 async function fsList(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);

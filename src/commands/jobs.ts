@@ -6,6 +6,7 @@ import {
   asList,
   assertObject,
   domainHelpers,
+  LIST_FLAGS,
   listResult,
   profileSuffix,
   runWithNotFoundHelp,
@@ -99,12 +100,6 @@ export async function jobsCommand(args: string[]): Promise<AxiRenderable> {
 
 // --- subcommands ---
 
-const LIST_FLAGS = {
-  profile: "value",
-  limit: "value",
-  fields: "value",
-} as const;
-
 async function jobsList(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);
   if (positional.length > 0) {
@@ -124,20 +119,17 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
     "creator_user_name",
   ]);
   const p = profileSuffix(flags.get("profile"));
-  return listResult(
-    "jobs",
-    rows,
-    limit,
-    `databricks-axi jobs list --limit ${limit * 2}${p}`,
-    {
+  return listResult("jobs", rows, limit, {
+    rerun: `databricks-axi jobs list --limit ${limit * 2}${p}`,
+    empty: {
       status: "no jobs in this workspace",
       help: ["Create one in the workspace UI: Workflows > Create job"],
     },
-    [
+    help: [
       `databricks-axi jobs view <job_id>${p}`,
       `databricks-axi jobs runs <job_id>${p}`,
     ],
-  );
+  });
 }
 
 async function jobsView(args: string[]): Promise<AxiRenderable> {
@@ -306,17 +298,14 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
   if (firstFailed) {
     help.unshift(`databricks-axi jobs logs ${firstFailed.run_id}${p}`);
   }
-  return listResult(
-    "runs",
-    rows,
-    limit,
-    `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${limit * 2}${p}`,
-    {
+  return listResult("runs", rows, limit, {
+    rerun: `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${limit * 2}${p}`,
+    empty: {
       status: "no runs found",
       help: [`databricks-axi jobs run <job_id>${p}`],
     },
     help,
-  );
+  });
 }
 
 async function runsView(args: string[]): Promise<AxiRenderable> {

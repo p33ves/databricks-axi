@@ -4,6 +4,7 @@ import {
   asList,
   assertObject,
   domainHelpers,
+  LIST_FLAGS,
   listResult,
   profileSuffix,
   runWithNotFoundHelp,
@@ -79,11 +80,7 @@ export async function clustersCommand(args: string[]): Promise<AxiRenderable> {
 // --- subcommands ---
 
 async function clustersList(args: string[]): Promise<AxiRenderable> {
-  const { positional, flags } = parseArgs(args, {
-    profile: "value",
-    limit: "value",
-    fields: "value",
-  });
+  const { positional, flags } = parseArgs(args, LIST_FLAGS);
   if (positional.length > 0) {
     throw usage(`clusters list takes no arguments, got: ${positional[0]}`);
   }
@@ -104,18 +101,15 @@ async function clustersList(args: string[]): Promise<AxiRenderable> {
   if (terminated) {
     help.push(`databricks-axi clusters start ${terminated.cluster_id}${p}`);
   }
-  return listResult(
-    "clusters",
-    rows,
-    limit,
-    `databricks-axi clusters list --limit ${limit * 2}${p}`,
-    {
+  return listResult("clusters", rows, limit, {
+    rerun: `databricks-axi clusters list --limit ${limit * 2}${p}`,
+    empty: {
       status:
         "no clusters in this workspace — serverless/Free Edition workspaces never show clusters here",
       help: ["Create one in the workspace UI: Compute > Create compute"],
     },
     help,
-  );
+  });
 }
 
 async function clustersView(args: string[]): Promise<AxiRenderable> {
