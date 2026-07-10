@@ -21,8 +21,12 @@ export function redactSecrets(text: string): string {
  * Returns (never throws) so callers decide whether to throw or inspect.
  */
 export function mapUpstreamError(stderr: string): AxiError {
+  // Some CLI errors carry a "Profile:/Host:/Auth type:" trailer whose
+  // "OAuth (...)" line would trip the AUTH_ERROR branch below on every
+  // auth mode — strip it before classification (live-verified shape).
+  const withoutTrailer = stderr.replace(/\n\s*Profile:\s[\s\S]*$/, "");
   const text =
-    redactSecrets(stderr.trim()) ||
+    redactSecrets(withoutTrailer.trim()) ||
     "databricks CLI failed with no error output";
   const firstLine = text.split("\n", 1)[0] ?? text;
   if (
