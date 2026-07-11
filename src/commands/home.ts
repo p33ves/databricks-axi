@@ -5,7 +5,7 @@
 export async function homeCommand(): Promise<string> {
   return [
     "databricks-axi: pre-release scaffold",
-    "available: jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement), catalog (catalogs, schemas, tables, table view), workspace (ls, view), fs (ls, cat), pipelines (list, view, start, stop, events), serving (list, view), api",
+    "available: jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement, history), catalog (catalogs, schemas, tables, table view, volumes, volume view, functions, function view), workspace (ls, view), fs (ls, cat), pipelines (list, view, start, stop, events), serving (list, view), api",
     "coming: setup",
     "roadmap: https://github.com/p33ves/databricks-axi#roadmap",
     "help[2]:",

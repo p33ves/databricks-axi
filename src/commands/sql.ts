@@ -19,24 +19,28 @@ const { usage, parseArgs, parseIntFlag, requireId, renderRows } =
   domainHelpers("sql");
 
 export const SQL_HELP = `usage: databricks-axi sql <subcommand> [args] [flags]
-subcommands[6]:
+subcommands[7]:
   warehouses [--fields a,b]
   warehouses view <id>
   warehouses start <id> [--wait]
   warehouses stop <id> [--wait]
   exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
   statement view <statement_id>
+  history [--limit N] [--status S] [--full] [--fields a,b]
 flags:
   --profile <name>  databricks auth profile passthrough
 examples:
   databricks-axi sql warehouses
   databricks-axi sql exec "SELECT count(*) FROM workspace.default.my_table"
   databricks-axi sql statement view <statement_id>
+  databricks-axi sql history --status FAILED
 notes:
   exec picks the warehouse automatically when the workspace has exactly one
   exec waits up to --timeout seconds (default 120), then exits 0 with the
   statement id — resume with sql statement view
   warehouse start/stop are async by default; --wait blocks up to ~20 min
+  history is read-only diagnosis over recent query activity; --status
+  filters client-side within the fetched window; it never starts a warehouse
 `;
 
 // Injectable so poll tests run at full speed.
@@ -50,6 +54,8 @@ const WAIT_TIMEOUT_MS = 25 * 60_000; // upstream blocks up to 20 min on --wait
 const POLL_INTERVAL_MS = 2_000;
 const DEFAULT_ROW_LIMIT = 100;
 const DEFAULT_BUDGET_S = 120;
+const DEFAULT_HISTORY_LIMIT = 20;
+const QUERY_TEXT_CLIP = 120;
 
 type RawWarehouse = {
   id?: string;
@@ -59,6 +65,14 @@ type RawWarehouse = {
   enable_serverless_compute?: boolean;
   auto_stop_mins?: number;
   creator_name?: string;
+} & Record<string, unknown>;
+
+type RawHistoryEntry = {
+  query_id?: string;
+  status?: string;
+  query_text?: string;
+  duration?: number;
+  error_message?: string;
 } & Record<string, unknown>;
 
 type RawStatement = {
@@ -97,6 +111,8 @@ export async function sqlCommand(args: string[]): Promise<AxiRenderable> {
         throw usage("Usage: databricks-axi sql statement view <statement_id>");
       }
       return statementView(rest.slice(1));
+    case "history":
+      return sqlHistory(rest);
     default:
       throw usage(
         sub ? `Unknown sql subcommand: ${sub}` : "sql requires a subcommand",
@@ -382,5 +398,118 @@ async function renderTerminalStatement(
   if (notes.length > 0) {
     out.truncated = notes.join("; ");
   }
+  return out;
+}
+
+// --- history ---
+
+function firstLine(text: string): string {
+  return text.split("\n", 1)[0] ?? text;
+}
+
+function clip(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** Spread-raw row (keeps upstream keys reachable via --fields), then
+ * override/add the derived display fields — the `warehouseSize` precedent. */
+function flattenHistoryEntry(
+  entry: RawHistoryEntry,
+  full: boolean,
+): AxiStructuredOutput {
+  const rawErrorMessage = entry.error_message;
+  const errorMessage =
+    typeof rawErrorMessage === "string"
+      ? redactSecrets(rawErrorMessage)
+      : rawErrorMessage;
+  const queryText = entry.query_text ?? "";
+  return {
+    ...entry,
+    query_text: full ? queryText : clip(queryText, QUERY_TEXT_CLIP),
+    duration_ms: entry.duration,
+    error_message: errorMessage,
+    error: errorMessage ? (full ? errorMessage : firstLine(errorMessage)) : "",
+  };
+}
+
+async function sqlHistory(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, {
+    profile: "value",
+    limit: "value",
+    status: "value",
+    full: "boolean",
+    fields: "value",
+  });
+  if (positional.length > 0) {
+    throw usage(`sql history takes no arguments, got: ${positional[0]}`);
+  }
+  const limit = parseIntFlag(flags, "limit", DEFAULT_HISTORY_LIMIT);
+  const full = flags.get("full") === true;
+  const statusFilter = flags.get("status");
+  const p = profileSuffix(flags.get("profile"));
+  const parsed = assertObject<{
+    res?: RawHistoryEntry[];
+    has_next_page?: boolean;
+  }>(
+    await runDatabricks(
+      ["query-history", "list", "--max-results", String(limit)],
+      spawnOpts(flags),
+    ),
+    "query-history list",
+  );
+  const raw = parsed.res ?? [];
+  if (raw.length === 0) {
+    return {
+      history: [],
+      status: "no queries in this workspace's query history",
+      help: [
+        "only warehouse / serverless SQL queries are recorded here",
+        `databricks-axi sql exec "<query>"${p}`,
+      ],
+    };
+  }
+
+  const flattened = raw.map((entry) => flattenHistoryEntry(entry, full));
+  const filtered =
+    typeof statusFilter === "string"
+      ? flattened.filter(
+          (row) =>
+            String(row.status).toUpperCase() === statusFilter.toUpperCase(),
+        )
+      : flattened;
+
+  if (filtered.length === 0 && typeof statusFilter === "string") {
+    return {
+      history: [],
+      status: `no ${statusFilter.toUpperCase()} queries in the most recent ${raw.length}`,
+      help: [
+        `databricks-axi sql history --limit ${limit * 2}${p}`,
+        `databricks-axi sql history${p}`,
+      ],
+    };
+  }
+
+  const rows = renderRows(filtered, flags, [
+    "query_id",
+    "status",
+    "query_text",
+    "error",
+  ]);
+  const help: string[] = [];
+  if (parsed.has_next_page) {
+    help.push(`databricks-axi sql history --limit ${limit * 2}${p}`);
+  }
+  if (
+    typeof statusFilter !== "string" &&
+    filtered.some((row) => row.status === "FAILED")
+  ) {
+    help.push(`databricks-axi sql history --status FAILED${p}`);
+  }
+  help.push(`databricks-axi sql exec "<query>"${p}`);
+  const out: AxiStructuredOutput = { history: rows, count: rows.length };
+  if (parsed.has_next_page) {
+    out.has_more = true;
+  }
+  out.help = help;
   return out;
 }

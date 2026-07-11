@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement view), catalog (catalogs, schemas, tables, table view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), pipelines (list, view, start, stop, events - Lakeflow/DLT), serving (list, view - model serving endpoints, read-only), api (raw REST passthrough). Other domains (setup) land incrementally - run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement view, history), catalog (catalogs, schemas, tables, table view, volumes, volume view, functions, function view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), pipelines (list, view, start, stop, events - Lakeflow/DLT), serving (list, view - model serving endpoints, read-only), api (raw REST passthrough). Other domains (setup) land incrementally - run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, jobs, cluster, compute, start, stop, sql, warehouse, query, catalog, schema, table, unity, notebook, dbfs, volume, file, pipeline, dlt, lakeflow, serving, endpoint, model]
+    tags: [databricks, spark, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model]
     category: data
 ---
 
@@ -28,7 +28,7 @@ Pre-release scaffold: command domains are landing incrementally. Run `databricks
 ## Commands
 
 ```
-commands[32]:
+commands[37]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -45,10 +45,15 @@ commands[32]:
   sql warehouses view|start|stop <id>
   sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
   sql statement view <statement_id>
+  sql history [--limit N] [--status S] [--full] [--fields a,b]
   catalog catalogs [--limit N] [--fields a,b]
   catalog schemas <catalog> [--limit N] [--fields a,b]
   catalog tables <catalog>.<schema> [--limit N] [--fields a,b]
   catalog table view <catalog>.<schema>.<table>
+  catalog volumes <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog volume view <catalog>.<schema>.<volume>
+  catalog functions <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog function view <catalog>.<schema>.<function>
   workspace ls [path] [--limit N] [--fields a,b]
   workspace view <path> [--full]
   fs ls <path> [--limit N] [--fields a,b]

@@ -16,11 +16,15 @@ const { usage, parseArgs, parseIntFlag, requireId, renderRows } =
   domainHelpers("catalog");
 
 export const CATALOG_HELP = `usage: databricks-axi catalog <subcommand> [args] [flags]
-subcommands[4]:
+subcommands[8]:
   catalogs [--limit N] [--fields a,b]
   schemas <catalog> [--limit N] [--fields a,b]
   tables <catalog>.<schema> [--limit N] [--fields a,b]
   table view <catalog>.<schema>.<table>
+  volumes <catalog>.<schema> [--limit N] [--fields a,b]
+  volume view <catalog>.<schema>.<volume>
+  functions <catalog>.<schema> [--limit N] [--fields a,b]
+  function view <catalog>.<schema>.<function>
 flags:
   --profile <name>  databricks auth profile passthrough
 examples:
@@ -28,9 +32,13 @@ examples:
   databricks-axi catalog schemas workspace
   databricks-axi catalog tables workspace.default
   databricks-axi catalog table view workspace.default.axi_bench_trips
+  databricks-axi catalog volumes workspace.default
+  databricks-axi catalog function view workspace.axi_bench.axi_fare_with_tip
 notes:
   read-only Unity Catalog browsing; tables omits column payloads —
   use table view for the column schema
+  volumes/functions are metadata browse only — volume contents read via
+  fs ls/cat, not this domain
 `;
 
 type RawTable = {
@@ -39,6 +47,25 @@ type RawTable = {
   owner?: string;
   comment?: string;
   columns?: { name?: string; type_text?: string; nullable?: boolean }[];
+} & Record<string, unknown>;
+
+type RawVolume = {
+  full_name?: string;
+  volume_type?: string;
+  owner?: string;
+  comment?: string;
+  storage_location?: string;
+} & Record<string, unknown>;
+
+type RawFunction = {
+  full_name?: string;
+  data_type?: string;
+  comment?: string;
+  routine_definition?: string;
+  sql_data_access?: string;
+  is_deterministic?: boolean;
+  external_language?: string;
+  input_params?: { parameters?: { name?: string; type_text?: string }[] };
 } & Record<string, unknown>;
 
 export async function catalogCommand(args: string[]): Promise<AxiRenderable> {
@@ -57,6 +84,24 @@ export async function catalogCommand(args: string[]): Promise<AxiRenderable> {
         );
       }
       return tableView(rest.slice(1));
+    case "volumes":
+      return volumesList(rest);
+    case "volume":
+      if (rest[0] !== "view") {
+        throw usage(
+          "Usage: databricks-axi catalog volume view <catalog>.<schema>.<volume>",
+        );
+      }
+      return volumeView(rest.slice(1));
+    case "functions":
+      return functionsList(rest);
+    case "function":
+      if (rest[0] !== "view") {
+        throw usage(
+          "Usage: databricks-axi catalog function view <catalog>.<schema>.<function>",
+        );
+      }
+      return functionView(rest.slice(1));
     default:
       throw usage(
         sub
@@ -198,5 +243,144 @@ async function tableView(args: string[]): Promise<AxiRenderable> {
     `databricks-axi sql exec "SELECT * FROM ${String(out.full_name)} LIMIT 10"${p}`,
     `databricks-axi catalog tables ${parent}${p}`,
   ];
+  return out;
+}
+
+async function volumesList(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, LIST_FLAGS);
+  const ref = requireId(
+    positional,
+    "catalog volumes <catalog>.<schema>",
+    /^[^.-][^.]*\.[^.-].*$/,
+  );
+  const dot = ref.indexOf(".");
+  const catalog = ref.slice(0, dot);
+  const schema = ref.slice(dot + 1);
+  const limit = parseIntFlag(flags, "limit", 30);
+  const p = profileSuffix(flags.get("profile"));
+  const parsed = await runWithNotFoundHelp(
+    ["volumes", "list", catalog, schema, "--limit", String(limit)],
+    spawnOpts(flags),
+    [`databricks-axi catalog schemas ${catalog}${p}`],
+  );
+  const rows = renderRows(asList(parsed, "volumes"), flags, [
+    "name",
+    "volume_type",
+  ]);
+  return listResult("volumes", rows, limit, {
+    rerun: `databricks-axi catalog volumes ${ref} --limit ${limit * 2}${p}`,
+    empty: {
+      status: `no volumes in ${ref}`,
+      help: [`databricks-axi catalog schemas ${catalog}${p}`],
+    },
+    help: [
+      `databricks-axi catalog volume view ${ref}.<name>${p}`,
+      `databricks-axi fs ls /Volumes/${catalog}/${schema}/<name>${p}`,
+    ],
+  });
+}
+
+async function volumeView(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, { profile: "value" });
+  const fullName = requireId(
+    positional,
+    "catalog volume view <catalog>.<schema>.<volume>",
+    /^[^.-][^.]*\.[^.]+\.[^.]+$/,
+  );
+  const parent = fullName.slice(0, fullName.lastIndexOf("."));
+  const p = profileSuffix(flags.get("profile"));
+  const volume = assertObject<RawVolume>(
+    await runWithNotFoundHelp(["volumes", "read", fullName], spawnOpts(flags), [
+      `databricks-axi catalog volumes ${parent}${p}`,
+    ]),
+    "databricks volumes read",
+  );
+  const out: AxiStructuredOutput = {
+    full_name: volume.full_name ?? fullName,
+    volume_type: volume.volume_type,
+    owner: volume.owner,
+  };
+  if (volume.comment) {
+    out.comment = volume.comment;
+  }
+  out.storage_location = volume.storage_location;
+  out.help = [
+    `databricks-axi fs ls /Volumes/${fullName.replace(/\./g, "/")}${p}`,
+    `databricks-axi catalog volumes ${parent}${p}`,
+  ];
+  return out;
+}
+
+async function functionsList(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, LIST_FLAGS);
+  const ref = requireId(
+    positional,
+    "catalog functions <catalog>.<schema>",
+    /^[^.-][^.]*\.[^.-].*$/,
+  );
+  const dot = ref.indexOf(".");
+  const catalog = ref.slice(0, dot);
+  const schema = ref.slice(dot + 1);
+  const limit = parseIntFlag(flags, "limit", 30);
+  const p = profileSuffix(flags.get("profile"));
+  const parsed = await runWithNotFoundHelp(
+    ["functions", "list", catalog, schema, "--limit", String(limit)],
+    spawnOpts(flags),
+    [`databricks-axi catalog schemas ${catalog}${p}`],
+  );
+  const rows = renderRows(asList(parsed, "functions"), flags, [
+    "name",
+    "data_type",
+    "comment",
+  ]);
+  return listResult("functions", rows, limit, {
+    rerun: `databricks-axi catalog functions ${ref} --limit ${limit * 2}${p}`,
+    empty: {
+      status: `no functions in ${ref}`,
+      help: [`databricks-axi catalog schemas ${catalog}${p}`],
+    },
+    help: [`databricks-axi catalog function view ${ref}.<name>${p}`],
+  });
+}
+
+async function functionView(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, { profile: "value" });
+  const fullName = requireId(
+    positional,
+    "catalog function view <catalog>.<schema>.<function>",
+    /^[^.-][^.]*\.[^.]+\.[^.]+$/,
+  );
+  const parent = fullName.slice(0, fullName.lastIndexOf("."));
+  const p = profileSuffix(flags.get("profile"));
+  const fn = assertObject<RawFunction>(
+    await runWithNotFoundHelp(
+      ["functions", "get", fullName],
+      spawnOpts(flags),
+      [`databricks-axi catalog functions ${parent}${p}`],
+    ),
+    "databricks functions get",
+  );
+  const out: AxiStructuredOutput = {
+    full_name: fn.full_name ?? fullName,
+    data_type: fn.data_type,
+    routine_definition: fn.routine_definition,
+  };
+  if (fn.comment) {
+    out.comment = fn.comment;
+  }
+  out.params = (fn.input_params?.parameters ?? []).map((param) => ({
+    name: param.name,
+    type_text: param.type_text,
+  }));
+  if (fn.sql_data_access) {
+    out.sql_data_access = fn.sql_data_access;
+  }
+  if (fn.is_deterministic !== undefined) {
+    out.is_deterministic = fn.is_deterministic;
+  }
+  if (fn.external_language) {
+    out.external_language = fn.external_language;
+  }
+  out.help = [`databricks-axi catalog functions ${parent}${p}`];
   return out;
 }

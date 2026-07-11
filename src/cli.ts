@@ -18,7 +18,7 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[32]:
+commands[37]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -35,10 +35,15 @@ commands[32]:
   sql warehouses view|start|stop <id>
   sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
   sql statement view <statement_id>
+  sql history [--limit N] [--status S] [--full] [--fields a,b]
   catalog catalogs [--limit N] [--fields a,b]
   catalog schemas <catalog> [--limit N] [--fields a,b]
   catalog tables <catalog>.<schema> [--limit N] [--fields a,b]
   catalog table view <catalog>.<schema>.<table>
+  catalog volumes <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog volume view <catalog>.<schema>.<volume>
+  catalog functions <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog function view <catalog>.<schema>.<function>
   workspace ls [path] [--limit N] [--fields a,b]
   workspace view <path> [--full]
   fs ls <path> [--limit N] [--fields a,b]
