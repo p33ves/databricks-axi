@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement view), catalog (catalogs, schemas, tables, table view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), api (raw REST passthrough). Other domains (pipelines, serving, setup) land incrementally - run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement view), catalog (catalogs, schemas, tables, table view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), pipelines (list, view, start, stop, events - Lakeflow/DLT), serving (list, view - model serving endpoints, read-only), api (raw REST passthrough). Other domains (setup) land incrementally - run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, jobs, cluster, compute, start, stop, sql, warehouse, query, catalog, schema, table, unity, notebook, dbfs, volume, file]
+    tags: [databricks, spark, jobs, cluster, compute, start, stop, sql, warehouse, query, catalog, schema, table, unity, notebook, dbfs, volume, file, pipeline, dlt, lakeflow, serving, endpoint, model]
     category: data
 ---
 
@@ -28,7 +28,7 @@ Pre-release scaffold: command domains are landing incrementally. Run `databricks
 ## Commands
 
 ```
-commands[25]:
+commands[32]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -53,6 +53,13 @@ commands[25]:
   workspace view <path> [--full]
   fs ls <path> [--limit N] [--fields a,b]
   fs cat <path> [--full]
+  pipelines list [--limit N] [--fields a,b]
+  pipelines view <pipeline_id>
+  pipelines start <pipeline_id>
+  pipelines stop <pipeline_id>
+  pipelines events <pipeline_id> [--limit N] [--full]
+  serving list [--limit N] [--fields a,b]
+  serving view <name>
   api <method> <path> [--body <json>]
 ```
 

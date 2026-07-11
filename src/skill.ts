@@ -8,9 +8,10 @@ export const SKILL_DESCRIPTION =
   "(list, view, run, runs, logs, cancel), clusters (list, view, start, " +
   "stop), sql (warehouses, exec, statement view), catalog (catalogs, " +
   "schemas, tables, table view), workspace (ls, view notebooks/directories), " +
-  "fs (ls, cat DBFS/volume files), api (raw REST passthrough). Other " +
-  "domains (pipelines, serving, setup) land incrementally - run " +
-  "`databricks-axi --help` for the current surface.";
+  "fs (ls, cat DBFS/volume files), pipelines (list, view, start, stop, " +
+  "events - Lakeflow/DLT), serving (list, view - model serving endpoints, " +
+  "read-only), api (raw REST passthrough). Other domains (setup) land " +
+  "incrementally - run `databricks-axi --help` for the current surface.";
 
 export const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
 
@@ -37,6 +38,12 @@ export const HERMES_TAGS = [
   "dbfs",
   "volume",
   "file",
+  "pipeline",
+  "dlt",
+  "lakeflow",
+  "serving",
+  "endpoint",
+  "model",
 ];
 export const HERMES_CATEGORY = "data";
 
