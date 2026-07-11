@@ -137,10 +137,35 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
   before classification — its `Auth type: OAuth (...)` line otherwise trips
   the `AUTH_ERROR` branch on every auth mode, not just real auth failures.
 - `NOT_FOUND` matching covers both "does not exist" and the contraction
-  "doesn't exist" (real upstream string, seen from `fs`/`workspace`).
+  "doesn't exist" (real upstream string, seen from `fs`/`workspace`), plus
+  "was not found" (real upstream string from `pipelines get` on an unknown
+  id).
   "Public DBFS root is disabled" is a Free Edition platform restriction, not
   a missing-object 403/404 — it gets its own `PERMISSION_DENIED` branch with
   a hint toward paths that are actually readable.
+- `pipelines stop` (`pipelines stop --no-wait`) is silently idempotent
+  upstream — exit 0, empty stdout on both an already-IDLE pipeline and a
+  mid-update one (which it cancels). No rejection shape to inspect, so
+  unlike `start` there is no conflict branch; always exit 0 (same shape as
+  `clusters stop` → `clusters delete`).
+- `pipelines start` (`pipelines start-update`) has no wait flags upstream
+  (naturally async). A conflicting active update is not a distinct error
+  code — it's `UPSTREAM_ERROR` with `An active update '<id>' already
+exists` in the message; catch it by regex (same pattern as `clusters`
+  "is in unexpected state") and convert to an exit-0 no-op that surfaces the
+  active `update_id`.
+- `pipelines get`'s `latest_updates` and `serving-endpoints get`'s
+  `config.served_entities` are nested, not top-level — both must be
+  extracted/flattened before rendering; don't assume a flat response shape
+  for a new domain.
+- `serving-endpoints list` has `--limit` upstream (unlike `fs ls`), so
+  `serving list` goes through the standard `listResult` envelope — it is
+  not a candidate for the `fs ls`-style has_more exemption.
+- `serving-endpoints` responses have no `entity_name` field on
+  foundation-model served entities — only custom-served-model entities set
+  it. Entity display name falls back through
+  `foundation_model.display_name` → `foundation_model.name` →
+  `entity_name` → `name`, never assume `entity_name` is always present.
 
 ## Generated files (never hand-edit)
 
