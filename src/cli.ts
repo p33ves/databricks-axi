@@ -8,6 +8,8 @@ import { clustersCommand, CLUSTERS_HELP } from "./commands/clusters.js";
 import { fsCommand, FS_HELP } from "./commands/fs.js";
 import { homeCommand } from "./commands/home.js";
 import { jobsCommand, JOBS_HELP } from "./commands/jobs.js";
+import { pipelinesCommand, PIPELINES_HELP } from "./commands/pipelines.js";
+import { servingCommand, SERVING_HELP } from "./commands/serving.js";
 import { sqlCommand, SQL_HELP } from "./commands/sql.js";
 import { workspaceCommand, WORKSPACE_HELP } from "./commands/workspace.js";
 
@@ -16,7 +18,7 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[25]:
+commands[32]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -41,6 +43,13 @@ commands[25]:
   workspace view <path> [--full]
   fs ls <path> [--limit N] [--fields a,b]
   fs cat <path> [--full]
+  pipelines list [--limit N] [--fields a,b]
+  pipelines view <pipeline_id>
+  pipelines start <pipeline_id>
+  pipelines stop <pipeline_id>
+  pipelines events <pipeline_id> [--limit N] [--full]
+  serving list [--limit N] [--fields a,b]
+  serving view <name>
   api <method> <path> [--body <json>]
 flags[3]:
   --help, -v/-V/--version, --profile <name>
@@ -66,6 +75,8 @@ export const COMMANDS = {
   catalog: catalogCommand,
   workspace: workspaceCommand,
   fs: fsCommand,
+  pipelines: pipelinesCommand,
+  serving: servingCommand,
   api: apiCommand,
 };
 
@@ -77,6 +88,8 @@ const COMMAND_HELP: Record<string, string> = {
   catalog: CATALOG_HELP,
   workspace: WORKSPACE_HELP,
   fs: FS_HELP,
+  pipelines: PIPELINES_HELP,
+  serving: SERVING_HELP,
   api: API_HELP,
 };
 

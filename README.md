@@ -10,9 +10,9 @@ Auth, transport, and API coverage stay upstream; this tool reshapes the
 experience for agents.
 
 > **Status: pre-release.** The `jobs`, `clusters`, `sql`, `catalog`,
-> `workspace`, and `fs` domains and the `api` passthrough are implemented.
-> Remaining domains are landing incrementally. Run `npx -y databricks-axi --help` to see what's
-> available today.
+> `workspace`, `fs`, `pipelines`, and `serving` domains and the `api`
+> passthrough are implemented. Remaining domains are landing incrementally.
+> Run `npx -y databricks-axi --help` to see what's available today.
 
 ## Why databricks-axi
 
@@ -120,8 +120,8 @@ v1 command surface (see the AXI standard for the principles each follows):
 | `catalog`   | catalogs, schemas, tables, table view ✅     |
 | `workspace` | ls, view ✅                                  |
 | `fs`        | ls, cat ✅                                   |
-| `pipelines` | list, view, start, stop, events              |
-| `serving`   | list, view                                   |
+| `pipelines` | list, view, start, stop, events ✅           |
+| `serving`   | list, view ✅                                |
 | `api`       | raw REST passthrough ✅                      |
 | `setup`     | hooks install (Claude Code, Codex, OpenCode) |
 

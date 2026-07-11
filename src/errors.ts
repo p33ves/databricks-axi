@@ -46,7 +46,11 @@ export function mapUpstreamError(stderr: string): AxiError {
   if (/\b403\b|PERMISSION_DENIED/i.test(text)) {
     return new AxiError(firstLine, "PERMISSION_DENIED");
   }
-  if (/RESOURCE_DOES_NOT_EXIST|\b404\b|does(?: not|n't) exist/i.test(text)) {
+  if (
+    /RESOURCE_DOES_NOT_EXIST|\b404\b|does(?: not|n't) exist|\bwas not found\b/i.test(
+      text,
+    )
+  ) {
     return new AxiError(firstLine, "NOT_FOUND");
   }
   if (/INVALID_STATE/.test(text)) {

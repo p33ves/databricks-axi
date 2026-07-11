@@ -110,6 +110,17 @@ describe("mapUpstreamError", () => {
     ).toBe("NOT_FOUND");
   });
 
+  it("maps the pipelines CLI's 'was not found' to NOT_FOUND", () => {
+    // Live-pinned pipeline-404 shape (2026-07-11): unlike the other
+    // domains' "does not exist", pipelines get uses "was not found" — the
+    // matcher must cover both.
+    expect(
+      mapUpstreamError(
+        "Error: The specified pipeline 905299c1-874d-44b6-995b-e6a5d2eb1a84 was not found.",
+      ).code,
+    ).toBe("NOT_FOUND");
+  });
+
   it("maps the disabled public DBFS root to PERMISSION_DENIED with a path hint", () => {
     const err = mapUpstreamError(
       "Error: Public DBFS root is disabled. Access is denied on path: /foo",
