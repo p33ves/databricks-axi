@@ -75,5 +75,5 @@ local `b64()` helper to build base64 export payloads. Covers bare-array
 tolerance, `has_more` pagination, the "doesn't exist" NOT_FOUND mapping,
 leading-dash/extra-positional rejection, `--fields` selection, `--profile`
 threading into both argv and suggestions, 200-line head truncation with and
-without `--full`, ZIP-archive-as-note rendering, and binary-content
-detection.
+without `--full`, ZIP-archive-as-note rendering, binary-content detection,
+and an unknown-flag rejection.

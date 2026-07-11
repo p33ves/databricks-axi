@@ -27,7 +27,10 @@ it can reach argv.
 - `start` → `databricks pipelines start-update <pipeline_id>` — no wait
   flags exist upstream for this call (`--help` only shows
   `--cause`/`--full-refresh`/`--json`/`--validate-only`), so it's naturally
-  async; there's no `--wait` option on `pipelines start` here either.
+  async; there's no `--wait` option on `pipelines start` here either. Both
+  `start` and `stop` pass a `timeoutHelp` pointing at `pipelines view
+<id>`, the same state-check-on-timeout pattern every other async mutation
+  (`jobs`, `clusters`, `sql`) uses.
 - `stop` → `databricks pipelines stop <pipeline_id> --no-wait`
 - `events` → `databricks pipelines list-pipeline-events <pipeline_id>
 --limit N`
@@ -44,7 +47,8 @@ it can reach argv.
   `FAILED`, plus a `stop`/`start` suggestion based on current state.
 - `start`: on success, `pipeline_id`, `update_id`, `status: "update
 requested"`. On a conflicting active update (see Errors), an exit-0 no-op
-  carrying the active `update_id` instead.
+  with `status: "update already in progress (no-op)"` carrying the active
+  `update_id` instead.
 - `stop`: always `pipeline_id`, `status: "stop requested"` — no branching
   on upstream response shape (see Sharp edges).
 - `events`: `listResult` envelope. Rows are sorted `ERROR` level first,
@@ -93,5 +97,5 @@ exists` in the message. Caught by the `CONFLICT` regex (the same pattern
 list pagination and field selection, `view`'s `latest_updates` slicing and
 state-based help suggestions, the UUID-format guard for `<pipeline_id>`
 (rejected before spawning), the live "was not found" NOT_FOUND mapping, the
-active-update conflict-to-no-op conversion for `start`, and the always-exit-0
-`stop` behavior.
+active-update conflict-to-no-op conversion for `start`, the always-exit-0
+`stop` behavior, and an unknown-flag rejection.

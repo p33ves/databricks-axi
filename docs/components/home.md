@@ -88,4 +88,4 @@ its zero-rows omission, one degraded/timed-out panel leaving the others
 intact (exit 0), the 4s-per-panel budget actually running in parallel (not
 serially), the whole-body swap on an `AUTH_ERROR`, bare-invocation parity
 with explicit `home`, `--profile` threading to every panel, and dispatch-
-level usage errors.
+level usage errors (including an unknown flag).

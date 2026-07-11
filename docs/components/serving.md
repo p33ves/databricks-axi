@@ -67,4 +67,5 @@ pagination from a bare-array response, field selection, the
 foundation-model vs. custom-endpoint served-entity rendering (including the
 absent-`entity_version`/`workload_size` case), the "(updating)" compact
 state suffix, the live serving-404 NOT_FOUND mapping, and dispatch-level
-usage errors (unknown subcommand, bare invocation, extra positionals).
+usage errors (unknown subcommand, bare invocation, extra positionals,
+unknown flag).
