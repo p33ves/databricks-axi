@@ -9,9 +9,9 @@ Wraps the official [`databricks` CLI](https://docs.databricks.com/dev-tools/cli/
 Auth, transport, and API coverage stay upstream; this tool reshapes the
 experience for agents.
 
-> **Status: pre-release.** The `jobs`, `clusters`, `sql`, `catalog`,
-> `workspace`, `fs`, `pipelines`, and `serving` domains and the `api`
-> passthrough are implemented. Remaining domains are landing incrementally.
+> **Status: pre-release.** The `home` ambient dashboard, `jobs`, `clusters`,
+> `sql`, `catalog`, `workspace`, `fs`, `pipelines`, `serving`, and `setup`
+> domains and the `api` passthrough are implemented.
 > Run `npx -y databricks-axi --help` to see what's available today.
 
 ## Why databricks-axi
@@ -101,6 +101,10 @@ npx -y databricks-axi            # ambient home view
 npx -y databricks-axi --help
 ```
 
+Cold `npx` resolution is a one-time cost on that first bare run; once
+`databricks-axi setup hooks` installs the session-start hook, every hooked
+agent session invokes the installed binary directly and pays none of it.
+
 Install the Agent Skill (Claude Code and compatible harnesses):
 
 ```bash
@@ -111,19 +115,19 @@ npx skills add p33ves/databricks-axi --skill databricks-axi -g
 
 v1 command surface (see the AXI standard for the principles each follows):
 
-| Domain      | Verbs                                        |
-| ----------- | -------------------------------------------- |
-| `home`      | ambient context dashboard                    |
-| `jobs`      | list, view, run, runs, logs, cancel ✅       |
-| `clusters`  | list, view, start, stop ✅                   |
-| `sql`       | warehouses, exec, statement view ✅          |
-| `catalog`   | catalogs, schemas, tables, table view ✅     |
-| `workspace` | ls, view ✅                                  |
-| `fs`        | ls, cat ✅                                   |
-| `pipelines` | list, view, start, stop, events ✅           |
-| `serving`   | list, view ✅                                |
-| `api`       | raw REST passthrough ✅                      |
-| `setup`     | hooks install (Claude Code, Codex, OpenCode) |
+| Domain      | Verbs                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `home`      | ambient context dashboard ✅                                                             |
+| `jobs`      | list, view, run, runs, logs, cancel ✅                                                   |
+| `clusters`  | list, view, start, stop ✅                                                               |
+| `sql`       | warehouses, exec, statement view, history ✅                                             |
+| `catalog`   | catalogs, schemas, tables, table view, volumes, volume view, functions, function view ✅ |
+| `workspace` | ls, view ✅                                                                              |
+| `fs`        | ls, cat ✅                                                                               |
+| `pipelines` | list, view, start, stop, events ✅                                                       |
+| `serving`   | list, view ✅                                                                            |
+| `api`       | raw REST passthrough ✅                                                                  |
+| `setup`     | hooks install (Claude Code, Codex, OpenCode) ✅                                          |
 
 ## Development
 

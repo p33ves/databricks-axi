@@ -354,6 +354,304 @@ describe("catalog table view", () => {
   });
 });
 
+describe("catalog volumes", () => {
+  const VOLUME = { name: "axi_bench_vol", volume_type: "MANAGED" };
+
+  it("splits the dotted arg and renders default fields", async () => {
+    t.fake.respond("volumes list", [VOLUME]);
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "volumes",
+      "workspace.default",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      [
+        "volumes",
+        "list",
+        "workspace",
+        "default",
+        "--limit",
+        "30",
+        "-o",
+        "json",
+      ],
+    ]);
+    expect(out).toContain("volumes[1]{name,volume_type}:");
+    expect(out).toContain("axi_bench_vol,MANAGED");
+    expect(out).toContain("catalog volume view workspace.default.<name>");
+    expect(out).toContain("fs ls /Volumes/workspace/default/<name>");
+  });
+
+  it("renders a definitive empty state", async () => {
+    t.fake.respond("volumes list", []);
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "volumes",
+      "workspace.default",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("no volumes in workspace.default");
+    expect(out).toContain("catalog schemas workspace");
+  });
+
+  it("flags a full page as has_more", async () => {
+    t.fake.respond("volumes list", [VOLUME]);
+    const { out } = await t.run([
+      "catalog",
+      "volumes",
+      "workspace.default",
+      "--limit",
+      "1",
+    ]);
+    expect(out).toContain("has_more: true");
+    expect(out).toContain("catalog volumes workspace.default --limit 2");
+  });
+
+  it("maps a missing schema to NOT_FOUND with a schemas suggestion", async () => {
+    t.fake.respondError(
+      "volumes list",
+      "Error: Schema 'workspace.does_not_exist_sch' does not exist.",
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "volumes",
+      "workspace.does_not_exist_sch",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("catalog schemas workspace");
+  });
+
+  it("rejects an arg with no dot", async () => {
+    const { out, exitCode } = await t.run(["catalog", "volumes", "workspace"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("<catalog>.<schema>");
+    expect(t.fake.calls()).toEqual([]);
+  });
+});
+
+describe("catalog volume view", () => {
+  const VOLUME = {
+    full_name: "workspace.default.axi_bench_vol",
+    volume_type: "MANAGED",
+    owner: "a@b.c",
+    comment: "seeded bench fixture",
+    storage_location: "s3://bucket/workspace/default/axi_bench_vol",
+  };
+
+  it("shows full_name, metadata, and storage_location", async () => {
+    t.fake.respond("volumes read", VOLUME);
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "volume",
+      "view",
+      "workspace.default.axi_bench_vol",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      ["volumes", "read", "workspace.default.axi_bench_vol", "-o", "json"],
+    ]);
+    expect(out).toContain("full_name: workspace.default.axi_bench_vol");
+    expect(out).toContain("volume_type: MANAGED");
+    expect(out).toContain("comment: seeded bench fixture");
+    expect(out).toContain("storage_location:");
+    expect(out).toContain("s3://bucket/workspace/default/axi_bench_vol");
+    expect(out).toContain("fs ls /Volumes/workspace/default/axi_bench_vol");
+    expect(out).toContain("catalog volumes workspace.default");
+  });
+
+  it("omits comment when absent", async () => {
+    t.fake.respond("volumes read", { ...VOLUME, comment: undefined });
+    const { out } = await t.run([
+      "catalog",
+      "volume",
+      "view",
+      "workspace.default.axi_bench_vol",
+    ]);
+    expect(out).not.toContain("comment:");
+  });
+
+  it("maps a missing volume to NOT_FOUND with a volumes suggestion", async () => {
+    t.fake.respondError(
+      "volumes read",
+      "Error: Volume 'workspace.default.does_not_exist_vol' does not exist.",
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "volume",
+      "view",
+      "workspace.default.does_not_exist_vol",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("catalog volumes workspace.default");
+  });
+
+  it("rejects --fields as an unknown flag", async () => {
+    const { exitCode } = await t.run([
+      "catalog",
+      "volume",
+      "view",
+      "workspace.default.axi_bench_vol",
+      "--fields",
+      "name",
+    ]);
+    expect(exitCode).toBe(2);
+  });
+
+  it("rejects fewer than two dots", async () => {
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "volume",
+      "view",
+      "workspace.default",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("<catalog>.<schema>.<volume>");
+    expect(t.fake.calls()).toEqual([]);
+  });
+});
+
+describe("catalog functions", () => {
+  const FUNCTION = {
+    name: "axi_fare_with_tip",
+    data_type: "DOUBLE",
+    comment: "computes fare with a flat 20 percent tip",
+  };
+
+  it("splits the dotted arg and renders default fields", async () => {
+    t.fake.respond("functions list", [FUNCTION]);
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "functions",
+      "workspace.axi_bench",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      [
+        "functions",
+        "list",
+        "workspace",
+        "axi_bench",
+        "--limit",
+        "30",
+        "-o",
+        "json",
+      ],
+    ]);
+    expect(out).toContain("functions[1]{name,data_type,comment}:");
+    expect(out).toContain("axi_fare_with_tip");
+    expect(out).toContain("catalog function view workspace.axi_bench.<name>");
+  });
+
+  it("renders a definitive empty state", async () => {
+    t.fake.respond("functions list", []);
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "functions",
+      "workspace.axi_bench",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("no functions in workspace.axi_bench");
+  });
+
+  it("flags a full page as has_more", async () => {
+    t.fake.respond("functions list", [FUNCTION]);
+    const { out } = await t.run([
+      "catalog",
+      "functions",
+      "workspace.axi_bench",
+      "--limit",
+      "1",
+    ]);
+    expect(out).toContain("has_more: true");
+    expect(out).toContain("catalog functions workspace.axi_bench --limit 2");
+  });
+
+  it("maps a missing schema to NOT_FOUND with a schemas suggestion", async () => {
+    t.fake.respondError(
+      "functions list",
+      "Error: Schema 'workspace.does_not_exist_sch' does not exist.",
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "functions",
+      "workspace.does_not_exist_sch",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("catalog schemas workspace");
+  });
+});
+
+describe("catalog function view", () => {
+  const FUNCTION = {
+    full_name: "workspace.axi_bench.axi_fare_with_tip",
+    data_type: "DOUBLE",
+    routine_definition: "fare * 1.2",
+    comment: "computes fare with a flat 20 percent tip",
+    input_params: {
+      parameters: [{ name: "fare", type_text: "double" }],
+    },
+  };
+
+  it("shows full_name, definition, comment, and params", async () => {
+    t.fake.respond("functions get", FUNCTION);
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "function",
+      "view",
+      "workspace.axi_bench.axi_fare_with_tip",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      [
+        "functions",
+        "get",
+        "workspace.axi_bench.axi_fare_with_tip",
+        "-o",
+        "json",
+      ],
+    ]);
+    expect(out).toContain("full_name: workspace.axi_bench.axi_fare_with_tip");
+    expect(out).toContain("data_type: DOUBLE");
+    expect(out).toContain("routine_definition: fare * 1.2");
+    expect(out).toContain("comment: computes fare with a flat 20 percent tip");
+    expect(out).toContain("params[1]{name,type_text}:");
+    expect(out).toContain("fare,double");
+    expect(out).toContain("catalog functions workspace.axi_bench");
+  });
+
+  it("maps a missing function to NOT_FOUND with a functions suggestion", async () => {
+    t.fake.respondError(
+      "functions get",
+      "Error: Routine or Model 'workspace.axi_bench.does_not_exist_fn' does not exist.",
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "function",
+      "view",
+      "workspace.axi_bench.does_not_exist_fn",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("catalog functions workspace.axi_bench");
+  });
+
+  it("rejects fewer than two dots", async () => {
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "function",
+      "view",
+      "workspace.axi_bench",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("<catalog>.<schema>.<function>");
+    expect(t.fake.calls()).toEqual([]);
+  });
+});
+
 describe("catalog dispatch", () => {
   it("rejects unknown subcommands", async () => {
     const { out, exitCode } = await t.run(["catalog", "frobnicate"]);

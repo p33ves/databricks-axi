@@ -37,8 +37,10 @@ truncation for view/cat/logs), `src/commands/shared.ts`
 `runWithNotFoundHelp` for domain-flavored NOT_FOUND suggestions). Field
 selection, suggestions, and pagination rendering live in `shared.ts`; the
 separate `fields.ts`/`suggestions.ts` files from the original design were
-dropped at CP2 (2026-07-10) as needless splitting. `src/context.ts` is still
-planned for home. Internal logic stays on JSON; TOON conversion happens only
+dropped at CP2 (2026-07-10) as needless splitting. `src/context.ts` holds
+`home`'s panel-fetch layer (auth context, recent runs, warehouses, running
+clusters); rendering/assembly stays in `src/commands/home.ts`. Internal
+logic stays on JSON; TOON conversion happens only
 at the output boundary. Don't re-inline the list envelope or a private
 NOT_FOUND wrapper in a new domain; call `listResult`/`runWithNotFoundHelp`.
 (`fs ls` is the deliberate exception to `listResult`: upstream `fs` has no
@@ -87,6 +89,15 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 - CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
   cap. A full page → `has_more: true` + a rerun-with-`--limit <2N>`
   suggestion, never auto-paginate unboundedly.
+- Exception: `query-history list` still has real server-side pagination
+  (`--max-results`/`--page-token`, `has_next_page` in the response). `sql
+history` maps its own `--limit` to `--max-results`, sources `has_more`
+  from `has_next_page`, and never exposes the raw page token. It also
+  doesn't route through `listResult` (unlike every other list domain) —
+  the real `has_next_page` flag and two distinct empty states (truly-empty
+  vs. `--status`-filtered-empty) don't fit that helper's `rows.length >=
+limit` heuristic. `fs ls` is the only other documented `listResult`
+  exemption; this is the second.
 - Legacy CLI 0.18.x is incompatible; the spawn layer version-guards >= 0.298.
 - int64 ids (`job_id`/`run_id`) can exceed 2^53, where `JSON.parse` silently
   rounds; `runDatabricks` quotes 16+-digit `*_id` values so they stay exact
@@ -170,6 +181,27 @@ exists` in the message; catch it by regex (same pattern as `clusters`
   it. Entity display name falls back through
   `foundation_model.display_name` → `foundation_model.name` →
   `entity_name` → `name`, never assume `entity_name` is always present.
+- `home`'s panels spawn in parallel (`Promise.allSettled`) with a 4s
+  per-panel timeout override; a degraded panel renders as one
+  `<panel>: unavailable (<reason>)` line and never fails the whole command
+  (exit 0) — the one exception is an `AUTH_ERROR` on the auth panel, which
+  swaps the whole dashboard body for the structured error (still exit 0)
+  since every other workspace panel would fail the same way.
+- `setup hooks` delegates entirely to `installSessionStartHooks()` from
+  `axi-sdk-js` (`src/commands/setup.ts`) — never hand-roll per-agent
+  JSON/TOML editing. It writes all three agents (Claude Code, Codex,
+  OpenCode) unconditionally; there is no `--agent` selector. Eligibility
+  (`process.argv[1]` matching a packaged `dist/bin/<marker>.js` path, or a
+  bin literally named `<marker>`) is pre-checked with the SDK's own
+  exported `shouldInstallHooksForNodeAxiExecPath`, using explicit
+  `marker`/`binaryNames`/`distEntrypoints` passed to both the check and the
+  install call so behavior is deterministic rather than relying on the
+  SDK's internal path-shape inference. An ineligible entrypoint returns a
+  `"not installed: unrecognized entrypoint"` result — never a false
+  "installed" — but it's still a real limitation: `pnpm run dev`
+  (`tsx bin/databricks-axi.ts`) always fails the check, since the `.ts`
+  entrypoint can't be matched. Build and run `dist/bin/databricks-axi.js`
+  (or a real install) to test hook installation for real.
 
 ## Generated files (never hand-edit)
 

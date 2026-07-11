@@ -10,6 +10,7 @@ import { homeCommand } from "./commands/home.js";
 import { jobsCommand, JOBS_HELP } from "./commands/jobs.js";
 import { pipelinesCommand, PIPELINES_HELP } from "./commands/pipelines.js";
 import { servingCommand, SERVING_HELP } from "./commands/serving.js";
+import { setupCommand, SETUP_HELP } from "./commands/setup.js";
 import { sqlCommand, SQL_HELP } from "./commands/sql.js";
 import { workspaceCommand, WORKSPACE_HELP } from "./commands/workspace.js";
 
@@ -18,7 +19,7 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[32]:
+commands[38]:
   (none)=home
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
@@ -35,10 +36,15 @@ commands[32]:
   sql warehouses view|start|stop <id>
   sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
   sql statement view <statement_id>
+  sql history [--limit N] [--status S] [--full] [--fields a,b]
   catalog catalogs [--limit N] [--fields a,b]
   catalog schemas <catalog> [--limit N] [--fields a,b]
   catalog tables <catalog>.<schema> [--limit N] [--fields a,b]
   catalog table view <catalog>.<schema>.<table>
+  catalog volumes <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog volume view <catalog>.<schema>.<volume>
+  catalog functions <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog function view <catalog>.<schema>.<function>
   workspace ls [path] [--limit N] [--fields a,b]
   workspace view <path> [--full]
   fs ls <path> [--limit N] [--fields a,b]
@@ -50,6 +56,7 @@ commands[32]:
   pipelines events <pipeline_id> [--limit N] [--full]
   serving list [--limit N] [--fields a,b]
   serving view <name>
+  setup hooks
   api <method> <path> [--body <json>]
 flags[3]:
   --help, -v/-V/--version, --profile <name>
@@ -59,8 +66,11 @@ examples:
   databricks-axi jobs logs <run_id>
 `;
 
-const HOME_HELP = `usage: databricks-axi [home]
-Workspace overview. Pre-release scaffold: reports which command domains are available.
+const HOME_HELP = `usage: databricks-axi [home] [--profile <name>]
+Ambient workspace dashboard: auth context, recent job runs, SQL warehouses,
+running clusters, and a command/verb summary. Panels are time-boxed and
+degrade independently — a slow or failing panel never blocks the others.
+Runs on every hooked agent session start (see \`databricks-axi setup hooks\`).
 examples:
   databricks-axi
   databricks-axi home
@@ -77,6 +87,7 @@ export const COMMANDS = {
   fs: fsCommand,
   pipelines: pipelinesCommand,
   serving: servingCommand,
+  setup: setupCommand,
   api: apiCommand,
 };
 
@@ -90,6 +101,7 @@ const COMMAND_HELP: Record<string, string> = {
   fs: FS_HELP,
   pipelines: PIPELINES_HELP,
   serving: SERVING_HELP,
+  setup: SETUP_HELP,
   api: API_HELP,
 };
 

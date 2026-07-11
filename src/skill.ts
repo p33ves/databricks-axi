@@ -4,14 +4,17 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 // Scoped to the implemented surface only (AXI: no advertised capabilities
 // that don't exist yet) - extend as command domains land.
 export const SKILL_DESCRIPTION =
-  "Agent-ergonomic wrapper around the Databricks CLI. Implemented: jobs " +
-  "(list, view, run, runs, logs, cancel), clusters (list, view, start, " +
-  "stop), sql (warehouses, exec, statement view), catalog (catalogs, " +
-  "schemas, tables, table view), workspace (ls, view notebooks/directories), " +
-  "fs (ls, cat DBFS/volume files), pipelines (list, view, start, stop, " +
-  "events - Lakeflow/DLT), serving (list, view - model serving endpoints, " +
-  "read-only), api (raw REST passthrough). Other domains (setup) land " +
-  "incrementally - run `databricks-axi --help` for the current surface.";
+  "Agent-ergonomic wrapper around the Databricks CLI. Implemented: home " +
+  "(ambient workspace dashboard: auth context, recent runs, warehouses, " +
+  "running clusters), jobs (list, view, run, runs, logs, cancel), clusters " +
+  "(list, view, start, stop), sql (warehouses, exec, statement view, " +
+  "history), catalog (catalogs, schemas, tables, table view, volumes, " +
+  "volume view, functions, function view), workspace (ls, view " +
+  "notebooks/directories), fs (ls, cat DBFS/volume files), pipelines " +
+  "(list, view, start, stop, events - Lakeflow/DLT), serving (list, view - " +
+  "model serving endpoints, read-only), setup (hooks - session-start " +
+  "ambient context for Claude Code, Codex, OpenCode), api (raw REST " +
+  "passthrough). Run `databricks-axi --help` for the current surface.";
 
 export const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
 
@@ -30,6 +33,7 @@ export const HERMES_TAGS = [
   "sql",
   "warehouse",
   "query",
+  "history",
   "catalog",
   "schema",
   "table",
@@ -37,6 +41,8 @@ export const HERMES_TAGS = [
   "notebook",
   "dbfs",
   "volume",
+  "function",
+  "udf",
   "file",
   "pipeline",
   "dlt",
@@ -44,6 +50,7 @@ export const HERMES_TAGS = [
   "serving",
   "endpoint",
   "model",
+  "hooks",
 ];
 export const HERMES_CATEGORY = "data";
 

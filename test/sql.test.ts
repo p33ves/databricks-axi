@@ -484,6 +484,181 @@ describe("sql exec", () => {
   });
 });
 
+describe("sql history", () => {
+  const FAILED_ENTRY = {
+    query_id: "01f1aaaa-0000-1111-2222-333344445555",
+    status: "FAILED",
+    query_text: "SELECT * FROM workspace.default.axi_bench_missing_src",
+    duration: 1234,
+    error_message:
+      "[TABLE_OR_VIEW_NOT_FOUND] The table or view `axi_bench_missing_src` cannot be found. SQLSTATE: 42P01\nmore detail on line two",
+    statement_type: "SELECT",
+    warehouse_id: "43dc9c412f8e5b4c",
+    query_start_time_ms: 1751900000000,
+  };
+  const FINISHED_ENTRY = {
+    query_id: "01f1bbbb-0000-1111-2222-333344445555",
+    status: "FINISHED",
+    query_text: "SELECT count(*) FROM workspace.default.axi_bench_trips",
+    duration: 512,
+    error_message: "",
+    statement_type: "SELECT",
+    warehouse_id: "43dc9c412f8e5b4c",
+    query_start_time_ms: 1751900001000,
+  };
+
+  it("passes exact argv and renders default fields", async () => {
+    t.fake.respond("query-history list", {
+      res: [FAILED_ENTRY, FINISHED_ENTRY],
+      has_next_page: false,
+    });
+    const { out, exitCode } = await t.run(["sql", "history"]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      ["query-history", "list", "--max-results", "20", "-o", "json"],
+    ]);
+    expect(out).toContain("history[2]{query_id,status,query_text,error}:");
+  });
+
+  it("filters client-side with --status, redacting the error's first line", async () => {
+    t.fake.respond("query-history list", {
+      res: [FAILED_ENTRY, FINISHED_ENTRY],
+      has_next_page: false,
+    });
+    const { out, exitCode } = await t.run([
+      "sql",
+      "history",
+      "--status",
+      "FAILED",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("history[1]");
+    expect(out).toContain("axi_bench_missing_src");
+    expect(out).toContain("TABLE_OR_VIEW_NOT_FOUND");
+    expect(out).not.toContain("more detail on line two");
+    expect(out).not.toContain("axi_bench_trips");
+  });
+
+  it("shows untrimmed query_text and full error_message under --full", async () => {
+    const longText = `SELECT ${"x".repeat(200)} FROM workspace.default.t`;
+    t.fake.respond("query-history list", {
+      res: [{ ...FAILED_ENTRY, query_text: longText }],
+      has_next_page: false,
+    });
+    const { out } = await t.run(["sql", "history", "--full"]);
+    expect(out).toContain(longText);
+    expect(out).toContain("more detail on line two");
+  });
+
+  it("clips a long query_text without --full", async () => {
+    const longText = `SELECT ${"x".repeat(200)} FROM workspace.default.t`;
+    t.fake.respond("query-history list", {
+      res: [{ ...FAILED_ENTRY, query_text: longText }],
+      has_next_page: false,
+    });
+    const { out } = await t.run(["sql", "history"]);
+    expect(out).not.toContain(longText);
+  });
+
+  it("renders the truly-empty state", async () => {
+    t.fake.respond("query-history list", { res: [], has_next_page: false });
+    const { out, exitCode } = await t.run(["sql", "history"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("no queries in this workspace's query history");
+    expect(out).toContain("only warehouse / serverless SQL queries");
+    expect(out).toContain("sql exec");
+    expect(out).toContain("<query>");
+  });
+
+  it("flags has_next_page with a rerun-with-double-limit suggestion", async () => {
+    t.fake.respond("query-history list", {
+      res: [FAILED_ENTRY],
+      has_next_page: true,
+    });
+    const { out } = await t.run(["sql", "history"]);
+    expect(out).toContain("has_more: true");
+    expect(out).toContain("sql history --limit 40");
+  });
+
+  it("redacts a token-shaped error_message, leaving query_text intact", async () => {
+    const token = "a".repeat(45);
+    t.fake.respond("query-history list", {
+      res: [{ ...FAILED_ENTRY, error_message: token }],
+      has_next_page: false,
+    });
+    const { out } = await t.run(["sql", "history", "--full"]);
+    expect(out).not.toContain(token);
+    expect(out).toContain("[redacted]");
+    expect(out).toContain("axi_bench_missing_src");
+  });
+
+  it("rejects unknown --fields keys", async () => {
+    t.fake.respond("query-history list", {
+      res: [FAILED_ENTRY],
+      has_next_page: false,
+    });
+    const { out, exitCode } = await t.run([
+      "sql",
+      "history",
+      "--fields",
+      "bogus",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown field: bogus");
+  });
+
+  it("allows --fields to reach a raw spread key", async () => {
+    t.fake.respond("query-history list", {
+      res: [FAILED_ENTRY],
+      has_next_page: false,
+    });
+    const { out, exitCode } = await t.run([
+      "sql",
+      "history",
+      "--fields",
+      "query_start_time_ms",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("1751900000000");
+  });
+
+  it("renders the filtered-empty state (not the truly-empty message) when --status matches nothing", async () => {
+    t.fake.respond("query-history list", {
+      res: [FINISHED_ENTRY],
+      has_next_page: false,
+    });
+    const { out, exitCode } = await t.run([
+      "sql",
+      "history",
+      "--status",
+      "FAILED",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("no FAILED queries in the most recent 1");
+    expect(out).not.toContain("no queries in this workspace's query history");
+  });
+
+  it("suggests --status FAILED when a FAILED row is present and unfiltered", async () => {
+    t.fake.respond("query-history list", {
+      res: [FAILED_ENTRY, FINISHED_ENTRY],
+      has_next_page: false,
+    });
+    const { out } = await t.run(["sql", "history"]);
+    expect(out).toContain("sql history --status FAILED");
+  });
+
+  it("threads --profile into the exec suggestion", async () => {
+    t.fake.respond("-p dev query-history list", {
+      res: [FINISHED_ENTRY],
+      has_next_page: false,
+    });
+    const { out } = await t.run(["sql", "history", "--profile", "dev"]);
+    expect(out).toContain("sql exec");
+    expect(out).toContain("<query>");
+    expect(out).toContain("--profile dev");
+  });
+});
+
 describe("sql statement view", () => {
   it("renders a terminal statement's results", async () => {
     t.fake.respond(`api get ${STMT_PATH}`, succeededStmt());
