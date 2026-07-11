@@ -241,14 +241,13 @@ async function pipelinesEvents(args: string[]): Promise<AxiRenderable> {
   const items = asList(parsed, "events") as RawEvent[];
   // No --order-by upstream — sort newest first ourselves, then stable-
   // partition ERROR rows to the front (same failed-first principle jobs
-  // logs uses for tasks); Array#sort is a stable sort, so the timestamp
-  // order survives within each partition.
-  const sorted = [...items].sort((a, b) =>
-    (b.timestamp ?? "").localeCompare(a.timestamp ?? ""),
-  );
-  sorted.sort(
-    (a, b) => Number(a.level !== "ERROR") - Number(b.level !== "ERROR"),
-  );
+  // logs uses for tasks), timestamp descending within each partition.
+  const sorted = [...items].sort((a, b) => {
+    const errDiff = Number(a.level !== "ERROR") - Number(b.level !== "ERROR");
+    return errDiff !== 0
+      ? errDiff
+      : (b.timestamp ?? "").localeCompare(a.timestamp ?? "");
+  });
   const flattened = sorted.map((e) => ({
     timestamp: e.timestamp,
     level: e.level,
