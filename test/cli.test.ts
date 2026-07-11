@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { main } from "../src/cli.js";
+import { installFakeDatabricks } from "./helpers/fake-databricks.js";
 
 function capture() {
   let out = "";
@@ -10,11 +11,19 @@ function capture() {
 }
 
 describe("main", () => {
+  // home (bare invocation and `home`) now spawns the databricks CLI for its
+  // dashboard panels — put a fake on PATH so this file never touches a real
+  // workspace, even for tests that don't otherwise care about spawning.
+  let prevPath: string | undefined;
   beforeEach(() => {
     process.exitCode = undefined;
+    const fake = installFakeDatabricks();
+    prevPath = process.env.PATH;
+    process.env.PATH = `${fake.binDir}:${prevPath ?? ""}`;
   });
   afterEach(() => {
     process.exitCode = undefined;
+    process.env.PATH = prevPath;
   });
 
   it("prints the version", async () => {
@@ -54,7 +63,7 @@ describe("main", () => {
     const c = capture();
     await main({ argv: ["home"], stdout: c.stdout });
     expect(process.exitCode ?? 0).toBe(0);
-    expect(c.read()).toContain("pre-release scaffold");
+    expect(c.read()).toContain("commands:");
 
     const h = capture();
     await main({ argv: ["home", "--help"], stdout: h.stdout });

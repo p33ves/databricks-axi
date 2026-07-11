@@ -21,6 +21,9 @@ export type FakeDatabricks = {
   respondRaw: (prefix: string, stdout: string) => void;
   /** Replay `stderr` text with a nonzero exit (default 1) — canned upstream errors. */
   respondError: (prefix: string, stderr: string, exitCode?: number) => void;
+  /** Never respond — the stub idles until the caller's own spawn timeout
+   * SIGKILLs it, for testing timeout/budget handling. */
+  respondHang: (prefix: string) => void;
   /** Every recorded invocation, as raw argv arrays, in call order. */
   calls: () => string[][];
   /** Contents of `--json @path` temp-file bodies, in call order. */
@@ -33,6 +36,7 @@ type CannedReply = {
   stderr?: string;
   exitCode?: number;
   seq?: unknown[];
+  hang?: boolean;
 };
 
 /**
@@ -104,6 +108,12 @@ for (const [prefix, reply] of Object.entries(responses)) {
   const parts = prefix.split(" ");
   if (parts.every((part, i) => args[i] === part)) {
     matched = true;
+    if (reply.hang) {
+      // Idle forever — never write, never exit. The caller's own spawn
+      // timeout is expected to SIGKILL this process.
+      setInterval(() => {}, 1 << 30);
+      break;
+    }
     if (reply.seq !== undefined) {
       // Sequential replies: consume one per call, the last one sticks.
       process.stdout.write(JSON.stringify(reply.seq[0]));
@@ -145,6 +155,7 @@ if (!matched) {
     respondRaw: (prefix, stdout) => seed(prefix, { stdoutRaw: stdout }),
     respondError: (prefix, stderr, exitCode = 1) =>
       seed(prefix, { stderr, exitCode }),
+    respondHang: (prefix) => seed(prefix, { hang: true }),
     calls: () =>
       existsSync(callsFile)
         ? readFileSync(callsFile, "utf8")
