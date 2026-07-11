@@ -1,6 +1,7 @@
 import { parseArgs as nodeParseArgs } from "node:util";
 import { AxiError } from "axi-sdk-js";
 import { runDatabricks, type RunDatabricksOptions } from "../databricks.js";
+import { MAX_VIEW_CHARS, truncate } from "../truncate.js";
 
 // axi-sdk-js 0.1.8 doesn't re-export its output types from the package
 // index; mirror the two one-line aliases locally until it does.
@@ -45,6 +46,19 @@ export function asList(parsed: unknown, key: string): AxiStructuredOutput[] {
   return (obj[key] as AxiStructuredOutput[] | undefined) ?? [];
 }
 
+/** Shared by jobs.ts and context.ts's home-panel run rendering. */
+export type RunState = { result_state?: string; life_cycle_state?: string };
+
+export function compactState(item: { state?: RunState }): string {
+  return item.state?.result_state ?? item.state?.life_cycle_state ?? "UNKNOWN";
+}
+
+/** Terminal and not clean success (FAILED, TIMEDOUT, CANCELED, ...). */
+export function isFailed(item: { state?: RunState }): boolean {
+  const result = item.state?.result_state;
+  return typeof result === "string" && result !== "SUCCESS";
+}
+
 /** Parent directory of a slash-separated workspace/dbfs path ("/" at the root). */
 export function parentPath(path: string): string {
   const idx = path.lastIndexOf("/");
@@ -59,6 +73,39 @@ export function parentPath(path: string): string {
 export function looksBinary(text: string): boolean {
   return text.includes("\uFFFD") || text.includes("\u0000");
 }
+
+const HEAD_LINES = 200;
+
+export type FileContentResult = { content: string; truncated?: string };
+
+/** Binary check + head-truncate for exported/read file content — shared by
+ * workspace view and fs cat. `size` is caller-computed (the two callers use
+ * different byte-count sources) and only used for the binary-sentinel text. */
+export function renderFileContent(
+  text: string,
+  size: number,
+  full: boolean,
+): FileContentResult {
+  if (looksBinary(text)) {
+    return { content: `<binary, ${size} bytes — not rendered>` };
+  }
+  const t = truncate(text, {
+    lines: full ? Infinity : HEAD_LINES,
+    mode: "head",
+    maxChars: full ? Infinity : MAX_VIEW_CHARS,
+  });
+  const result: FileContentResult = { content: t.text };
+  if (t.truncated) {
+    result.truncated = t.clipped
+      ? `content clipped at ${MAX_VIEW_CHARS} chars — rerun with --full`
+      : `showing first ${HEAD_LINES} of ${t.totalLines} lines — rerun with --full`;
+  }
+  return result;
+}
+
+/** --wait budget for async start/stop/run mutations; upstream blocks up to
+ * 20 min. Shared by jobs, clusters, sql (warehouses start/stop). */
+export const WAIT_TIMEOUT_MS = 25 * 60_000;
 
 /** The flag spec every list-shaped subcommand shares. */
 export const LIST_FLAGS = {
@@ -95,14 +142,15 @@ export function listResult(
   return out;
 }
 
-/** runDatabricks, folding domain-flavored suggestions into bare NOT_FOUND. */
-export async function runWithNotFoundHelp(
-  args: string[],
-  opts: RunDatabricksOptions,
+/** Fold a bare NOT_FOUND (no domain suggestions yet) into a domain-flavored
+ * one. Shared by runWithNotFoundHelp and callers that go through
+ * runDatabricksApi instead of runDatabricks (e.g. sql statement view). */
+export async function foldNotFoundHelp<T>(
+  promise: Promise<T>,
   notFoundHelp: string[],
-): Promise<unknown> {
+): Promise<T> {
   try {
-    return await runDatabricks(args, opts);
+    return await promise;
   } catch (error) {
     if (
       error instanceof AxiError &&
@@ -113,6 +161,15 @@ export async function runWithNotFoundHelp(
     }
     throw error;
   }
+}
+
+/** runDatabricks, folding domain-flavored suggestions into bare NOT_FOUND. */
+export function runWithNotFoundHelp(
+  args: string[],
+  opts: RunDatabricksOptions,
+  notFoundHelp: string[],
+): Promise<unknown> {
+  return foldNotFoundHelp(runDatabricks(args, opts), notFoundHelp);
 }
 
 /** Helpers whose usage errors point at `databricks-axi <domain> --help`. */

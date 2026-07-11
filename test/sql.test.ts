@@ -174,6 +174,33 @@ describe("sql warehouses", () => {
     expect(exitCode).toBe(1);
     expect(out).toContain("PERMISSION_DENIED");
   });
+
+  it("maps a missing warehouse to NOT_FOUND with a warehouses-list suggestion", async () => {
+    t.fake.respondError(
+      "warehouses get",
+      "Error: Warehouse 999 does not exist.",
+    );
+    const { out, exitCode } = await t.run(["sql", "warehouses", "view", "999"]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("sql warehouses");
+  });
+
+  it("maps a missing warehouse to NOT_FOUND on start", async () => {
+    t.fake.respondError(
+      "warehouses start",
+      "Error: Warehouse 999 does not exist.",
+    );
+    const { out, exitCode } = await t.run([
+      "sql",
+      "warehouses",
+      "start",
+      "999",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("sql warehouses");
+  });
 });
 
 describe("sql exec", () => {
@@ -687,6 +714,22 @@ describe("sql statement view", () => {
     expect(exitCode).toBe(0);
     expect(out).toContain("state: RUNNING");
     expect(out).toContain(`sql statement view ${STMT_ID}`);
+  });
+
+  it("maps a missing statement to NOT_FOUND with a history suggestion", async () => {
+    t.fake.respondError(
+      `api get ${STMT_PATH}`,
+      "Error: RESOURCE_DOES_NOT_EXIST: Statement not found",
+    );
+    const { out, exitCode } = await t.run([
+      "sql",
+      "statement",
+      "view",
+      STMT_ID,
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("sql history");
   });
 
   it("rejects unknown sql subcommands", async () => {

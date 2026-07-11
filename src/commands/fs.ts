@@ -1,11 +1,10 @@
-import { MAX_VIEW_CHARS, truncate } from "../truncate.js";
 import {
   asList,
   domainHelpers,
   LIST_FLAGS,
-  looksBinary,
   parentPath,
   profileSuffix,
+  renderFileContent,
   runWithNotFoundHelp,
   spawnOpts,
   type AxiRenderable,
@@ -31,7 +30,6 @@ notes:
 `;
 
 const DEFAULT_LIST_LIMIT = 100;
-const HEAD_LINES = 200;
 
 type RawEntry = {
   name?: string;
@@ -162,24 +160,10 @@ async function fsCat(args: string[]): Promise<AxiRenderable> {
   // anyway, so the count is informational only).
   const size = Buffer.byteLength(text, "utf8");
   const help = [`databricks-axi fs ls ${parentDbfsDir(scoped)}${p}`];
-  if (looksBinary(text)) {
-    return {
-      path,
-      size,
-      content: `<binary, ${size} bytes — not rendered>`,
-      help,
-    };
-  }
-  const t = truncate(text, {
-    lines: full ? Infinity : HEAD_LINES,
-    mode: "head",
-    maxChars: full ? Infinity : MAX_VIEW_CHARS,
-  });
-  const out: AxiStructuredOutput = { path, size, content: t.text };
-  if (t.truncated) {
-    out.truncated = t.clipped
-      ? `content clipped at ${MAX_VIEW_CHARS} chars — rerun with --full`
-      : `showing first ${HEAD_LINES} of ${t.totalLines} lines — rerun with --full`;
+  const rendered = renderFileContent(text, size, full);
+  const out: AxiStructuredOutput = { path, size, content: rendered.content };
+  if (rendered.truncated) {
+    out.truncated = rendered.truncated;
   }
   out.help = help;
   return out;

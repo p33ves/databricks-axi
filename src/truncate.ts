@@ -1,6 +1,6 @@
-export type TruncateMode = "head" | "tail";
+type TruncateMode = "head" | "tail";
 
-export type TruncateResult = {
+type TruncateResult = {
   text: string;
   truncated: boolean;
   totalLines: number;

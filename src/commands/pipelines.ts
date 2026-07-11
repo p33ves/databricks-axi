@@ -251,7 +251,7 @@ async function pipelinesEvents(args: string[]): Promise<AxiRenderable> {
       ? errDiff
       : (b.timestamp ?? "").localeCompare(a.timestamp ?? "");
   });
-  let anyTruncated = false;
+  let truncatedCount = 0;
   const flattened = sorted.map((e) => {
     // Upstream event text goes straight into agent context — redact
     // token-shaped strings before truncation (same rule as jobs logs).
@@ -269,7 +269,9 @@ async function pipelinesEvents(args: string[]): Promise<AxiRenderable> {
       mode: "head",
       maxChars: 200,
     });
-    anyTruncated ||= t.truncated;
+    if (t.truncated) {
+      truncatedCount++;
+    }
     return {
       timestamp: e.timestamp,
       level: e.level,
@@ -285,12 +287,10 @@ async function pipelinesEvents(args: string[]): Promise<AxiRenderable> {
   ]);
   const p = profileSuffix(flags.get("profile"));
   const help = [`databricks-axi pipelines view ${pipelineId}${p}`];
-  if (anyTruncated) {
-    help.unshift(
-      `databricks-axi pipelines events ${pipelineId} --full${p}  # some messages clipped to 200 chars`,
-    );
+  if (truncatedCount > 0) {
+    help.unshift(`databricks-axi pipelines events ${pipelineId} --full${p}`);
   }
-  return listResult("events", rows, limit, {
+  const out = listResult("events", rows, limit, {
     rerun: `databricks-axi pipelines events ${pipelineId} --limit ${limit * 2}${p}`,
     empty: {
       status: "no events for this pipeline",
@@ -298,6 +298,10 @@ async function pipelinesEvents(args: string[]): Promise<AxiRenderable> {
     },
     help,
   });
+  if (truncatedCount > 0 && typeof out === "object") {
+    out.truncated = `${truncatedCount} message(s) clipped to 200 chars — rerun with --full`;
+  }
+  return out;
 }
 
 /** runDatabricks, folding pipelines-flavored suggestions into bare NOT_FOUND. */

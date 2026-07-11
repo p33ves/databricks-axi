@@ -102,7 +102,10 @@ history` maps its own `--limit` to `--max-results`, sources `has_more`
   the real `has_next_page` flag and two distinct empty states (truly-empty
   vs. `--status`-filtered-empty) don't fit that helper's `rows.length >=
 limit` heuristic. `fs ls` is the only other documented `listResult`
-  exemption; this is the second.
+  exemption; this is the second. `sql warehouses` is a third: it has no
+  `--limit` flag at all (a workspace has a handful of warehouses, per the
+  sql domain spec) and hand-builds its own `count`-only envelope — the
+  one list command in the repo with no client-side cap safeguard.
 - Legacy CLI 0.18.x is incompatible; the spawn layer version-guards >= 0.298.
 - int64 ids (`job_id`/`run_id`) can exceed 2^53, where `JSON.parse` silently
   rounds; `runDatabricks` quotes 16+-digit `*_id` values so they stay exact
