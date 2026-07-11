@@ -19,7 +19,11 @@ directories up from the compiled/source location (`readPackageVersion`),
 since `dist/` and source layouts differ by one directory level. `main()`
 is the single entrypoint `bin/databricks-axi.ts` calls, and the same
 entrypoint the test rig (`setupCli()`) calls directly with a captured
-`stdout`.
+`stdout`. `bin/databricks-axi.ts`'s own last-resort `catch` (anything
+`main()` itself throws, outside the normal error taxonomy) redacts the
+message via `errors.js`'s `redactSecrets` before writing it to stdout,
+falling back to a generic "unexpected startup failure" string if even that
+import fails — this is the one stdout write that sits outside `runAxiCli`.
 
 ## `src/databricks.ts`
 
@@ -50,7 +54,9 @@ CLI only through this file's two exports:
   the child the instant the running total exceeds the cap, rather than
   buffering an unbounded response — chunks are concatenated and decoded
   once at the end so a multi-byte UTF-8 sequence split across pipe reads
-  is never mangled by incremental decoding.
+  is never mangled by incremental decoding. stderr is capped at 64KB
+  (`STDERR_CAP_BYTES`) — error text is never legitimately larger than that,
+  so it just stops appending past the cap instead of buffering unbounded.
 
 ## `src/errors.ts`
 
@@ -66,8 +72,9 @@ The error taxonomy and secret redaction, shared by every domain:
 - `mapUpstreamError(stderr)`: pattern-matches the Go CLI's plain-text
   stderr into one `AxiError` with a taxonomy code (`AUTH_ERROR`,
   `PERMISSION_DENIED`, `NOT_FOUND`, `INVALID_STATE`, or the
-  `UPSTREAM_ERROR` fallback). Strips a trailing `Profile:`/`Host:`/
-  `Auth type:` block before classification, since its own
+  `UPSTREAM_ERROR` fallback). Strips a trailing run of `Profile:`/`Host:`/
+  `Auth type:`/`Username:` lines (matched in any order, not anchored on
+  `Profile:` coming first) before classification, since its own
   `Auth type: OAuth (...)` line would otherwise trip the `AUTH_ERROR`
   branch on every auth mode, not just genuine auth failures. Has a
   dedicated branch for "Public DBFS root is disabled" (a Free Edition
@@ -120,7 +127,11 @@ requireId, renderRows }` bound to that domain's name (so usage errors
   `node:util`'s `parseArgs` in strict mode — not a hand-rolled flag
   loop — so usage-error wording follows Node's own messages
   (`Unknown option '--x'`, `argument missing`) and `--flag=value` works
-  alongside `--flag value`. `renderRows` applies `--fields` (raw top-level
+  alongside `--flag value`. `parseIntFlag` only accepts a plain run of
+  decimal digits (`/^\d+$/`) — `Number()` alone would also accept
+  scientific notation (`1e3`) or hex (`0x1F4`), which aren't integers a
+  human or agent would type for `--limit`/`--timeout`. `renderRows` applies
+  `--fields` (raw top-level
   key selection, validated against the actual keys present in the result
   set) or a domain-supplied default field list.
 - `LIST_FLAGS`: the `{ profile, limit, fields }` flag spec every
@@ -200,8 +211,9 @@ list envelope or a private NOT_FOUND wrapper.
   base64-ish, an inline host URL, an inline email) including edge cases (a
   dkea token preceded by a word character, keeping workspace paths and SQL
   UUIDs/SQLSTATEs readable), and every `mapUpstreamError` branch including
-  the Profile/Host/Auth-type trailer strip and the disabled-public-DBFS-root
-  special case.
+  the Profile/Host/Auth-type trailer strip (with its lines reordered, to
+  prove the strip isn't anchored on `Profile:` coming first) and the
+  disabled-public-DBFS-root special case.
 - `test/truncate.test.ts`: head/tail truncation, exact-boundary
   non-truncation, trailing-newline non-counting, char-clamping
   independent of line count, and short-input passthrough.

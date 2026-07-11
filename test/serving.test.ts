@@ -192,4 +192,10 @@ describe("serving dispatch", () => {
     const { exitCode } = await t.run(["serving", "view", "a", "b"]);
     expect(exitCode).toBe(2);
   });
+
+  it("fails loud on an unknown flag", async () => {
+    const { out, exitCode } = await t.run(["serving", "list", "--bogus"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option '--bogus'");
+  });
 });

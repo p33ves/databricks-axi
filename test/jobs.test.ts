@@ -54,6 +54,12 @@ describe("jobs list", () => {
     ]);
   });
 
+  it("rejects a scientific-notation --limit (decimal digits only)", async () => {
+    const { out, exitCode } = await t.run(["jobs", "list", "--limit", "1e3"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("--limit must be a positive integer");
+  });
+
   it("rejects a non-integer --limit as a usage error", async () => {
     const { out, exitCode } = await t.run(["jobs", "list", "--limit", "abc"]);
     expect(exitCode).toBe(2);
@@ -169,6 +175,8 @@ describe("jobs view", () => {
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([["jobs", "get", "101", "-o", "json"]]);
     expect(out).toContain("name: axi-bench-etl");
+    // Same key as jobs list and the spec — not a bare `creator`.
+    expect(out).toContain("creator_user_name: a@b.c");
     expect(out).toContain("0 0 3 * * ?");
     expect(out).toContain("tasks[1]{task_key,type}:");
     expect(out).toContain("extract");
@@ -346,6 +354,18 @@ describe("jobs runs", () => {
     const { out } = await t.run(["jobs", "runs", "--fields", "run_id,job_id"]);
     expect(out).toContain("runs[2]{run_id,job_id}:");
     expect(out).toContain("901,101");
+  });
+
+  it("exposes the derived display fields to --fields too", async () => {
+    t.fake.respond("jobs list-runs", RUNS);
+    const { out } = await t.run([
+      "jobs",
+      "runs",
+      "--fields",
+      "run_id,duration_s,state",
+    ]);
+    expect(out).toContain("runs[2]{run_id,duration_s,state}:");
+    expect(out).toContain("901,63,SUCCESS");
   });
 
   it("treats non-SUCCESS terminal states like TIMEDOUT as failed", async () => {

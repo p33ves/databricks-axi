@@ -81,4 +81,5 @@ cancel`'s `INVALID_STATE` no-op does not carry to `clusters start` (which
 list/view/start/stop argv shape, autoscale min-max vs. fixed `num_workers`
 fallback logic, the `state_message` presence/absence branches, the
 "is in unexpected state" no-op conversion for `start`, the silent-idempotent
-`stop` path, and 403 → `PERMISSION_DENIED` mapping.
+`stop` path, 403 → `PERMISSION_DENIED` mapping, and an unknown-flag
+rejection.

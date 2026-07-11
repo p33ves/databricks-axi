@@ -736,4 +736,23 @@ describe("sql statement view", () => {
     const { exitCode } = await t.run(["sql", "frobnicate"]);
     expect(exitCode).toBe(2);
   });
+
+  it("fails loud on an unknown flag", async () => {
+    const { out, exitCode } = await t.run(["sql", "history", "--bogus"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option '--bogus'");
+  });
+
+  it("attaches next-step help to a successful exec result", async () => {
+    t.fake.respond("api post", succeededStmt());
+    const { out, exitCode } = await t.run([
+      "sql",
+      "exec",
+      "SELECT 1",
+      "--warehouse",
+      WH_ID,
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("databricks-axi sql history");
+  });
 });

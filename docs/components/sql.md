@@ -45,7 +45,8 @@ All accept `--profile <name>`.
   `creator_name`, plus `start`/`stop` and an `sql exec --warehouse <id>`
   follow-up.
 - `exec` / `statement view`: on success, `{ statement_id, columns
-(name:type_text pairs), rows, total_row_count }`. A non-`SUCCEEDED`
+(name:type_text pairs), rows, total_row_count }`, plus a `help` array with
+  `sql exec "<query>"` and `sql history` follow-ups. A non-`SUCCEEDED`
   terminal state throws `SQL_ERROR` with the redacted error detail. A
   still-`PENDING`/`RUNNING` statement past the `--timeout` budget returns
   exit 0 with `status: "still running..."` and a `sql statement view`
@@ -110,5 +111,6 @@ responses. Covers warehouse list/view/start/stop, the NOT_FOUND-to-
 `sql warehouses` mapping on `warehouses view`/`start` and the NOT_FOUND-to-
 `sql history` mapping on `statement view`, exec submit/poll/timeout/
 chunk-fetch paths, wait_timeout clamping (both the 50s ceiling and the 5s
-floor), row_limit truncation, and the two `history` empty states plus its
-`has_next_page`-sourced pagination.
+floor), row_limit truncation, the two `history` empty states plus its
+`has_next_page`-sourced pagination, the `help` follow-up on a successful
+`exec`, and an unknown-flag rejection.

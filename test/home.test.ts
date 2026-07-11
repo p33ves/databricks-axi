@@ -181,4 +181,10 @@ describe("home dashboard", () => {
     expect(out).toContain("usage: databricks-axi [home]");
     expect(out).toContain("setup hooks");
   });
+
+  it("fails loud on an unknown flag", async () => {
+    const { out, exitCode } = await t.run(["home", "--bogus"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option '--bogus'");
+  });
 });

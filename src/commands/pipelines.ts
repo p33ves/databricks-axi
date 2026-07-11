@@ -172,10 +172,13 @@ async function pipelinesStart(args: string[]): Promise<AxiRenderable> {
   let updateId: unknown;
   try {
     const result = assertObject<{ update_id?: string }>(
-      await runPipelines(
-        ["pipelines", "start-update", pipelineId],
-        spawnOpts(flags),
-      ),
+      await runPipelines(["pipelines", "start-update", pipelineId], {
+        ...spawnOpts(flags),
+        timeoutHelp: [
+          "The start may have applied despite the timeout — check state:",
+          `databricks-axi pipelines view ${pipelineId}${p}`,
+        ],
+      }),
       "pipelines start-update",
     );
     updateId = result.update_id;
@@ -190,7 +193,7 @@ async function pipelinesStart(args: string[]): Promise<AxiRenderable> {
         return {
           pipeline_id: pipelineId,
           update_id: match[1],
-          status: "update already in progress",
+          status: "update already in progress (no-op)",
           help: [`databricks-axi pipelines view ${pipelineId}${p}`],
         };
       }
@@ -213,10 +216,13 @@ async function pipelinesStop(args: string[]): Promise<AxiRenderable> {
   // stdout, both already-IDLE and mid-update (which cancels). No rejection
   // shape to inspect, so unlike start there is no conflict branch here;
   // always exit 0 (same shape as clusters stop -> clusters delete).
-  await runPipelines(
-    ["pipelines", "stop", pipelineId, "--no-wait"],
-    spawnOpts(flags),
-  );
+  await runPipelines(["pipelines", "stop", pipelineId, "--no-wait"], {
+    ...spawnOpts(flags),
+    timeoutHelp: [
+      "The stop may have applied despite the timeout — check state:",
+      `databricks-axi pipelines view ${pipelineId}${p}`,
+    ],
+  });
   return {
     pipeline_id: pipelineId,
     status: "stop requested",

@@ -361,4 +361,10 @@ describe("clusters dispatch", () => {
     const { exitCode } = await t.run(["clusters", "view", "abc", "def"]);
     expect(exitCode).toBe(2);
   });
+
+  it("fails loud on an unknown flag", async () => {
+    const { out, exitCode } = await t.run(["clusters", "list", "--bogus"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option '--bogus'");
+  });
 });

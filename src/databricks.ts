@@ -10,6 +10,7 @@ const MIN_MINOR_VERSION = 298; // databricks CLI floor: 0.298 (pre-0.298 paginat
 const INSTALL_HELP =
   "Install it: https://docs.databricks.com/dev-tools/cli/install";
 const RAW_OUTPUT_CAP_BYTES = 5 * 1024 * 1024; // fs cat / raw mode: stream + abort, never buffer unbounded
+const STDERR_CAP_BYTES = 64 * 1024; // error text is never legitimately large; stop buffering past this
 
 export type RunDatabricksOptions = {
   profile?: string;
@@ -166,7 +167,11 @@ function spawnCollect(
       }
       stdoutChunks.push(chunk);
     });
-    child.stderr.on("data", (chunk: string) => (stderr += chunk));
+    child.stderr.on("data", (chunk: string) => {
+      if (stderr.length < STDERR_CAP_BYTES) {
+        stderr += chunk;
+      }
+    });
     child.on("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       resolve({

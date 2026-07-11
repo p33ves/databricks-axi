@@ -290,6 +290,12 @@ describe("fs dispatch", () => {
     expect(exitCode).toBe(0);
     expect(out).toContain("usage: databricks-axi fs");
   });
+
+  it("fails loud on an unknown flag", async () => {
+    const { out, exitCode } = await t.run(["fs", "ls", "--bogus"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option '--bogus'");
+  });
 });
 
 describe("humanSize", () => {

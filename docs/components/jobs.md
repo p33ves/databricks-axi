@@ -43,16 +43,17 @@ upstream's own ~20-minute block on `run-now`.
 
 - `list`: envelope via `listResult`, default fields `job_id`, `name`
   (flattened out of `settings.name`), `creator_user_name`.
-- `view`: `job_id`, `name`, `creator`, an optional `schedule` string
+- `view`: `job_id`, `name`, `creator_user_name` (same key as `jobs list`), an
+  optional `schedule` string
   (`"<cron> (<pause_status>)"`) when a schedule exists, and `tasks` reduced
   to `{ task_key, type }` (`type` is derived from `notebook_task`/
   `spark_python_task` or a generic `<x>_task` key name).
 - `run`: `run_id` (+ `state` if upstream returns one) and a `runs view`
   follow-up.
-- `runs`: default fields are a derived shape (`run_id`, `state`,
-  `start_time` as ISO, `duration_s`), not raw upstream fields, unless
-  `--fields` is passed — then it goes through `renderRows` on the raw items
-  instead.
+- `runs`: rows are the raw upstream items with the derived display fields
+  (`state`, `start_time` as ISO, `duration_s`) merged in, so `--fields` can
+  select either raw upstream keys or the derived ones. Default fields are
+  `run_id`, `state`, `start_time`, `duration_s`.
 - `runs view`: `run_id`, `job_id`, `state`, `start_time` (ISO),
   `duration_s`, and a flattened `tasks` array (`task_key`, `state`,
   `duration_s`).
@@ -97,5 +98,6 @@ a fresh fake `databricks` on PATH per test, `respond`/`respondError` to seed
 canned JSON or stderr, `t.run(argv)` to invoke the CLI, and `calls()` to
 assert exact argv. Covers list pagination (`has_more`), field selection and
 rejection, empty states, auth-error mapping, job/run views, the `--wait`
-timeout path, log truncation and `--full`, and the already-terminated
-cancel no-op.
+timeout path, log truncation and `--full`, the already-terminated cancel
+no-op, the decimal-only `--limit` guard (rejecting `1e3`), and an
+unknown-flag rejection.

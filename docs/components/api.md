@@ -63,5 +63,6 @@ passthrough rendered as TOON, an inline `--body` going through a temp file
 never visible on argv, `@file` bodies passing through without JSON
 validation, `--profile` threading as `-p`, rejection of an unknown method
 or a non-`/api/` path (asserting no spawn happens), rejection of invalid
-inline JSON, wrapping a non-object response, and the 1MB truncation
-including a UTF-8-byte-accurate (not UTF-16-length) count.
+inline JSON, wrapping a non-object response, the 1MB truncation
+including a UTF-8-byte-accurate (not UTF-16-length) count, and an
+unknown-flag rejection.

@@ -166,13 +166,22 @@ async function schemasList(args: string[]): Promise<AxiRenderable> {
   });
 }
 
-async function tablesList(args: string[]): Promise<AxiRenderable> {
+/** Shared skeleton for the three <catalog>.<schema>-scoped list commands
+ * (tables/volumes/functions): split on the first "." — agents think in
+ * `workspace.default`, not positional pairs — then list, render, envelope. */
+async function scopedList(
+  args: string[],
+  cfg: {
+    noun: "tables" | "volumes" | "functions";
+    argv: (catalog: string, schema: string, limit: number) => string[];
+    fields: string[];
+    help: (ref: string, catalog: string, schema: string, p: string) => string[];
+  },
+): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);
-  // Split on the first "." — agents think in `workspace.default`, not
-  // positional pairs.
   const ref = requireId(
     positional,
-    "catalog tables <catalog>.<schema>",
+    `catalog ${cfg.noun} <catalog>.<schema>`,
     /^[^.-][^.]*\.[^.-].*$/,
   );
   const dot = ref.indexOf(".");
@@ -181,7 +190,25 @@ async function tablesList(args: string[]): Promise<AxiRenderable> {
   const limit = parseIntFlag(flags, "limit", 30);
   const p = profileSuffix(flags.get("profile"));
   const parsed = await runWithNotFoundHelp(
-    [
+    cfg.argv(catalog, schema, limit),
+    spawnOpts(flags),
+    [`databricks-axi catalog schemas ${catalog}${p}`],
+  );
+  const rows = renderRows(asList(parsed, cfg.noun), flags, cfg.fields);
+  return listResult(cfg.noun, rows, limit, {
+    rerun: `databricks-axi catalog ${cfg.noun} ${ref} --limit ${limit * 2}${p}`,
+    empty: {
+      status: `no ${cfg.noun} in ${ref}`,
+      help: [`databricks-axi catalog schemas ${catalog}${p}`],
+    },
+    help: cfg.help(ref, catalog, schema, p),
+  });
+}
+
+function tablesList(args: string[]): Promise<AxiRenderable> {
+  return scopedList(args, {
+    noun: "tables",
+    argv: (catalog, schema, limit) => [
       "tables",
       "list",
       catalog,
@@ -193,21 +220,10 @@ async function tablesList(args: string[]): Promise<AxiRenderable> {
       "--omit-columns",
       "--omit-properties",
     ],
-    spawnOpts(flags),
-    [`databricks-axi catalog schemas ${catalog}${p}`],
-  );
-  const rows = renderRows(asList(parsed, "tables"), flags, [
-    "name",
-    "table_type",
-    "data_source_format",
-  ]);
-  return listResult("tables", rows, limit, {
-    rerun: `databricks-axi catalog tables ${ref} --limit ${limit * 2}${p}`,
-    empty: {
-      status: `no tables in ${ref}`,
-      help: [`databricks-axi catalog schemas ${catalog}${p}`],
-    },
-    help: [`databricks-axi catalog table view ${ref}.<name>${p}`],
+    fields: ["name", "table_type", "data_source_format"],
+    help: (ref, _catalog, _schema, p) => [
+      `databricks-axi catalog table view ${ref}.<name>${p}`,
+    ],
   });
 }
 
@@ -246,34 +262,19 @@ async function tableView(args: string[]): Promise<AxiRenderable> {
   return out;
 }
 
-async function volumesList(args: string[]): Promise<AxiRenderable> {
-  const { positional, flags } = parseArgs(args, LIST_FLAGS);
-  const ref = requireId(
-    positional,
-    "catalog volumes <catalog>.<schema>",
-    /^[^.-][^.]*\.[^.-].*$/,
-  );
-  const dot = ref.indexOf(".");
-  const catalog = ref.slice(0, dot);
-  const schema = ref.slice(dot + 1);
-  const limit = parseIntFlag(flags, "limit", 30);
-  const p = profileSuffix(flags.get("profile"));
-  const parsed = await runWithNotFoundHelp(
-    ["volumes", "list", catalog, schema, "--limit", String(limit)],
-    spawnOpts(flags),
-    [`databricks-axi catalog schemas ${catalog}${p}`],
-  );
-  const rows = renderRows(asList(parsed, "volumes"), flags, [
-    "name",
-    "volume_type",
-  ]);
-  return listResult("volumes", rows, limit, {
-    rerun: `databricks-axi catalog volumes ${ref} --limit ${limit * 2}${p}`,
-    empty: {
-      status: `no volumes in ${ref}`,
-      help: [`databricks-axi catalog schemas ${catalog}${p}`],
-    },
-    help: [
+function volumesList(args: string[]): Promise<AxiRenderable> {
+  return scopedList(args, {
+    noun: "volumes",
+    argv: (catalog, schema, limit) => [
+      "volumes",
+      "list",
+      catalog,
+      schema,
+      "--limit",
+      String(limit),
+    ],
+    fields: ["name", "volume_type"],
+    help: (ref, catalog, schema, p) => [
       `databricks-axi catalog volume view ${ref}.<name>${p}`,
       `databricks-axi fs ls /Volumes/${catalog}/${schema}/<name>${p}`,
     ],
@@ -313,35 +314,21 @@ async function volumeView(args: string[]): Promise<AxiRenderable> {
   return out;
 }
 
-async function functionsList(args: string[]): Promise<AxiRenderable> {
-  const { positional, flags } = parseArgs(args, LIST_FLAGS);
-  const ref = requireId(
-    positional,
-    "catalog functions <catalog>.<schema>",
-    /^[^.-][^.]*\.[^.-].*$/,
-  );
-  const dot = ref.indexOf(".");
-  const catalog = ref.slice(0, dot);
-  const schema = ref.slice(dot + 1);
-  const limit = parseIntFlag(flags, "limit", 30);
-  const p = profileSuffix(flags.get("profile"));
-  const parsed = await runWithNotFoundHelp(
-    ["functions", "list", catalog, schema, "--limit", String(limit)],
-    spawnOpts(flags),
-    [`databricks-axi catalog schemas ${catalog}${p}`],
-  );
-  const rows = renderRows(asList(parsed, "functions"), flags, [
-    "name",
-    "data_type",
-    "comment",
-  ]);
-  return listResult("functions", rows, limit, {
-    rerun: `databricks-axi catalog functions ${ref} --limit ${limit * 2}${p}`,
-    empty: {
-      status: `no functions in ${ref}`,
-      help: [`databricks-axi catalog schemas ${catalog}${p}`],
-    },
-    help: [`databricks-axi catalog function view ${ref}.<name>${p}`],
+function functionsList(args: string[]): Promise<AxiRenderable> {
+  return scopedList(args, {
+    noun: "functions",
+    argv: (catalog, schema, limit) => [
+      "functions",
+      "list",
+      catalog,
+      schema,
+      "--limit",
+      String(limit),
+    ],
+    fields: ["name", "data_type", "comment"],
+    help: (ref, _catalog, _schema, p) => [
+      `databricks-axi catalog function view ${ref}.<name>${p}`,
+    ],
   });
 }
 

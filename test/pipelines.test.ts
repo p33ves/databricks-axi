@@ -365,4 +365,10 @@ describe("pipelines dispatch", () => {
     expect(out).toContain("usage: databricks-axi pipelines");
     expect(out).toContain("start-update");
   });
+
+  it("fails loud on an unknown flag", async () => {
+    const { out, exitCode } = await t.run(["pipelines", "list", "--bogus"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option '--bogus'");
+  });
 });

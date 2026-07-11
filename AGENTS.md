@@ -152,9 +152,10 @@ limit` heuristic. `fs ls` is the only other documented `listResult`
   a minified one-liner. `--full` is the unbounded escape hatch. The invalid
   upstream-JSON error never echoes any stdout snippet (even redacted),
   since stdout can carry exported file content.
-- `mapUpstreamError` strips a trailing `Profile:`/`Host:`/`Auth type:` block
-  before classification — its `Auth type: OAuth (...)` line otherwise trips
-  the `AUTH_ERROR` branch on every auth mode, not just real auth failures.
+- `mapUpstreamError` strips a trailing run of `Profile:`/`Host:`/
+  `Auth type:`/`Username:` lines, in any order, before classification —
+  its `Auth type: OAuth (...)` line otherwise trips the `AUTH_ERROR`
+  branch on every auth mode, not just real auth failures.
 - `NOT_FOUND` matching covers both "does not exist" and the contraction
   "doesn't exist" (real upstream string, seen from `fs`/`workspace`), plus
   "was not found" (real upstream string from `pipelines get` on an unknown

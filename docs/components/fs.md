@@ -82,4 +82,5 @@ the exact client-side truncation message (not `has_more`), the disabled
 public-DBFS-root PERMISSION_DENIED mapping, leading-dash rejection,
 `--fields` selection, `--profile` threading, raw-mode `cat` (asserting
 `-o json` is skipped), binary/NUL-byte detection, 200-line head truncation
-with `--full`, and char-clamp truncation on a low-newline file.
+with `--full`, char-clamp truncation on a low-newline file, and an
+unknown-flag rejection.
