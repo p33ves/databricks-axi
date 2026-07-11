@@ -318,10 +318,7 @@ function isPendingState(stmt: RawStatement): boolean {
 }
 
 /** runDatabricks, folding sql-flavored suggestions into bare NOT_FOUND. */
-function runSql(
-  args: string[],
-  opts: RunDatabricksOptions,
-): Promise<unknown> {
+function runSql(args: string[], opts: RunDatabricksOptions): Promise<unknown> {
   return runWithNotFoundHelp(args, opts, [
     `databricks-axi sql warehouses${profileSuffix(opts.profile)}`,
   ]);

@@ -47,9 +47,9 @@ describe("redactSecrets", () => {
   });
 
   it("redacts an account email inline in error text", () => {
-    expect(
-      redactSecrets("principal user@example.com lacks permission"),
-    ).toBe("principal [redacted-email] lacks permission");
+    expect(redactSecrets("principal user@example.com lacks permission")).toBe(
+      "principal [redacted-email] lacks permission",
+    );
   });
 
   it("keeps long workspace paths readable", () => {
