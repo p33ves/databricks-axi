@@ -222,7 +222,9 @@ export function domainHelpers(domain: string) {
     if (raw === undefined) {
       return fallback;
     }
-    const value = Number(raw);
+    // Decimal digits only — Number() alone would accept "1e3"/"0x1F4".
+    const value =
+      typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : NaN;
     if (!Number.isInteger(value) || value < min) {
       const kind = min === 0 ? "non-negative" : "positive";
       throw usage(`--${name} must be a ${kind} integer, got: ${String(raw)}`);

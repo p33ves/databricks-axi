@@ -87,6 +87,18 @@ describe("mapUpstreamError", () => {
     expect(err.suggestions[0]).toContain("databricks-datasets");
   });
 
+  it("strips the trailer even when its lines are reordered", () => {
+    const stderr = [
+      "Error: Public DBFS root is disabled. Access is denied on path: /nope-xyz",
+      "Host:      https://example.cloud.databricks.com",
+      "Auth type: OAuth (databricks-cli)",
+      "Profile:   DEFAULT",
+    ].join("\n");
+    const err = mapUpstreamError(stderr);
+    // The "Auth type: OAuth" line must never trip the AUTH_ERROR branch.
+    expect(err.code).toBe("PERMISSION_DENIED");
+  });
+
   it("maps 401-shaped stderr to AUTH_ERROR with login help", () => {
     const err = mapUpstreamError("Error: failed request: 401 Unauthorized");
     expect(err.code).toBe("AUTH_ERROR");

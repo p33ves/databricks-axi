@@ -146,7 +146,7 @@ async function jobsView(args: string[]): Promise<AxiRenderable> {
   const out: AxiStructuredOutput = {
     job_id: job.job_id,
     name: settings.name,
-    creator: job.creator_user_name,
+    creator_user_name: job.creator_user_name,
   };
   if (settings.schedule?.quartz_cron_expression) {
     out.schedule = `${settings.schedule.quartz_cron_expression} (${settings.schedule.pause_status ?? "UNPAUSED"})`;
@@ -272,17 +272,22 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
     argv.push("--job-id", jobId);
   }
   const parsed = await runJobs(argv, spawnOpts(flags));
-  const items = asList(parsed, "runs");
-  const runs = items as RawRun[];
-  const rows =
-    typeof flags.get("fields") === "string"
-      ? renderRows(items, flags, [])
-      : runs.map((r) => ({
-          run_id: r.run_id,
-          state: compactState(r),
-          start_time: iso(r.start_time),
-          duration_s: durationSeconds(r),
-        }));
+  const runs = asList(parsed, "runs") as RawRun[];
+  // Spread-raw then override with the derived display fields, so --fields
+  // can select both raw upstream keys and the computed columns the default
+  // view shows (the warehouseSize/jobs-list `name` precedent).
+  const flattened = runs.map((r) => ({
+    ...r,
+    state: compactState(r),
+    start_time: iso(r.start_time),
+    duration_s: durationSeconds(r),
+  }));
+  const rows = renderRows(flattened, flags, [
+    "run_id",
+    "state",
+    "start_time",
+    "duration_s",
+  ]);
   const p = profileSuffix(flags.get("profile"));
   const help = [`databricks-axi jobs runs view <run_id>${p}`];
   const firstFailed = runs.find(isFailed);

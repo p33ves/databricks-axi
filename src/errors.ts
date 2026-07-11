@@ -25,8 +25,13 @@ export function redactSecrets(text: string): string {
 export function mapUpstreamError(stderr: string): AxiError {
   // Some CLI errors carry a "Profile:/Host:/Auth type:" trailer whose
   // "OAuth (...)" line would trip the AUTH_ERROR branch below on every
-  // auth mode — strip it before classification (live-verified shape).
-  const withoutTrailer = stderr.replace(/\n\s*Profile:\s[\s\S]*$/, "");
+  // auth mode — strip it before classification. Matched as a trailing run
+  // of labeled lines in any order, not anchored on "Profile:" first, so an
+  // upstream reorder can't smuggle the "Auth type:" line past the strip.
+  const withoutTrailer = stderr.replace(
+    /(?:\n\s*(?:Profile|Host|Auth type|Username):[^\n]*)+\s*$/,
+    "",
+  );
   const text =
     redactSecrets(withoutTrailer.trim()) ||
     "databricks CLI failed with no error output";

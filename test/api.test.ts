@@ -140,4 +140,15 @@ describe("api", () => {
     expect(out).toMatch(/truncated:.*\d+ bytes/);
     expect(out).not.toContain("blob");
   });
+
+  it("fails loud on an unknown flag", async () => {
+    const { out, exitCode } = await t.run([
+      "api",
+      "get",
+      "/api/2.0/x",
+      "--bogus",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option '--bogus'");
+  });
 });

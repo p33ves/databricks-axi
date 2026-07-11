@@ -241,4 +241,10 @@ describe("workspace dispatch", () => {
     expect(exitCode).toBe(0);
     expect(out).toContain("usage: databricks-axi workspace");
   });
+
+  it("fails loud on an unknown flag", async () => {
+    const { out, exitCode } = await t.run(["workspace", "ls", "--bogus"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option '--bogus'");
+  });
 });

@@ -62,7 +62,7 @@ commands[38]:
   pipelines view <pipeline_id>
   pipelines start <pipeline_id>
   pipelines stop <pipeline_id>
-  pipelines events <pipeline_id> [--limit N] [--full]
+  pipelines events <pipeline_id> [--limit N] [--fields a,b] [--full]
   serving list [--limit N] [--fields a,b]
   serving view <name>
   setup hooks

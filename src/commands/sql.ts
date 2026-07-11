@@ -410,6 +410,10 @@ async function renderTerminalStatement(
   if (notes.length > 0) {
     out.truncated = notes.join("; ");
   }
+  out.help = [
+    `databricks-axi sql exec "<query>"${ctx.p}`,
+    `databricks-axi sql history${ctx.p}`,
+  ];
   return out;
 }
 
