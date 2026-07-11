@@ -115,19 +115,19 @@ npx skills add p33ves/databricks-axi --skill databricks-axi -g
 
 v1 command surface (see the AXI standard for the principles each follows):
 
-| Domain      | Verbs                                           |
-| ----------- | ----------------------------------------------- |
-| `home`      | ambient context dashboard ✅                    |
-| `jobs`      | list, view, run, runs, logs, cancel ✅          |
-| `clusters`  | list, view, start, stop ✅                      |
-| `sql`       | warehouses, exec, statement view ✅             |
-| `catalog`   | catalogs, schemas, tables, table view ✅        |
-| `workspace` | ls, view ✅                                     |
-| `fs`        | ls, cat ✅                                      |
-| `pipelines` | list, view, start, stop, events ✅              |
-| `serving`   | list, view ✅                                   |
-| `api`       | raw REST passthrough ✅                         |
-| `setup`     | hooks install (Claude Code, Codex, OpenCode) ✅ |
+| Domain      | Verbs                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `home`      | ambient context dashboard ✅                                                             |
+| `jobs`      | list, view, run, runs, logs, cancel ✅                                                   |
+| `clusters`  | list, view, start, stop ✅                                                               |
+| `sql`       | warehouses, exec, statement view, history ✅                                             |
+| `catalog`   | catalogs, schemas, tables, table view, volumes, volume view, functions, function view ✅ |
+| `workspace` | ls, view ✅                                                                              |
+| `fs`        | ls, cat ✅                                                                               |
+| `pipelines` | list, view, start, stop, events ✅                                                       |
+| `serving`   | list, view ✅                                                                            |
+| `api`       | raw REST passthrough ✅                                                                  |
+| `setup`     | hooks install (Claude Code, Codex, OpenCode) ✅                                          |
 
 ## Development
 

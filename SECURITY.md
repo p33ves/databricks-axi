@@ -26,3 +26,9 @@ safe proof-of-concept details.
   output.
 - `fs cat` streams and caps raw output at 5MB, killing the child process if
   exceeded, so an oversized file can't be buffered unbounded in memory.
+- `setup hooks` is the one command that writes to disk outside of spawned
+  `databricks` calls: it delegates to `axi-sdk-js`'s
+  `installSessionStartHooks()` to write session-start hook config under the
+  user's home directory (Claude Code, Codex, OpenCode config paths). No
+  credentials are written; only hook wiring that points those agents at the
+  installed `databricks-axi` binary.
