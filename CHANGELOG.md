@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/p33ves/databricks-axi/compare/v0.8.1...v0.9.0) (2026-07-11)
+
+
+### Bug Fixes
+
+* address v0.9.0 whole-repo audit findings (round 2) ([#36](https://github.com/p33ves/databricks-axi/issues/36)) ([e1a770f](https://github.com/p33ves/databricks-axi/commit/e1a770f6b606dc8ad405104db8cfae7143973ac5))
+
 ## [0.8.1](https://github.com/p33ves/databricks-axi/compare/v0.8.0...v0.8.1) (2026-07-11)
 
 
