@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/p33ves/databricks-axi/compare/v0.6.1...v0.7.0) (2026-07-11)
+
+
+### Features
+
+* **pipelines,serving:** add Lakeflow pipelines and model serving domains ([#27](https://github.com/p33ves/databricks-axi/issues/27)) ([baee1ef](https://github.com/p33ves/databricks-axi/commit/baee1ef3c00ba9c6791b362e3194ddfd076e581f))
+
 ## [0.6.1](https://github.com/p33ves/databricks-axi/compare/v0.6.0...v0.6.1) (2026-07-10)
 
 
