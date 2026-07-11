@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/p33ves/databricks-axi/compare/v0.8.0...v0.8.1) (2026-07-11)
+
+
+### Bug Fixes
+
+* **shared:** fix sql NOT_FOUND handling and dedupe shared command helpers ([#34](https://github.com/p33ves/databricks-axi/issues/34)) ([e543613](https://github.com/p33ves/databricks-axi/commit/e54361330cbeec6509c2f4ab143310f802998e9e))
+
 ## [0.8.0](https://github.com/p33ves/databricks-axi/compare/v0.7.0...v0.8.0) (2026-07-11)
 
 
