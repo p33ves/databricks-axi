@@ -9,8 +9,11 @@ import {
   asList,
   assertObject,
   domainHelpers,
+  foldNotFoundHelp,
   profileSuffix,
+  runWithNotFoundHelp,
   spawnOpts,
+  WAIT_TIMEOUT_MS,
   type AxiRenderable,
   type AxiStructuredOutput,
 } from "./shared.js";
@@ -50,7 +53,6 @@ export const sqlPoll = {
 
 const STATEMENTS_PATH = "/api/2.0/sql/statements";
 const SUBMIT_TIMEOUT_MS = 60_000; // must exceed the API-side 50s wait_timeout
-const WAIT_TIMEOUT_MS = 25 * 60_000; // upstream blocks up to 20 min on --wait
 const POLL_INTERVAL_MS = 2_000;
 const DEFAULT_ROW_LIMIT = 100;
 const DEFAULT_BUDGET_S = 120;
@@ -165,7 +167,7 @@ async function warehousesView(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, { profile: "value" });
   const id = requireId(positional, "sql warehouses view <id>");
   const w = assertObject<RawWarehouse>(
-    await runDatabricks(["warehouses", "get", id], spawnOpts(flags)),
+    await runSql(["warehouses", "get", id], spawnOpts(flags)),
     "warehouses get",
   );
   const p = profileSuffix(flags.get("profile"));
@@ -202,7 +204,7 @@ async function warehousesStartStop(
   }
   // Upstream is already idempotent here: start-on-RUNNING / stop-on-STOPPED
   // exit 0 with no output (pinned live 2026-07-07), so no no-op mapping.
-  await runDatabricks(argv, {
+  await runSql(argv, {
     ...spawnOpts(flags),
     ...(wait ? { timeoutMs: WAIT_TIMEOUT_MS } : {}),
     timeoutHelp: [
@@ -290,7 +292,10 @@ async function statementView(args: string[]): Promise<AxiRenderable> {
   const opts = spawnOpts(flags);
   const p = profileSuffix(flags.get("profile"));
   const stmt = assertObject<RawStatement>(
-    await runDatabricksApi("get", `${STATEMENTS_PATH}/${id}`, undefined, opts),
+    await foldNotFoundHelp(
+      runDatabricksApi("get", `${STATEMENTS_PATH}/${id}`, undefined, opts),
+      [`databricks-axi sql history${p}`],
+    ),
     "sql statement get",
   );
   if (isPendingState(stmt)) {
@@ -310,6 +315,13 @@ async function statementView(args: string[]): Promise<AxiRenderable> {
 function isPendingState(stmt: RawStatement): boolean {
   const state = stmt.status?.state;
   return state === "PENDING" || state === "RUNNING";
+}
+
+/** runDatabricks, folding sql-flavored suggestions into bare NOT_FOUND. */
+function runSql(args: string[], opts: RunDatabricksOptions): Promise<unknown> {
+  return runWithNotFoundHelp(args, opts, [
+    `databricks-axi sql warehouses${profileSuffix(opts.profile)}`,
+  ]);
 }
 
 async function resolveWarehouse(

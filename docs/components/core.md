@@ -59,7 +59,10 @@ The error taxonomy and secret redaction, shared by every domain:
 - `redactSecrets(text)`: strips token-shaped strings (dapi tokens, dkea
   OAuth tokens, long hex runs, long base64-ish runs) before they can reach
   stdout. Order matters — dapi tokens are matched first since they'd
-  otherwise also match the generic long-hex rule.
+  otherwise also match the generic long-hex rule. Also masks a workspace
+  host URL or account email when either appears inline in an error's
+  classified first line — not just in the trailing `Profile:`/`Host:`/
+  `Auth type:` block `mapUpstreamError` already strips.
 - `mapUpstreamError(stderr)`: pattern-matches the Go CLI's plain-text
   stderr into one `AxiError` with a taxonomy code (`AUTH_ERROR`,
   `PERMISSION_DENIED`, `NOT_FOUND`, `INVALID_STATE`, or the
@@ -125,15 +128,21 @@ requireId, renderRows }` bound to that domain's name (so usage errors
 - `listResult(key, rows, limit, opts)`: the shared list-result tail —
   empty state, `count` envelope, and the full-page `has_more` +
   rerun-with-double-limit suggestion. This is the standard shape for every
-  list subcommand except the two documented exemptions: `fs ls` (upstream
+  list subcommand except the three documented exemptions: `fs ls` (upstream
   has no `--limit` at all, so it reports exact truncation instead of
-  `has_more`) and `sql history` (real server-side `has_next_page`
-  pagination plus two distinct empty states that don't fit this helper's
-  `rows.length >= limit` heuristic).
-- `runWithNotFoundHelp(args, opts, notFoundHelp)`: wraps `runDatabricks`,
-  folding domain-flavored suggestions into a bare `NOT_FOUND` error (one
-  with no suggestions already attached) instead of every domain
-  reinventing its own NOT_FOUND-catch-and-rewrap logic.
+  `has_more`), `sql history` (real server-side `has_next_page` pagination
+  plus two distinct empty states that don't fit this helper's
+  `rows.length >= limit` heuristic), and `sql warehouses` (no `--limit` flag
+  at all, by deliberate spec decision, so it hand-builds its own `count`-only
+  envelope with no client-side cap safeguard).
+- `foldNotFoundHelp(promise, notFoundHelp)`: folds a bare `NOT_FOUND` (no
+  suggestions already attached) into a domain-flavored one. Shared by
+  `runWithNotFoundHelp` and callers that go through `runDatabricksApi`
+  instead of `runDatabricks` (e.g. `sql statement view`).
+- `runWithNotFoundHelp(args, opts, notFoundHelp)`: `runDatabricks` piped
+  through `foldNotFoundHelp`, so every domain gets domain-flavored
+  NOT_FOUND suggestions instead of reinventing its own catch-and-rewrap
+  logic.
 - `asList(parsed, key)`: tolerates both response shapes the Go CLI can
   emit — a bare item array (CLI >= 0.298) or the wrapped `{ items, ... }`
   object, depending on version.
@@ -146,6 +155,19 @@ requireId, renderRows }` bound to that domain's name (so usage errors
   suggested commands keep hitting the same workspace.
 - `parentPath(path)` / `looksBinary(text)`: small path/binary-detection
   helpers reused by `workspace`/`fs`.
+- `renderFileContent(text, size, full)`: binary check + head-truncate
+  (200 lines, clamped at `MAX_VIEW_CHARS`) for exported/read file content —
+  shared by `workspace view` and `fs cat`. `size` is caller-computed (the
+  two callers use different byte-count sources) and only used for the
+  binary-sentinel text.
+- `compactState(item)` / `isFailed(item)` (with the shared `RunState`
+  type): terminal-state helpers — `compactState` prefers `result_state`
+  over `life_cycle_state`, falling back to `"UNKNOWN"`; `isFailed` is true
+  for any terminal `result_state` other than `SUCCESS`. Shared by
+  `jobs.ts`'s run rendering and `context.ts`'s home-panel `fetchRecentRuns`.
+- `WAIT_TIMEOUT_MS` (25 min): the `--wait` budget for async start/stop/run
+  mutations, since upstream blocks up to ~20 min. Shared by `jobs`,
+  `clusters`, and `sql` (`warehouses start`/`stop`).
 
 ### Why there's no separate `fields.ts`/`suggestions.ts`
 
@@ -175,10 +197,11 @@ list envelope or a private NOT_FOUND wrapper.
   JSON wrapping, and raw mode's skip of `-o json`/int64-quoting plus its
   5MB streaming cap.
 - `test/errors.test.ts`: every `redactSecrets` pattern (dapi, dkea, hex,
-  base64-ish) including edge cases (a dkea token preceded by a word
-  character, keeping workspace paths and SQL UUIDs/SQLSTATEs readable),
-  and every `mapUpstreamError` branch including the Profile/Host/Auth-type
-  trailer strip and the disabled-public-DBFS-root special case.
+  base64-ish, an inline host URL, an inline email) including edge cases (a
+  dkea token preceded by a word character, keeping workspace paths and SQL
+  UUIDs/SQLSTATEs readable), and every `mapUpstreamError` branch including
+  the Profile/Host/Auth-type trailer strip and the disabled-public-DBFS-root
+  special case.
 - `test/truncate.test.ts`: head/tail truncation, exact-boundary
   non-truncation, trailing-newline non-counting, char-clamping
   independent of line count, and short-input passthrough.

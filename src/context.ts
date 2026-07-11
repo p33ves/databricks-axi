@@ -3,7 +3,13 @@
 // caller via Promise.allSettled with a 4s per-panel timeout override — none
 // of these functions retry or extend that budget themselves.
 import { runDatabricks, type RunDatabricksOptions } from "./databricks.js";
-import { asList, assertObject } from "./commands/shared.js";
+import {
+  asList,
+  assertObject,
+  compactState,
+  isFailed,
+  type RunState,
+} from "./commands/shared.js";
 
 /** Wall-clock budget for each parallel home panel spawn. */
 export const PANEL_TIMEOUT_MS = 4_000;
@@ -56,20 +62,9 @@ export type RecentRun = {
 
 type RawRun = {
   run_id?: unknown;
-  state?: { result_state?: string; life_cycle_state?: string };
+  state?: RunState;
   start_time?: unknown;
 };
-
-function compactRunState(run: RawRun): string {
-  return run.state?.result_state ?? run.state?.life_cycle_state ?? "UNKNOWN";
-}
-
-/** Terminal and not clean success (FAILED, TIMEDOUT, CANCELED, ...) —
- * mirrors jobs.ts's isFailed. */
-function isFailedRun(run: RawRun): boolean {
-  const result = run.state?.result_state;
-  return typeof result === "string" && result !== "SUCCESS";
-}
 
 /** FAILED rows first, each carrying its own `jobs logs <run_id>` follow-up. */
 export async function fetchRecentRuns(
@@ -81,15 +76,15 @@ export async function fetchRecentRuns(
   );
   const runs = asList(parsed, "runs") as RawRun[];
   const sorted = [...runs].sort(
-    (a, b) => Number(isFailedRun(b)) - Number(isFailedRun(a)),
+    (a, b) => Number(isFailed(b)) - Number(isFailed(a)),
   );
   return sorted.map((run) => {
     const row: RecentRun = {
       run_id: run.run_id,
-      state: compactRunState(run),
+      state: compactState(run),
       start_time: run.start_time,
     };
-    if (isFailedRun(run)) {
+    if (isFailed(run)) {
       row.next = `databricks-axi jobs logs ${String(run.run_id)}`;
     }
     return row;

@@ -9,6 +9,7 @@ import {
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
+  WAIT_TIMEOUT_MS,
   type AxiRenderable,
   type AxiStructuredOutput,
 } from "./shared.js";
@@ -144,8 +145,6 @@ async function clustersView(args: string[]): Promise<AxiRenderable> {
   ];
   return out;
 }
-
-const WAIT_TIMEOUT_MS = 25 * 60_000; // upstream blocks up to 20 min on --wait
 
 async function clustersStart(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, {

@@ -72,6 +72,12 @@ All accept `--profile <name>`.
 - `resolveWarehouse` throws `NOT_FOUND` when the workspace has zero
   warehouses, or a usage error listing every warehouse id/name when more
   than one exists and `--warehouse` wasn't passed.
+- `warehouses view`/`start`/`stop` route through a local `runSql`
+  (`runWithNotFoundHelp`), folding a bare NOT_FOUND into a
+  `sql warehouses` suggestion.
+- `statement view` goes through `runDatabricksApi`, not `runDatabricks`, so
+  it folds NOT_FOUND via `foldNotFoundHelp` directly (not `runSql`),
+  suggesting `sql history` instead.
 - Error/log-adjacent text (`error_message`, statement error detail) goes
   through `redactSecrets` before it can reach output.
 
@@ -83,10 +89,14 @@ All accept `--profile <name>`.
 - `sql warehouses start/stop` on an already-in-state warehouse exits 0
   silently upstream (live-verified 2026-07-07) — no `INVALID_STATE` no-op
   mapping is needed or present here, unlike `clusters start`.
-- `sql history` is one of only two documented exemptions from
-  `listResult` (the other is `fs ls`): the real `has_next_page` flag and
-  the two distinct empty states don't fit that helper's
+- `sql history` is one of three documented exemptions from `listResult`
+  (the others are `fs ls` and `sql warehouses`): the real `has_next_page`
+  flag and the two distinct empty states don't fit that helper's
   `rows.length >= limit` heuristic, so it builds its own envelope by hand.
+- `sql warehouses` is the third exemption: it has no `--limit` flag at
+  all, by deliberate spec decision (a workspace has a handful of
+  warehouses), and hand-builds its own `count`-only envelope — the one
+  list command in the repo with no client-side cap safeguard.
 - `--status` filtering is always client-side over the already-fetched
   page, never a second server call.
 
@@ -96,7 +106,9 @@ All accept `--profile <name>`.
 restores it in `afterEach` so poll-loop tests run at full speed instead of
 waiting 2s per iteration. Uses `setupCli()`/`fake-databricks.ts`, plus
 local helpers `succeededStmt()` and `submittedBody()` for canned statement
-responses. Covers warehouse list/view/start/stop, exec submit/poll/timeout/
+responses. Covers warehouse list/view/start/stop, the NOT_FOUND-to-
+`sql warehouses` mapping on `warehouses view`/`start` and the NOT_FOUND-to-
+`sql history` mapping on `statement view`, exec submit/poll/timeout/
 chunk-fetch paths, wait_timeout clamping (both the 50s ceiling and the 5s
 floor), row_limit truncation, and the two `history` empty states plus its
 `has_next_page`-sourced pagination.

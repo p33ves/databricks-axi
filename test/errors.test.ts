@@ -38,6 +38,20 @@ describe("redactSecrets", () => {
     ).toBe("bearer [redacted] done");
   });
 
+  it("redacts a workspace host URL inline in error text", () => {
+    expect(
+      redactSecrets(
+        "cannot configure default credentials, host=https://dbc-1234abcd-5678.cloud.databricks.com",
+      ),
+    ).toBe("cannot configure default credentials, host=[redacted-host]");
+  });
+
+  it("redacts an account email inline in error text", () => {
+    expect(redactSecrets("principal user@example.com lacks permission")).toBe(
+      "principal [redacted-email] lacks permission",
+    );
+  });
+
   it("keeps long workspace paths readable", () => {
     const text =
       "Notebook /Workspace/Shared/my-long-notebook-name does not exist";

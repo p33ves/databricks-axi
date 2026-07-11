@@ -35,7 +35,8 @@ hit its own 4s timeout) — the whole command never blocks on the default
 - `context`: `{ user, host, auth_type, profile }` from `fetchAuthContext`,
   or an `unavailable(reason)` string if that panel failed/timed out.
 - `recent_runs`: up to 5 rows, FAILED-first (`fetchRecentRuns` sorts by
-  `isFailedRun` descending), each `{ run_id, state, start_time, next? }` —
+  `shared.ts`'s `isFailed` descending), each
+  `{ run_id, state, start_time, next? }` —
   `next` is a `jobs logs <run_id>` follow-up, present only on failed runs.
 - `warehouses`: `{ id, name, state }` rows — "the compute panel that
   actually has content" on Free Edition, per the source comment.

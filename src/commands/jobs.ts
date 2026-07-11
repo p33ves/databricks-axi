@@ -5,14 +5,18 @@ import { truncate } from "../truncate.js";
 import {
   asList,
   assertObject,
+  compactState,
   domainHelpers,
+  isFailed,
   LIST_FLAGS,
   listResult,
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
+  WAIT_TIMEOUT_MS,
   type AxiRenderable,
   type AxiStructuredOutput,
+  type RunState,
 } from "./shared.js";
 
 const {
@@ -48,7 +52,6 @@ notes:
 `;
 
 type Raw = Record<string, unknown>;
-type RunState = { result_state?: string; life_cycle_state?: string };
 type RawTask = {
   task_key?: string;
   run_id?: number | string;
@@ -158,18 +161,6 @@ async function jobsView(args: string[]): Promise<AxiRenderable> {
     `databricks-axi jobs runs ${jobId}${p}`,
   ];
   return out;
-}
-
-const WAIT_TIMEOUT_MS = 25 * 60_000; // upstream blocks up to 20 min on --wait
-
-function compactState(item: { state?: RunState }): string {
-  return item.state?.result_state ?? item.state?.life_cycle_state ?? "UNKNOWN";
-}
-
-/** Terminal and not clean success (FAILED, TIMEDOUT, CANCELED, ...). */
-function isFailed(item: { state?: RunState }): boolean {
-  const result = item.state?.result_state;
-  return typeof result === "string" && result !== "SUCCESS";
 }
 
 async function jobsRun(args: string[]): Promise<AxiRenderable> {

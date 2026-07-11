@@ -1,4 +1,3 @@
-import { MAX_VIEW_CHARS, truncate } from "../truncate.js";
 import {
   asList,
   assertObject,
@@ -8,6 +7,7 @@ import {
   looksBinary,
   parentPath,
   profileSuffix,
+  renderFileContent,
   runWithNotFoundHelp,
   spawnOpts,
   type AxiRenderable,
@@ -34,7 +34,6 @@ notes:
 `;
 
 const DEFAULT_LIST_LIMIT = 30;
-const HEAD_LINES = 200;
 
 type RawObject = {
   path?: string;
@@ -142,29 +141,18 @@ async function workspaceView(args: string[]): Promise<AxiRenderable> {
     };
   }
   const text = buf.toString("utf8");
-  if (looksBinary(text)) {
-    return {
-      path,
-      size,
-      content: `<binary, ${size} bytes — not rendered>`,
-      help: [`databricks-axi workspace ls ${parent}${p}`],
-    };
-  }
-  const t = truncate(text, {
-    lines: full ? Infinity : HEAD_LINES,
-    mode: "head",
-    maxChars: full ? Infinity : MAX_VIEW_CHARS,
-  });
+  const rendered = renderFileContent(text, size, full);
+  // Binary files render only the sentinel note — no meaningful language.
   const out: AxiStructuredOutput = {
     path,
-    language: languageFromFileType(obj.file_type),
+    ...(looksBinary(text)
+      ? {}
+      : { language: languageFromFileType(obj.file_type) }),
     size,
-    content: t.text,
+    content: rendered.content,
   };
-  if (t.truncated) {
-    out.truncated = t.clipped
-      ? `content clipped at ${MAX_VIEW_CHARS} chars — rerun with --full`
-      : `showing first ${HEAD_LINES} of ${t.totalLines} lines — rerun with --full`;
+  if (rendered.truncated) {
+    out.truncated = rendered.truncated;
   }
   out.help = [`databricks-axi workspace ls ${parent}${p}`];
   return out;

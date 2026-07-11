@@ -3,7 +3,7 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 // Trigger string agent harnesses match against to auto-load the skill.
 // Scoped to the implemented surface only (AXI: no advertised capabilities
 // that don't exist yet) - extend as command domains land.
-export const SKILL_DESCRIPTION =
+const SKILL_DESCRIPTION =
   "Agent-ergonomic wrapper around the Databricks CLI. Implemented: home " +
   "(ambient workspace dashboard: auth context, recent runs, warehouses, " +
   "running clusters), jobs (list, view, run, runs, logs, cancel), clusters " +
@@ -16,13 +16,13 @@ export const SKILL_DESCRIPTION =
   "ambient context for Claude Code, Codex, OpenCode), api (raw REST " +
   "passthrough). Run `databricks-axi --help` for the current surface.";
 
-export const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
+const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
 
 // Extended frontmatter read by Nous Research's Hermes Agent harness.
 // Harnesses that don't know these fields (e.g. Claude Code) ignore them.
 // Scoped like SKILL_DESCRIPTION: topical only, no unimplemented domains —
 // extend tags as more domains land.
-export const HERMES_TAGS = [
+const HERMES_TAGS = [
   "databricks",
   "spark",
   "jobs",
@@ -52,7 +52,7 @@ export const HERMES_TAGS = [
   "model",
   "hooks",
 ];
-export const HERMES_CATEGORY = "data";
+const HERMES_CATEGORY = "data";
 
 /**
  * Extract the `commands[N]:` block from the top-level help so the skill's
