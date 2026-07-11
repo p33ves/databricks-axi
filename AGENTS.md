@@ -47,6 +47,11 @@ NOT_FOUND wrapper in a new domain; call `listResult`/`runWithNotFoundHelp`.
 `--limit`, so it knows the true total and reports exact truncation instead
 of `has_more`.)
 
+Per-component detail (exports, sharp edges, test coverage) for every
+domain and the shared core layer lives under
+[docs/components/](docs/components/), one file per domain plus `core.md`
+for the shared/support modules.
+
 Tests mirror `src/` under `test/`. Domain tests call `setupCli()` from
 `test/helpers/fake-databricks.ts` for the standard rig (fresh fake
 `databricks` on PATH each test, `t.run(argv)` to invoke the CLI and capture
