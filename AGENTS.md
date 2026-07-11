@@ -87,6 +87,15 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 - CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
   cap. A full page → `has_more: true` + a rerun-with-`--limit <2N>`
   suggestion, never auto-paginate unboundedly.
+- Exception: `query-history list` still has real server-side pagination
+  (`--max-results`/`--page-token`, `has_next_page` in the response). `sql
+history` maps its own `--limit` to `--max-results`, sources `has_more`
+  from `has_next_page`, and never exposes the raw page token. It also
+  doesn't route through `listResult` (unlike every other list domain) —
+  the real `has_next_page` flag and two distinct empty states (truly-empty
+  vs. `--status`-filtered-empty) don't fit that helper's `rows.length >=
+limit` heuristic. `fs ls` is the only other documented `listResult`
+  exemption; this is the second.
 - Legacy CLI 0.18.x is incompatible; the spawn layer version-guards >= 0.298.
 - int64 ids (`job_id`/`run_id`) can exceed 2^53, where `JSON.parse` silently
   rounds; `runDatabricks` quotes 16+-digit `*_id` values so they stay exact

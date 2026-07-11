@@ -303,7 +303,9 @@ async function volumeView(args: string[]): Promise<AxiRenderable> {
   if (volume.comment) {
     out.comment = volume.comment;
   }
-  out.storage_location = volume.storage_location;
+  if (volume.storage_location) {
+    out.storage_location = volume.storage_location;
+  }
   out.help = [
     `databricks-axi fs ls /Volumes/${fullName.replace(/\./g, "/")}${p}`,
     `databricks-axi catalog volumes ${parent}${p}`,

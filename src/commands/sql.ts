@@ -403,10 +403,6 @@ async function renderTerminalStatement(
 
 // --- history ---
 
-function firstLine(text: string): string {
-  return text.split("\n", 1)[0] ?? text;
-}
-
 function clip(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
@@ -417,6 +413,7 @@ function flattenHistoryEntry(
   entry: RawHistoryEntry,
   full: boolean,
 ): AxiStructuredOutput {
+  const { duration, ...rest } = entry;
   const rawErrorMessage = entry.error_message;
   const errorMessage =
     typeof rawErrorMessage === "string"
@@ -424,11 +421,15 @@ function flattenHistoryEntry(
       : rawErrorMessage;
   const queryText = entry.query_text ?? "";
   return {
-    ...entry,
+    ...rest,
     query_text: full ? queryText : clip(queryText, QUERY_TEXT_CLIP),
-    duration_ms: entry.duration,
+    duration_ms: duration,
     error_message: errorMessage,
-    error: errorMessage ? (full ? errorMessage : firstLine(errorMessage)) : "",
+    error: errorMessage
+      ? full
+        ? errorMessage
+        : String(errorMessage).split("\n")[0]
+      : "",
   };
 }
 
@@ -447,6 +448,10 @@ async function sqlHistory(args: string[]): Promise<AxiRenderable> {
   const full = flags.get("full") === true;
   const statusFilter = flags.get("status");
   const p = profileSuffix(flags.get("profile"));
+  // query-history is the one endpoint with real server-side pagination
+  // (has_next_page/next_page_token) — unlike the dual-mode bare-array-or-
+  // object list responses elsewhere, it's always object-enveloped, so
+  // assertObject (not asList) is the correct shape guard here.
   const parsed = assertObject<{
     res?: RawHistoryEntry[];
     has_next_page?: boolean;
@@ -509,6 +514,14 @@ async function sqlHistory(args: string[]): Promise<AxiRenderable> {
   const out: AxiStructuredOutput = { history: rows, count: rows.length };
   if (parsed.has_next_page) {
     out.has_more = true;
+  }
+  if (!full) {
+    const truncatedCount = filtered.filter((row) =>
+      String(row.query_text).endsWith("…"),
+    ).length;
+    if (truncatedCount > 0) {
+      out.truncated = `${truncatedCount} row(s) have longer query_text — rerun with --full`;
+    }
   }
   out.help = help;
   return out;
