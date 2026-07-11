@@ -143,6 +143,10 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
   "Public DBFS root is disabled" is a Free Edition platform restriction, not
   a missing-object 403/404 — it gets its own `PERMISSION_DENIED` branch with
   a hint toward paths that are actually readable.
+- Upstream `pipelines stop`/`start-update`/`get` are dual-mode: a non-UUID
+  argument is treated as a bundle resource KEY resolved against cwd project
+  config (confusing errors), not a pipeline id. axi validates every
+  `<pipeline_id>` arg is a UUID before it ever reaches argv.
 - `pipelines stop` (`pipelines stop --no-wait`) is silently idempotent
   upstream — exit 0, empty stdout on both an already-IDLE pipeline and a
   mid-update one (which it cancels). No rejection shape to inspect, so
