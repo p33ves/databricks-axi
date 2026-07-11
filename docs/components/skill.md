@@ -11,16 +11,19 @@ stale).
 
 ## Exports
 
-- `SKILL_DESCRIPTION`: the trigger string agent harnesses match against to
-  auto-load the skill. Scoped to only the implemented command surface — no
-  advertised domain that doesn't exist yet — extended by hand as new domains
-  land, not derived from `TOP_HELP`.
-- `SKILL_AUTHOR`: `"Vignesh Perumal (p33ves)"`, written into frontmatter.
-- `HERMES_TAGS` / `HERMES_CATEGORY`: extended frontmatter fields read by Nous
-  Research's Hermes Agent harness (`category: "data"`, topical keyword list).
-  Harnesses that don't know these fields, e.g. Claude Code, ignore them. Kept
-  in sync with implemented domains the same way `SKILL_DESCRIPTION` is — by
-  hand, not generated.
+- `SKILL_DESCRIPTION` (module-private): the trigger string agent harnesses
+  match against to auto-load the skill. Scoped to only the implemented
+  command surface — no advertised domain that doesn't exist yet — extended
+  by hand as new domains land, not derived from `TOP_HELP`.
+- `SKILL_AUTHOR` (module-private): `"Vignesh Perumal (p33ves)"`, written
+  into frontmatter.
+- `HERMES_TAGS` / `HERMES_CATEGORY` (module-private): extended frontmatter
+  fields read by Nous Research's Hermes Agent harness (`category: "data"`,
+  topical keyword list). Harnesses that don't know these fields, e.g.
+  Claude Code, ignore them. Kept in sync with implemented domains the same
+  way `SKILL_DESCRIPTION` is — by hand, not generated. None of these four
+  are imported outside this file — only `extractCommandsBlock()` and
+  `createSkillMarkdown()` (below) are actually exported.
 - `extractCommandsBlock()`: regex-extracts the `commands[N]:\n  ...` block out
   of `TOP_HELP` (from `src/cli.ts`) so the command list embedded in SKILL.md
   is always the literal text `--help` prints, not a hand-copied duplicate.

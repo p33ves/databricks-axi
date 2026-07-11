@@ -52,8 +52,10 @@ requested"`. On a conflicting active update (see Errors), an exit-0 no-op
   upstream, so this is done client-side, mirroring the failed-first
   principle `jobs logs` uses for tasks). `message` text is redacted, then
   clipped to 200 chars unless `--full`; a clip anywhere in the page adds a
-  `pipelines events <id> --full` help line. Default fields (also the only
-  fields `--fields` may select among): `timestamp`, `level`, `event_type`,
+  `pipelines events <id> --full` help line and a top-level `truncated: "N
+message(s) clipped to 200 chars — rerun with --full"` field, same as every
+  sibling domain's truncation signal. Default fields (also the only fields
+  `--fields` may select among): `timestamp`, `level`, `event_type`,
   `message` — other upstream event fields are dropped before rendering.
 
 ## Errors
