@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/p33ves/databricks-axi/compare/v0.7.0...v0.8.0) (2026-07-11)
+
+
+### Features
+
+* **commands:** add home dashboard, setup hooks, and sql/catalog read surfaces ([#30](https://github.com/p33ves/databricks-axi/issues/30)) ([a9d850d](https://github.com/p33ves/databricks-axi/commit/a9d850d1ca32db39a9599cec451e4fda0bd1d65c))
+
 ## [0.7.0](https://github.com/p33ves/databricks-axi/compare/v0.6.1...v0.7.0) (2026-07-11)
 
 
