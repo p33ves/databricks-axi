@@ -23,7 +23,7 @@ deterministically where the answer is machine-checkable (row counts, IDs,
 statuses), by an LLM judge otherwise. Not every condition can run every
 task: `mcp-managed` is SQL-only, so it's excluded from job/cluster-mutating
 tasks and every AWS-profile task; both MCP servers are excluded from
-`api-current-user` and `notebook-discovery` (no matching tool).
+`api-current-user-aws` and `notebook-discovery-aws` (no matching tool).
 
 ## Latest run: CP2 (2026-07-10, v0.6.1)
 
