@@ -298,6 +298,7 @@ describe("pipelines events", () => {
     const { out } = await t.run(["pipelines", "events", PID]);
     expect(out).not.toContain(long);
     expect(out).toContain(long.slice(0, 200));
+    expect(out).toContain(`pipelines events ${PID} --full`);
   });
 
   it("--full disables message truncation", async () => {

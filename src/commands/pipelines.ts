@@ -251,21 +251,30 @@ async function pipelinesEvents(args: string[]): Promise<AxiRenderable> {
       ? errDiff
       : (b.timestamp ?? "").localeCompare(a.timestamp ?? "");
   });
+  let anyTruncated = false;
   const flattened = sorted.map((e) => {
     // Upstream event text goes straight into agent context — redact
     // token-shaped strings before truncation (same rule as jobs logs).
     const message = redactSecrets(e.message ?? "");
+    if (full) {
+      return {
+        timestamp: e.timestamp,
+        level: e.level,
+        event_type: e.event_type,
+        message,
+      };
+    }
+    const t = truncate(message, {
+      lines: Infinity,
+      mode: "head",
+      maxChars: 200,
+    });
+    anyTruncated ||= t.truncated;
     return {
       timestamp: e.timestamp,
       level: e.level,
       event_type: e.event_type,
-      message: full
-        ? message
-        : truncate(message, {
-            lines: Infinity,
-            mode: "head",
-            maxChars: 200,
-          }).text,
+      message: t.text,
     };
   });
   const rows = renderRows(flattened, flags, [
@@ -275,13 +284,19 @@ async function pipelinesEvents(args: string[]): Promise<AxiRenderable> {
     "message",
   ]);
   const p = profileSuffix(flags.get("profile"));
+  const help = [`databricks-axi pipelines view ${pipelineId}${p}`];
+  if (anyTruncated) {
+    help.unshift(
+      `databricks-axi pipelines events ${pipelineId} --full${p}  # some messages clipped to 200 chars`,
+    );
+  }
   return listResult("events", rows, limit, {
     rerun: `databricks-axi pipelines events ${pipelineId} --limit ${limit * 2}${p}`,
     empty: {
       status: "no events for this pipeline",
       help: [`databricks-axi pipelines view ${pipelineId}${p}`],
     },
-    help: [`databricks-axi pipelines view ${pipelineId}${p}`],
+    help,
   });
 }
 
