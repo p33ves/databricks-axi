@@ -7,3 +7,4 @@ docs/superpowers/
 .databricks*
 .npm/
 .local/
+.no-mistakes/
