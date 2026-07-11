@@ -1,5 +1,6 @@
 import { AxiError } from "axi-sdk-js";
 import type { RunDatabricksOptions } from "../databricks.js";
+import { redactSecrets } from "../errors.js";
 import { truncate } from "../truncate.js";
 import {
   asList,
@@ -36,7 +37,7 @@ subcommands[5]:
   view <pipeline_id>
   start <pipeline_id>
   stop <pipeline_id>
-  events <pipeline_id> [--limit N] [--full]
+  events <pipeline_id> [--limit N] [--fields a,b] [--full]
 flags:
   --profile <name>  databricks auth profile passthrough
 examples:
@@ -46,6 +47,8 @@ examples:
 notes:
   pipeline_id must be a UUID — upstream treats a non-UUID argument as a
   bundle resource KEY, not a pipeline id
+  events --fields only selects among timestamp,level,event_type,message —
+  other upstream event fields are dropped before rendering, not exposed
   start maps to upstream \`start-update\`; stop passes --no-wait and always
   exits 0 (upstream has no rejection shape to inspect, same as clusters stop)
 `;
@@ -248,18 +251,23 @@ async function pipelinesEvents(args: string[]): Promise<AxiRenderable> {
       ? errDiff
       : (b.timestamp ?? "").localeCompare(a.timestamp ?? "");
   });
-  const flattened = sorted.map((e) => ({
-    timestamp: e.timestamp,
-    level: e.level,
-    event_type: e.event_type,
-    message: full
-      ? (e.message ?? "")
-      : truncate(e.message ?? "", {
-          lines: Infinity,
-          mode: "head",
-          maxChars: 200,
-        }).text,
-  }));
+  const flattened = sorted.map((e) => {
+    // Upstream event text goes straight into agent context — redact
+    // token-shaped strings before truncation (same rule as jobs logs).
+    const message = redactSecrets(e.message ?? "");
+    return {
+      timestamp: e.timestamp,
+      level: e.level,
+      event_type: e.event_type,
+      message: full
+        ? message
+        : truncate(message, {
+            lines: Infinity,
+            mode: "head",
+            maxChars: 200,
+          }).text,
+    };
+  });
   const rows = renderRows(flattened, flags, [
     "timestamp",
     "level",

@@ -284,7 +284,7 @@ describe("pipelines events", () => {
   });
 
   it("head-truncates a long message to 200 chars by default", async () => {
-    const long = "x".repeat(300);
+    const long = "word ".repeat(60); // 300 chars, spaced so it isn't token-shaped
     t.fake.respond("pipelines list-pipeline-events", {
       events: [
         {
@@ -297,11 +297,11 @@ describe("pipelines events", () => {
     });
     const { out } = await t.run(["pipelines", "events", PID]);
     expect(out).not.toContain(long);
-    expect(out).toContain("x".repeat(200));
+    expect(out).toContain(long.slice(0, 200));
   });
 
   it("--full disables message truncation", async () => {
-    const long = "x".repeat(300);
+    const long = "word ".repeat(60); // 300 chars, spaced so it isn't token-shaped
     t.fake.respond("pipelines list-pipeline-events", {
       events: [
         {
@@ -314,6 +314,22 @@ describe("pipelines events", () => {
     });
     const { out } = await t.run(["pipelines", "events", PID, "--full"]);
     expect(out).toContain(long);
+  });
+
+  it("redacts token-shaped strings in event messages", async () => {
+    t.fake.respond("pipelines list-pipeline-events", {
+      events: [
+        {
+          timestamp: "2026-07-10T07:00:00.000Z",
+          level: "ERROR",
+          event_type: "flow_progress",
+          message: "auth failed for dapi1234567890abcdef",
+        },
+      ],
+    });
+    const { out } = await t.run(["pipelines", "events", PID]);
+    expect(out).not.toContain("dapi1234567890abcdef");
+    expect(out).toContain("[redacted]");
   });
 
   it("renders a definitive empty state", async () => {
