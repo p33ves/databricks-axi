@@ -97,7 +97,7 @@ databricks-axi requires the official [\`databricks\` CLI](https://docs.databrick
 
 ## Status
 
-Pre-release scaffold: command domains are landing incrementally. Run \`databricks-axi --help\` (per the invocation note above) for the currently available commands.
+Pre-1.0: the full v1 command surface is implemented (home, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run \`databricks-axi --help\` (per the invocation note above) for the current command list.
 
 ## Commands
 
