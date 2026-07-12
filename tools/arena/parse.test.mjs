@@ -242,4 +242,20 @@ describe("buildComparison", () => {
     expect(c.lowest_cost).toEqual([]);
     expect(c.lowest_turns).toEqual([]);
   });
+
+  it("badges nobody when only one condition survives", () => {
+    const metrics = {
+      "raw-cli": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
+      mcp: { exit: null, is_error: true, disabled: true },
+      "databricks-axi": {
+        exit: 0,
+        is_error: false,
+        num_turns: 2,
+        cost_usd: null,
+      },
+    };
+    const c = buildComparison(metrics);
+    expect(c.lowest_cost).toEqual([]);
+    expect(c.lowest_turns).toEqual([]);
+  });
 });

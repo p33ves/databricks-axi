@@ -955,7 +955,7 @@
             gate();
           } else if (e.kind === "error") {
             if (e.pane) {
-              setState(e.pane, "error", "disabled");
+              setState(e.pane, "error", e.disabled ? "disabled" : "failed");
               addLine(e.pane, e.reason, "t-error");
             } else {
               $("#runmeta").textContent = "Run failed: " + e.reason;

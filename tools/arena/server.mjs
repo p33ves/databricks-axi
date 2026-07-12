@@ -165,16 +165,15 @@ export function buildResultRow(task, conditionMetrics) {
 // output ~5x), so the condition with the fewest total tokens can still be
 // the most expensive — the winner must track cost_usd. Each highlight is the
 // SET of conditions tied at the minimum; a tie between all candidates is a
-// wash and highlights nobody.
+// wash and highlights nobody, and a lone finisher has nothing to compare
+// against so it gets no badge either.
 function lowestSet(candidates, value) {
-  if (!candidates.length) return [];
+  if (candidates.length < 2) return [];
   const scored = candidates.map(([id, m]) => [id, value(m) ?? Infinity]);
   const min = Math.min(...scored.map(([, v]) => v));
   const winners = scored.filter(([, v]) => v === min).map(([id]) => id);
   // Everyone tied → no differentiation, badge nobody.
-  return winners.length === candidates.length && candidates.length > 1
-    ? []
-    : winners;
+  return winners.length === candidates.length ? [] : winners;
 }
 
 export function buildComparison(conditionMetrics) {
@@ -573,7 +572,12 @@ async function startRun(task, profile, model) {
         "databricks-axi": preflight.axi,
       }[id];
       if (!status.ok) {
-        broadcast(run, { pane: id, kind: "error", reason: status.reason });
+        broadcast(run, {
+          pane: id,
+          kind: "error",
+          reason: status.reason,
+          disabled: true,
+        });
         metrics[id] = { exit: null, wall_s: 0, is_error: true, disabled: true };
         continue;
       }
@@ -713,14 +717,26 @@ export function createArenaServer() {
         jsonResponse(res, 400, { error: "task is required" });
         return;
       }
+      // The task is a positional in the child argv; a leading dash would be
+      // parsed as a CLI flag instead of the prompt.
+      if (task.startsWith("-")) {
+        jsonResponse(res, 400, { error: "task must not begin with a dash" });
+        return;
+      }
       const profile =
         typeof body.profile === "string" && body.profile.trim()
           ? body.profile.trim()
           : null;
+      if (typeof body.model === "string" && body.model.trim().startsWith("-")) {
+        jsonResponse(res, 400, { error: "invalid model" });
+        return;
+      }
       // Model id is agent-facing config, not a shell/path value, but keep it
-      // to a conservative charset so nothing odd reaches the child argv.
+      // to a conservative charset (no leading dash) so nothing odd reaches
+      // the child argv.
       const model =
-        typeof body.model === "string" && /^[\w.:-]{1,64}$/.test(body.model)
+        typeof body.model === "string" &&
+        /^[A-Za-z0-9][\w.:-]{0,63}$/.test(body.model)
           ? body.model
           : null;
       const runId = await startRun(task, profile, model);
