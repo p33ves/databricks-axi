@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>databricks-axi Demo Arena</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <!--
+      Placeholder page. The real 3-pane arena UI (task input, transcript
+      panes, safety notice, tokens/turns/duration comparison charts) is
+      built separately with the frontend-design and dataviz skills
+      (spec §4.1) — this file only names the contract it must consume.
+      Full contract detail: tools/arena/README.md.
+    -->
+    <h1>databricks-axi Demo Arena</h1>
+    <p>UI not yet built. This server serves the following contract:</p>
+    <ul>
+      <li><code>GET /</code> — this page (embeds the CSRF nonce below)</li>
+      <li>
+        <code>GET /preflight</code> —
+        <code>{ databricks, claude, axi, mcp }</code> status
+      </li>
+      <li>
+        <code>GET /profiles</code> — <code>{ profiles: [{ name, host }] }</code>
+      </li>
+      <li>
+        <code>POST /run</code> — body <code>{ task, profile? }</code>, header
+        <code>x-arena-nonce</code>; returns <code>{ runId }</code>
+      </li>
+      <li>
+        <code>GET /events/:runId</code> — <code>text/event-stream</code>,
+        <code>{ pane, kind, ... }</code> per <code>data:</code> line, kinds
+        <code>started | line | done | comparison | error</code>
+      </li>
+    </ul>
+    <script>
+      window.__ARENA_NONCE__ = "%%ARENA_NONCE%%";
+      window.__ARENA_PORT__ = "%%ARENA_PORT%%";
+    </script>
+  </body>
+</html>
