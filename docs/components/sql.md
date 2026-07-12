@@ -44,6 +44,10 @@ All accept `--profile <name>`.
 - `warehouses view`: `id`, `name`, `state`, `size`, `auto_stop_mins`,
   `creator_name`, plus `start`/`stop` and an `sql exec --warehouse <id>`
   follow-up.
+- `warehouses start`/`stop`: async by default, status `"start requested"` /
+  `"stop requested"`. With `--wait` upstream blocks until the state is
+  reached and only then exits 0, so the reported status is the reached
+  state: `"started, warehouse RUNNING"` / `"stopped, warehouse STOPPED"`.
 - `exec` / `statement view`: on success, `{ statement_id, columns
 (name:type_text pairs), rows, total_row_count }`, plus a `help` array with
   `sql exec "<query>"` and `sql history` follow-ups. A non-`SUCCEEDED`
