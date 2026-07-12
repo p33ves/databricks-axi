@@ -117,10 +117,18 @@ describe("parseResultEvent", () => {
 
 describe("buildResultRow", () => {
   it("contains no host/token key and only the numeric metric fields plus task", () => {
+    // Realistic runCondition shape, including the free-text fields that the
+    // live paths attach (error_line can be the upstream CLI's stderr trailer
+    // ending in "Host: https://..."): buildResultRow must strip every one of
+    // them, so this fixture deliberately carries the worst case.
     const metrics = {
-      exit: 0,
+      exit: 1,
       wall_s: 12,
       ...parseResultEvent(STREAM_LINES),
+      is_error: true,
+      error_line: "Host: https://dbc-abc123.cloud.databricks.com",
+      error: "spawn failed",
+      disabled: true,
     };
     const row = buildResultRow("list clusters", {
       "raw-cli": metrics,
@@ -155,7 +163,9 @@ describe("buildResultRow", () => {
         ).toBe(true);
       }
     }
-    expect(JSON.stringify(row)).not.toMatch(/"host"|access_token|bearer/i);
+    expect(JSON.stringify(row)).not.toMatch(
+      /"host|error_line|"error"|disabled|access_token|bearer|https:/i,
+    );
   });
 });
 

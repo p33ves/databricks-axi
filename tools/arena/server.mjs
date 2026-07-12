@@ -113,20 +113,45 @@ export function parseResultEvent(streamLines) {
 }
 
 // Build the one JSONL row persisted per run (spec §6). No host, no token —
-// `task` is the only free-text field.
+// `task` is the only free-text field. Enforced by whitelist: free-text
+// diagnostics (`error_line`, `error`) and UI-only flags stay SSE-only —
+// upstream CLI stderr can end with a "Host: https://..." trailer, and the
+// spec promises this file never carries a hostname or transcript text.
+const PERSISTED_KEYS = [
+  "exit",
+  "wall_s",
+  "num_turns",
+  "tokens_in",
+  "tokens_cache_create",
+  "tokens_cache_read",
+  "tokens_out",
+  "cost_usd",
+  "is_error",
+];
 export function buildResultRow(task, conditionMetrics) {
+  const conditions = {};
+  for (const [id, m] of Object.entries(conditionMetrics)) {
+    conditions[id] = Object.fromEntries(
+      PERSISTED_KEYS.map((k) => [k, m?.[k] ?? null]),
+    );
+  }
   return {
     ts: new Date().toISOString(),
     task,
-    conditions: conditionMetrics,
+    conditions,
   };
 }
 
 // Pick the comparison highlight (lowest tokens / lowest turns), skipping any
 // condition that errored or never produced a result event.
 export function buildComparison(conditionMetrics) {
+  // Input-token total (in + cache create + cache read) — the same formula
+  // the page's "Input tokens" column uses, so the lowest badge always lands
+  // on the smallest displayed number.
   const totalTokens = (m) =>
-    (m.tokens_in ?? 0) + (m.tokens_cache_read ?? 0) + (m.tokens_out ?? 0);
+    (m.tokens_in ?? 0) +
+    (m.tokens_cache_create ?? 0) +
+    (m.tokens_cache_read ?? 0);
   const candidates = Object.entries(conditionMetrics).filter(
     ([, m]) => m && m.is_error !== true && m.exit === 0,
   );
@@ -423,10 +448,15 @@ async function runCondition(id, task, { mcpName, axiStatus, profile }, onLine) {
       });
     });
     const wallS = Math.round((Date.now() - started) / 1000);
+    const parsed = parseResultEvent(rawLines);
     const metrics = {
       exit: result.code,
       wall_s: wallS,
-      ...parseResultEvent(rawLines),
+      ...parsed,
+      // A killed/timed-out/crashed child emits no result event: is_error
+      // stays null there unless we fall back to the exit code, and a
+      // force-killed condition must never render as a fast, cheap success.
+      is_error: parsed.is_error ?? result.code !== 0,
       error_line: result.code === 0 ? null : result.lastErrLine || null,
     };
     return metrics;
@@ -443,13 +473,24 @@ async function runCondition(id, task, { mcpName, axiStatus, profile }, onLine) {
 const NONCE = randomBytes(16).toString("hex");
 const runs = new Map(); // runId -> { subscribers: Set<res>, buffer: [] }
 
-function sseSend(res, event) {
-  res.write(`data: ${JSON.stringify(event)}\n\n`);
+function sseSend(res, event, id) {
+  res.write(`id: ${id}\ndata: ${JSON.stringify(event)}\n\n`);
 }
 
 function broadcast(run, event) {
   run.buffer.push(event);
-  for (const res of run.subscribers) sseSend(res, event);
+  for (const res of run.subscribers) sseSend(res, event, run.buffer.length - 1);
+}
+
+// Shared teardown for success and failure: end every stream exactly once,
+// then evict the run after a grace window so a reload can still replay it,
+// but a long-lived server does not grow without bound.
+const RUN_EVICT_MS = 10 * 60 * 1000;
+function finishRun(runId, run) {
+  for (const res of run.subscribers) res.end();
+  run.subscribers.clear();
+  run.finished = true;
+  setTimeout(() => runs.delete(runId), RUN_EVICT_MS).unref();
 }
 
 function jsonResponse(res, status, body) {
@@ -530,16 +571,14 @@ async function startRun(task, profile) {
       kind: "comparison",
       ...buildComparison(metrics),
     });
-    for (const res of run.subscribers) res.end();
-    run.subscribers.clear();
-    run.finished = true;
+    finishRun(runId, run);
   })().catch((e) => {
     broadcast(run, {
       pane: null,
       kind: "error",
       reason: String(e?.message ?? e),
     });
-    for (const res of run.subscribers) res.end();
+    finishRun(runId, run);
   });
 
   return runId;
@@ -556,7 +595,10 @@ function handleEvents(req, res, runId) {
     "cache-control": "no-cache",
     connection: "keep-alive",
   });
-  for (const event of run.buffer) sseSend(res, event);
+  // On EventSource auto-reconnect, replay only what the client missed.
+  const lastSeen = Number.parseInt(req.headers["last-event-id"] ?? "", 10);
+  const from = Number.isNaN(lastSeen) ? 0 : lastSeen + 1;
+  for (let i = from; i < run.buffer.length; i++) sseSend(res, run.buffer[i], i);
   if (run.finished) {
     res.end();
     return;
@@ -565,11 +607,9 @@ function handleEvents(req, res, runId) {
   req.on("close", () => run.subscribers.delete(res));
 }
 
-function indexHtml(port) {
+function indexHtml() {
   const html = readFileSync(join(HERE, "index.html"), "utf8");
-  return html
-    .replace(/%%ARENA_NONCE%%/g, NONCE)
-    .replace(/%%ARENA_PORT%%/g, String(port));
+  return html.replace(/%%ARENA_NONCE%%/g, NONCE);
 }
 
 function isSameOrigin(req, port) {
@@ -597,7 +637,7 @@ export function createArenaServer() {
     const url = new URL(req.url, `http://${host}`);
 
     if (req.method === "GET" && url.pathname === "/") {
-      const html = indexHtml(port);
+      const html = indexHtml();
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(html);
       return;
@@ -626,6 +666,12 @@ export function createArenaServer() {
       try {
         body = JSON.parse(await readBody(req));
       } catch {
+        jsonResponse(res, 400, { error: "invalid JSON body" });
+        return;
+      }
+      // `null`/`"x"` are valid JSON: reading .task off them must be a 400,
+      // never an unhandled throw that takes the whole server down.
+      if (typeof body !== "object" || body === null) {
         jsonResponse(res, 400, { error: "invalid JSON body" });
         return;
       }

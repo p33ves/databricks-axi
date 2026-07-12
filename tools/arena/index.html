@@ -382,6 +382,12 @@
       </header>
 
       <section class="controls" aria-label="run a task">
+        <p class="cost">
+          A run is <strong>three real claude agent sessions</strong> spending
+          your tokens, and it
+          <strong>executes this task against your workspace</strong>. Prefer
+          read-only tasks.
+        </p>
         <div class="row">
           <div style="flex: 1; min-width: 260px">
             <label for="task">Task, in your own words</label>
@@ -402,12 +408,6 @@
             <button id="run" disabled>Run task 3 ways</button>
           </div>
         </div>
-        <p class="cost">
-          A run is <strong>three real claude agent sessions</strong> spending
-          your tokens, and it
-          <strong>executes this task against your workspace</strong>. Prefer
-          read-only tasks.
-        </p>
       </section>
 
       <p class="runmeta" id="runmeta" aria-live="polite"></p>
@@ -673,16 +673,18 @@
         es.onmessage = (ev) => {
           const e = JSON.parse(ev.data);
           if (e.kind === "started") {
-            const link = document.createElement("a");
-            link.href = e.host;
-            link.target = "_blank";
-            link.rel = "noopener";
-            link.textContent = "open workspace ↗";
             const meta = $("#runmeta");
             meta.textContent = e.profile
               ? "Running against profile " + e.profile + " — "
               : "Running — ";
-            meta.appendChild(link);
+            if (typeof e.host === "string" && e.host.startsWith("https://")) {
+              const link = document.createElement("a");
+              link.href = e.host;
+              link.target = "_blank";
+              link.rel = "noopener";
+              link.textContent = "open workspace ↗";
+              meta.appendChild(link);
+            }
           } else if (e.kind === "line") {
             setState(e.pane, "running", "running");
             addLine(e.pane, e.text);

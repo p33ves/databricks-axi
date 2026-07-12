@@ -90,8 +90,9 @@ consumer — see the design spec §4/§11(c)).
 
 ### `GET /`
 
-Serves the static page. Embeds the CSRF nonce and port for the page's own
-script to read (`window.__ARENA_NONCE__`, `window.__ARENA_PORT__`).
+Serves the static page with the CSRF nonce substituted into it
+(`%%ARENA_NONCE%%` placeholder). All page fetches are relative, so no port
+value is embedded.
 
 ### `GET /preflight`
 
@@ -181,8 +182,7 @@ never committed) per completed run:
       "tokens_cache_read": 20,
       "tokens_out": 50,
       "cost_usd": 0.01,
-      "is_error": false,
-      "error_line": null
+      "is_error": false
     },
     "mcp": { "...": "..." },
     "databricks-axi": { "...": "..." }
@@ -191,8 +191,10 @@ never committed) per completed run:
 ```
 
 No workspace hostname, no token, no transcript text is written to this
-file. `task` is the only free-text field. Transcripts stream to the browser
-only and are never persisted.
+file: rows are reduced to the fixed numeric/boolean field list above by
+whitelist, so `task` is the only free-text field. Free-text diagnostics
+(`error_line`, `error`) exist only on the SSE stream to the browser.
+Transcripts stream to the browser only and are never persisted.
 
 ## Error taxonomy
 
