@@ -754,7 +754,8 @@
           for (const p of profiles) {
             const o = document.createElement("option");
             o.value = p.name;
-            o.textContent = p.name + " — " + p.host.replace(/^https:\/\//, "");
+            o.textContent =
+              p.name + " — " + (p.host || "").replace(/^https:\/\//, "");
             $("#profile").appendChild(o);
           }
           // A named profile pins one workspace; the bare "default" entry can be
@@ -811,14 +812,10 @@
       function comparison(data) {
         const rows = $("#ctable tbody");
         rows.textContent = "";
-        const tok = (m) =>
-          (m.tokens_in || 0) +
-          (m.tokens_cache_create || 0) +
-          (m.tokens_cache_read || 0);
         const max = Math.max(
           1,
           ...CONDS.map((c) =>
-            data.conditions[c] ? tok(data.conditions[c]) : 0,
+            data.conditions[c] ? tokTotal(data.conditions[c]) : 0,
           ),
         );
         for (const c of CONDS) {
@@ -849,7 +846,7 @@
             rows.appendChild(tr);
             continue;
           }
-          const t = tok(m);
+          const t = tokTotal(m);
           const tokTd = document.createElement("td");
           tokTd.className = "num";
           tokTd.textContent = fmt(t);
@@ -965,6 +962,9 @@
         };
         es.onerror = () => {
           if (!running) return;
+          // On CONNECTING the browser auto-reconnects and replays missed
+          // events via Last-Event-ID; only a CLOSED stream is fatal.
+          if (es.readyState !== EventSource.CLOSED) return;
           $("#runmeta").textContent = "Event stream dropped; check the server.";
           es.close();
           running = false;

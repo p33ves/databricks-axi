@@ -549,7 +549,11 @@ async function startRun(task, profile, model) {
 
   // Per-run random order: a fixed order would let the last condition ride
   // any cross-session warmup or cache advantage on every single run.
-  const order = [...CONDITION_ORDER].sort(() => Math.random() - 0.5);
+  const order = [...CONDITION_ORDER];
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
 
   (async () => {
     const host = await resolveHost(profile);
