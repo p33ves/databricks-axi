@@ -28,8 +28,9 @@ Pre-1.0: the full v1 command surface is implemented (home, jobs, clusters, sql, 
 ## Commands
 
 ```
-commands[38]:
+commands[39]:
   (none)=home
+  whoami [--profile <name>]
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
   jobs run <job_id> [--wait]
