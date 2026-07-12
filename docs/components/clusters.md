@@ -84,7 +84,9 @@ cancel`'s `INVALID_STATE` no-op does not carry to `clusters start` (which
 ## Tests
 
 `test/clusters.test.ts` uses `setupCli()`/`fake-databricks.ts`. Covers
-list/view/start/stop argv shape, autoscale min-max vs. fixed `num_workers`
+list/view/start/stop argv shape, the start/stop status wording on both flag
+paths (`"requested"` by default, reached state with `--wait`), autoscale
+min-max vs. fixed `num_workers`
 fallback logic, the `state_message` presence/absence branches, the
 "is in unexpected state" no-op conversion for `start`, the silent-idempotent
 `stop` path, 403 → `PERMISSION_DENIED` mapping, and an unknown-flag

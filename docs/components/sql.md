@@ -111,7 +111,9 @@ All accept `--profile <name>`.
 restores it in `afterEach` so poll-loop tests run at full speed instead of
 waiting 2s per iteration. Uses `setupCli()`/`fake-databricks.ts`, plus
 local helpers `succeededStmt()` and `submittedBody()` for canned statement
-responses. Covers warehouse list/view/start/stop, the NOT_FOUND-to-
+responses. Covers warehouse list/view/start/stop (including the status
+wording on both flag paths: `"requested"` by default, reached state with
+`--wait`), the NOT_FOUND-to-
 `sql warehouses` mapping on `warehouses view`/`start` and the NOT_FOUND-to-
 `sql history` mapping on `statement view`, exec submit/poll/timeout/
 chunk-fetch paths, wait_timeout clamping (both the 50s ceiling and the 5s
