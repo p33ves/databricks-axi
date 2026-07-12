@@ -159,33 +159,32 @@ export function buildResultRow(task, conditionMetrics) {
   };
 }
 
-// Pick the comparison highlight (lowest tokens / lowest turns), skipping any
-// condition that errored or never produced a result event.
+// Pick the comparison highlights, skipping any condition that errored or
+// never produced a result event. Cost, not raw token count, is the headline
+// axis: token classes are priced very differently (cache-read ~0.1x input,
+// output ~5x), so the condition with the fewest total tokens can still be
+// the most expensive — the winner must track cost_usd. Each highlight is the
+// SET of conditions tied at the minimum; a tie between all candidates is a
+// wash and highlights nobody.
+function lowestSet(candidates, value) {
+  if (!candidates.length) return [];
+  const scored = candidates.map(([id, m]) => [id, value(m) ?? Infinity]);
+  const min = Math.min(...scored.map(([, v]) => v));
+  const winners = scored.filter(([, v]) => v === min).map(([id]) => id);
+  // Everyone tied → no differentiation, badge nobody.
+  return winners.length === candidates.length && candidates.length > 1
+    ? []
+    : winners;
+}
+
 export function buildComparison(conditionMetrics) {
-  // Input-token total (in + cache create + cache read) — the same formula
-  // the page's "Input tokens" column uses, so the lowest badge always lands
-  // on the smallest displayed number.
-  const totalTokens = (m) =>
-    (m.tokens_in ?? 0) +
-    (m.tokens_cache_create ?? 0) +
-    (m.tokens_cache_read ?? 0);
   const candidates = Object.entries(conditionMetrics).filter(
     ([, m]) => m && m.is_error !== true && m.exit === 0,
   );
-  const lowestTokens = candidates.length
-    ? candidates.reduce((a, b) =>
-        totalTokens(b[1]) < totalTokens(a[1]) ? b : a,
-      )[0]
-    : null;
-  const lowestTurns = candidates.length
-    ? candidates.reduce((a, b) =>
-        (b[1].num_turns ?? Infinity) < (a[1].num_turns ?? Infinity) ? b : a,
-      )[0]
-    : null;
   return {
     conditions: conditionMetrics,
-    lowest_tokens: lowestTokens,
-    lowest_turns: lowestTurns,
+    lowest_cost: lowestSet(candidates, (m) => m.cost_usd),
+    lowest_turns: lowestSet(candidates, (m) => m.num_turns),
   };
 }
 

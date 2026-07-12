@@ -194,35 +194,52 @@ describe("buildResultRow", () => {
 });
 
 describe("buildComparison", () => {
-  it("picks the lowest-tokens and lowest-turns condition, skipping errored ones", () => {
+  it("badges lowest cost (not token count) and fewest turns, skipping errored", () => {
     const metrics = {
-      "raw-cli": {
-        exit: 0,
-        is_error: false,
-        num_turns: 8,
-        tokens_in: 500,
-        tokens_out: 300,
-        tokens_cache_read: 0,
-      },
-      mcp: {
-        exit: 1,
-        is_error: true,
-        num_turns: 1,
-        tokens_in: 10,
-        tokens_out: 5,
-        tokens_cache_read: 0,
-      },
+      // fewest total tokens but the MOST expensive (cost must win, not tokens)
+      mcp: { exit: 0, is_error: false, num_turns: 3, cost_usd: 0.53 },
+      "raw-cli": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
       "databricks-axi": {
         exit: 0,
         is_error: false,
         num_turns: 2,
-        tokens_in: 50,
-        tokens_out: 30,
-        tokens_cache_read: 0,
+        cost_usd: 0.46,
       },
     };
-    const comparison = buildComparison(metrics);
-    expect(comparison.lowest_tokens).toBe("databricks-axi");
-    expect(comparison.lowest_turns).toBe("databricks-axi");
+    const c = buildComparison(metrics);
+    expect(c.lowest_cost).toEqual(["databricks-axi"]);
+    expect(c.lowest_turns).toEqual(["databricks-axi"]);
+  });
+
+  it("badges every condition tied at the minimum", () => {
+    const metrics = {
+      "raw-cli": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.11 },
+      "databricks-axi": {
+        exit: 0,
+        is_error: false,
+        num_turns: 2,
+        cost_usd: 0.12,
+      },
+      mcp: { exit: 0, is_error: false, num_turns: 5, cost_usd: 0.2 },
+    };
+    const c = buildComparison(metrics);
+    expect(c.lowest_cost).toEqual(["raw-cli"]); // distinct cost winner
+    expect(c.lowest_turns.sort()).toEqual(["databricks-axi", "raw-cli"]); // 2-way tie
+  });
+
+  it("badges nobody when all candidates tie (a wash)", () => {
+    const metrics = {
+      "raw-cli": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.1 },
+      "databricks-axi": {
+        exit: 0,
+        is_error: false,
+        num_turns: 2,
+        cost_usd: 0.1,
+      },
+      mcp: { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.1 },
+    };
+    const c = buildComparison(metrics);
+    expect(c.lowest_cost).toEqual([]);
+    expect(c.lowest_turns).toEqual([]);
   });
 });

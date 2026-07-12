@@ -822,11 +822,16 @@
           const m = data.conditions[c];
           const tr = document.createElement("tr");
           const name = document.createElement("td");
+          // Badge the real efficiency axes: lowest cost (the headline) and
+          // fewest turns. Each is a set, so ties badge every winner; token
+          // count is shown as a column but is not a "win" (it does not track
+          // cost once caching is priced in). See buildComparison.
+          const inSet = (set) => Array.isArray(set) && set.includes(c);
           const badges =
-            (data.lowest_tokens === c
-              ? '<span class="low">fewest tokens</span>'
+            (inSet(data.lowest_cost)
+              ? '<span class="low">lowest cost</span>'
               : "") +
-            (data.lowest_turns === c
+            (inSet(data.lowest_turns)
               ? '<span class="low">fewest turns</span>'
               : "");
           name.innerHTML =
@@ -1096,8 +1101,8 @@
               kind: "comparison",
               pane: null,
               conditions: metrics,
-              lowest_tokens: "databricks-axi",
-              lowest_turns: "databricks-axi",
+              lowest_cost: ["databricks-axi"],
+              lowest_turns: ["databricks-axi"],
             });
             for (const [ms, ev] of seq)
               this._timers.push(
