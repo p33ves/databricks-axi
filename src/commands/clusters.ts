@@ -190,9 +190,11 @@ async function clustersStart(args: string[]): Promise<AxiRenderable> {
     }
     throw error;
   }
+  // With --wait upstream exits 0 only once the cluster reaches RUNNING
+  // (a timeout raises above), so report the reached state, not the request.
   return {
     cluster_id: clusterId,
-    status: "start requested",
+    status: wait ? "started, cluster RUNNING" : "start requested",
     help: [`databricks-axi clusters view ${clusterId}${p}`],
   };
 }
@@ -227,9 +229,10 @@ async function clustersStop(args: string[]): Promise<AxiRenderable> {
       `databricks-axi clusters view ${clusterId}${p}`,
     ],
   });
+  // Same contract as start: --wait exit 0 means TERMINATED was reached.
   return {
     cluster_id: clusterId,
-    status: "stop requested",
+    status: wait ? "stopped, cluster TERMINATED" : "stop requested",
     help: [`databricks-axi clusters view ${clusterId}${p}`],
   };
 }
