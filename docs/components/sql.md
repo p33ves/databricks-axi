@@ -44,6 +44,10 @@ All accept `--profile <name>`.
 - `warehouses view`: `id`, `name`, `state`, `size`, `auto_stop_mins`,
   `creator_name`, plus `start`/`stop` and an `sql exec --warehouse <id>`
   follow-up.
+- `warehouses start`/`stop`: async by default, status `"start requested"` /
+  `"stop requested"`. With `--wait` upstream blocks until the state is
+  reached and only then exits 0, so the reported status is the reached
+  state: `"started, warehouse RUNNING"` / `"stopped, warehouse STOPPED"`.
 - `exec` / `statement view`: on success, `{ statement_id, columns
 (name:type_text pairs), rows, total_row_count }`, plus a `help` array with
   `sql exec "<query>"` and `sql history` follow-ups. A non-`SUCCEEDED`
@@ -107,7 +111,9 @@ All accept `--profile <name>`.
 restores it in `afterEach` so poll-loop tests run at full speed instead of
 waiting 2s per iteration. Uses `setupCli()`/`fake-databricks.ts`, plus
 local helpers `succeededStmt()` and `submittedBody()` for canned statement
-responses. Covers warehouse list/view/start/stop, the NOT_FOUND-to-
+responses. Covers warehouse list/view/start/stop (including the status
+wording on both flag paths: `"requested"` by default, reached state with
+`--wait`), the NOT_FOUND-to-
 `sql warehouses` mapping on `warehouses view`/`start` and the NOT_FOUND-to-
 `sql history` mapping on `statement view`, exec submit/poll/timeout/
 chunk-fetch paths, wait_timeout clamping (both the 50s ceiling and the 5s

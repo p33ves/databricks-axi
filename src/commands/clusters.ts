@@ -190,9 +190,12 @@ async function clustersStart(args: string[]): Promise<AxiRenderable> {
     }
     throw error;
   }
+  // With --wait upstream exits 0 only once the cluster reaches RUNNING
+  // (a timeout raises above), so report the reached state, not the request
+  // (live-verified 2026-07-12 on AWS2: --wait blocked ~8 min to RUNNING).
   return {
     cluster_id: clusterId,
-    status: "start requested",
+    status: wait ? "started, cluster RUNNING" : "start requested",
     help: [`databricks-axi clusters view ${clusterId}${p}`],
   };
 }
@@ -227,9 +230,11 @@ async function clustersStop(args: string[]): Promise<AxiRenderable> {
       `databricks-axi clusters view ${clusterId}${p}`,
     ],
   });
+  // Same contract as start: --wait exit 0 means TERMINATED was reached
+  // (live-verified 2026-07-12 on AWS2, same cycle as the start capture).
   return {
     cluster_id: clusterId,
-    status: "stop requested",
+    status: wait ? "stopped, cluster TERMINATED" : "stop requested",
     help: [`databricks-axi clusters view ${clusterId}${p}`],
   };
 }

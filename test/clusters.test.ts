@@ -237,12 +237,19 @@ describe("clusters start", () => {
     expect(out).toContain("clusters view 1234-567890-abc123");
   });
 
-  it("omits --no-wait with --wait", async () => {
+  it("omits --no-wait with --wait and reports the reached state", async () => {
     t.fake.respondRaw("clusters start", "");
-    await t.run(["clusters", "start", "1234-567890-abc123", "--wait"]);
+    const { out } = await t.run([
+      "clusters",
+      "start",
+      "1234-567890-abc123",
+      "--wait",
+    ]);
     expect(t.fake.calls()).toEqual([
       ["clusters", "start", "1234-567890-abc123", "-o", "json"],
     ]);
+    expect(out).toContain("started, cluster RUNNING");
+    expect(out).not.toContain("start requested");
   });
 
   it("treats the real 'unexpected state Running' error as an exit-0 no-op", async () => {
@@ -316,12 +323,19 @@ describe("clusters stop", () => {
     expect(out).toContain("clusters view 1234-567890-abc123");
   });
 
-  it("omits --no-wait with --wait", async () => {
+  it("omits --no-wait with --wait and reports the reached state", async () => {
     t.fake.respondRaw("clusters delete", "");
-    await t.run(["clusters", "stop", "1234-567890-abc123", "--wait"]);
+    const { out } = await t.run([
+      "clusters",
+      "stop",
+      "1234-567890-abc123",
+      "--wait",
+    ]);
     expect(t.fake.calls()).toEqual([
       ["clusters", "delete", "1234-567890-abc123", "-o", "json"],
     ]);
+    expect(out).toContain("stopped, cluster TERMINATED");
+    expect(out).not.toContain("stop requested");
   });
 
   it("still exits 0 on an already-terminated cluster (silent upstream no-op)", async () => {

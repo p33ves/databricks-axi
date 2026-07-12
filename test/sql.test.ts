@@ -152,12 +152,38 @@ describe("sql warehouses", () => {
     expect(out).toContain("stop requested");
   });
 
-  it("omits --no-wait with --wait", async () => {
+  it("omits --no-wait with --wait and reports the reached state on start", async () => {
     t.fake.respondRaw("warehouses start", "");
-    await t.run(["sql", "warehouses", "start", WH_ID, "--wait"]);
+    const { out, exitCode } = await t.run([
+      "sql",
+      "warehouses",
+      "start",
+      WH_ID,
+      "--wait",
+    ]);
+    expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
       ["warehouses", "start", WH_ID, "-o", "json"],
     ]);
+    expect(out).toContain("started, warehouse RUNNING");
+    expect(out).not.toContain("start requested");
+  });
+
+  it("reports the reached state on stop --wait", async () => {
+    t.fake.respondRaw("warehouses stop", "");
+    const { out, exitCode } = await t.run([
+      "sql",
+      "warehouses",
+      "stop",
+      WH_ID,
+      "--wait",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      ["warehouses", "stop", WH_ID, "-o", "json"],
+    ]);
+    expect(out).toContain("stopped, warehouse STOPPED");
+    expect(out).not.toContain("stop requested");
   });
 
   it("maps a genuine 403 to PERMISSION_DENIED, exit 1", async () => {

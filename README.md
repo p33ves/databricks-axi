@@ -46,11 +46,60 @@ live behind the same CLI, triaging a failed run stays a jobs-API call, no
 `system`-table workaround needed. See Benchmarks below for how that plays
 out in tokens, cost, and turns.
 
+## What the agent sees
+
+Same workspace, same question, both CLIs. The raw CLI:
+
+```console
+$ databricks jobs list -o json
+[
+  {
+    "created_time": 1783396339626,
+    "creator_user_name": "you@example.com",
+    "job_id": 517790498477266,
+    "settings": {
+      "email_notifications": {},
+      "format": "MULTI_TASK",
+      "max_concurrent_runs": 1,
+      "name": "axi-bench-etl",
+      "queue": {
+        "enabled": true
+      },
+      "timeout_seconds": 0
+    }
+  }
+]
+```
+
+databricks-axi:
+
+```console
+$ databricks-axi jobs list
+jobs[1]{job_id,name,creator_user_name}:
+  517790498477266,axi-bench-etl,you@example.com
+count: 1
+help[2]: databricks-axi jobs view <job_id>,databricks-axi jobs runs <job_id>
+```
+
+TOON rows instead of nested JSON, a minimal default schema (`--fields`
+expands it), and the next two commands an agent would reach for. Errors
+follow the same contract:
+
+```console
+$ databricks-axi catalog table view workspace.default.does_not_exist
+error: "Error: Table 'workspace.default.does_not_exist' does not exist."
+code: NOT_FOUND
+help[1]: databricks-axi catalog tables workspace.default
+```
+
+Exit code 1, a stable `code` field, and the recovery command. Nothing to
+parse out of prose, nothing to guess.
+
 ## Benchmarks
 
 Agent ergonomics is measurable. The benchmark follows the
 [axi benchmark](https://axi.md) methodology: real-world Databricks tasks run
-through up to 4 interface setups, 3 repeats each, with `claude-sonnet-5` as
+through up to 4 interface setups, 5 repeats each, with `claude-sonnet-5` as
 the agent. The four setups are the raw `databricks` CLI, databricks-axi, and
 two Databricks MCP servers: the workspace-managed SQL server and Databricks
 Field Engineering's
@@ -59,21 +108,23 @@ server (~40 tools). Task success is scored against seeded fixtures:
 deterministically where the answer is machine-checkable, by an LLM judge
 otherwise.
 
-The latest full pass (**291 runs, v0.6.1, 2026-07-10**, three workspaces, 32
-tasks) put every condition at 100% pass. Over the six tasks all four setups
-can run, databricks-axi posts the lowest input tokens, cost, turns, and
-duration:
+The latest full pass (**565 runs, v0.9.0, 2026-07-11**, three workspaces, 37
+tasks) put databricks-axi at 185/185 (100%). Across all conditions the pass
+rate was 564/565: the one miss was a single ai-dev-kit repeat on a
+cluster-detail task, agent variance rather than a tool error. Over the seven
+tasks all four setups can run, databricks-axi posts the lowest input tokens,
+cost, turns, and duration:
 
 | Condition                    | Avg Input Tokens | Avg Cost/Task | Avg Duration | Avg Turns | Success  |
 | ---------------------------- | ---------------- | ------------- | ------------ | --------- | -------- |
-| **databricks-axi**           | **92,346**       | **$0.163**    | **14s**      | **3.1**   | **100%** |
-| databricks CLI (raw)         | 112,946          | $0.175        | 16s          | 3.8       | 100%     |
-| Databricks managed MCP (SQL) | 177,440          | $0.279        | 22s          | 4.2       | 100%     |
-| Databricks ai-dev-kit MCP    | 243,231          | $0.393        | 25s          | 5.2       | 100%     |
+| **databricks-axi**           | **85,664**       | **$0.130**    | **14s**      | **2.9**   | **100%** |
+| databricks CLI (raw)         | 103,963          | $0.148        | 15s          | 3.5       | 100%     |
+| Databricks managed MCP (SQL) | 186,051          | $0.221        | 22s          | 4.6       | 100%     |
+| Databricks ai-dev-kit MCP    | 277,399          | $0.342        | 28s          | 5.9       | 100%     |
 
 Against the raw `databricks` CLI, the very CLI this tool wraps, that's 18%
-fewer input tokens, 19% fewer turns, and 7% lower cost. Against the MCP
-servers the gap is wider: **48-62% fewer input tokens** and 42-58% lower cost.
+fewer input tokens, 17% fewer turns, and 12% lower cost. Against the MCP
+servers the gap is wider: **54-69% fewer input tokens** and 41-62% lower cost.
 
 The reason is structural. An MCP server loads its tool schemas into the
 agent's context on every session (3 tools for the managed SQL server, ~40 for
@@ -82,7 +133,7 @@ surface as a single CLI the agent already knows how to read. The managed SQL
 server also cannot run job- or warehouse-mutating tasks at all, since no SQL
 surface can trigger a job run.
 
-Full per-task numbers across all 32 tasks and all three workspaces live in
+Full per-task numbers across all 37 tasks and all three workspaces live in
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Requirements
