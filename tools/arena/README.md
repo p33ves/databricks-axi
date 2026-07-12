@@ -34,6 +34,12 @@ button; it is not optional copy.
     launch with `DATABRICKS_CONFIG_FILE=/path/to/.databrickscfg node
 tools/arena/server.mjs`. Do not override `HOME`: the `claude` children
     read your Claude login from your real home directory.
+  - OAuth (U2M) profiles cache their token at `~/.databricks/token-cache.json`
+    under the launching `HOME`. If you authenticated those profiles under a
+    different `HOME` than you launch the arena with, the cache will not be
+    found and those panes fail auth (PAT profiles are unaffected). Re-run
+    `databricks auth login -p <profile>` under the launching `HOME`, or point
+    the arena at the same `HOME` you logged in with.
 - `databricks-axi` on `PATH`, or built in this repo (`pnpm run build`,
   which produces `dist/bin/databricks-axi.js`). If neither is available the
   axi pane is disabled; the other panes still run.
@@ -140,14 +146,19 @@ Request body:
   the official CLI and `databricks-axi`). The mcp condition's server is
   configured independently of any CLI profile, so this is best-effort
   there. Omitted: current/default profile behavior, unchanged.
+- `model` (string, optional): a Claude model id from the page's Model
+  dropdown, applied as `--model` to every condition equally (so the
+  comparison stays fair). Overrides the `ARENA_MODEL` env default. Omitted:
+  the viewer's Claude default. Validated against `^[\w.:-]{1,64}$`.
 
 Headers required: `x-arena-nonce: <the page's embedded nonce>`, plus a
 same-origin `Origin`/`Sec-Fetch-Site` (browsers set these automatically for
 a same-origin fetch).
 
 Response: `{ "runId": "<uuid>" }`. The three conditions start running
-**sequentially** in the background; open `GET /events/:runId` right away to
-watch.
+**sequentially in a per-run random order** (so no condition permanently
+rides a warmup/cache advantage) in the background; the drawn order is sent
+in the `started` event. Open `GET /events/:runId` right away to watch.
 
 ### `GET /events/:runId`
 
@@ -156,14 +167,15 @@ object, tagged `{ pane, kind, ... }`:
 
 | kind         | pane                   | payload                                       | meaning                                                                                                                                                                                              |
 | ------------ | ---------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `started`    | `null`                 | `{ profile, host }`                           | once, at run start; `host` is the resolved workspace URL for the chosen (or default) profile — render an "open workspace" link (`target="_blank"`), never an iframe/proxy of the workspace UI        |
+| `started`    | `null`                 | `{ profile, host, order }`                    | once, at run start; `host` is the resolved workspace URL for the chosen (or default) profile — render an "open workspace" link (`target="_blank"`), never an iframe/proxy of the workspace UI        |
 | `line`       | condition id           | `{ text }`                                    | one condensed transcript line (`ASSISTANT: ...` / `TOOL <name>: ...` / `RESULT: ...`), pushed as the child's stdout arrives                                                                          |
 | `done`       | condition id           | `{ metrics }`                                 | that condition finished; `metrics` = `{ exit, wall_s, num_turns, tokens_in, tokens_cache_create, tokens_cache_read, tokens_out, cost_usd, is_error, error_line }`                                    |
 | `comparison` | `null`                 | `{ conditions, lowest_tokens, lowest_turns }` | once, after all three conditions finish; `conditions` mirrors the per-condition `metrics` above, `lowest_tokens`/`lowest_turns` name the winning condition id (or `null` if every condition errored) |
 | `error`      | condition id or `null` | `{ reason }`                                  | that condition is disabled (failed preflight) or crashed; a `null`-pane error is a whole-run failure                                                                                                 |
 
-Condition ids: `"raw-cli"`, `"mcp"`, `"databricks-axi"` — the three panes,
-run in that order.
+Condition ids: `"raw-cli"`, `"mcp"`, `"databricks-axi"` — the three panes.
+They run in the per-run random order carried by the `started` event, not a
+fixed sequence.
 
 The stream ends (`res.end()`) once the `comparison` event has been sent.
 

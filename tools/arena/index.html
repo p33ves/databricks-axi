@@ -15,10 +15,14 @@
         --ink: #e8e4da;
         --muted: #8b94a3;
         --faint: #5c6573;
-        --c-raw: #4a90dd;
-        --c-mcp: #b8801f;
-        --c-axi: #1fa878;
+        --c-raw: #5aa2ff;
+        --c-mcp: #f5b73a;
+        --c-axi: #1fd6a0;
         --bad: #d06565;
+        /* Status success green — deliberately a *different* green from the
+           databricks-axi condition hue, so "online / done / ✓" never reads as
+           the axi lane. */
+        --ok: #34c759;
         --ui: system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
         --mono:
           ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
@@ -102,7 +106,7 @@
       }
       .chip.ok::before {
         content: "● ";
-        color: var(--c-axi);
+        color: var(--ok);
       }
       .chip.bad::before {
         content: "● ";
@@ -142,10 +146,10 @@
         min-width: 260px;
       }
       button {
-        background: var(--c-axi);
+        background: var(--ink);
         border: none;
         border-radius: 6px;
-        color: #06231a;
+        color: var(--surface);
         font: 600 14px var(--ui);
         padding: 10px 18px;
         cursor: pointer;
@@ -160,11 +164,12 @@
         outline-offset: 2px;
       }
       .cost {
-        margin: 12px 0 0;
+        margin: 0 0 18px;
+        padding: 0 0 14px 10px;
         font-size: 13px;
         color: var(--muted);
         border-left: 3px solid var(--c-mcp);
-        padding-left: 10px;
+        border-bottom: 1px solid var(--line);
       }
       .cost strong {
         color: var(--ink);
@@ -196,6 +201,17 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        cursor: pointer;
+        transition:
+          border-color 0.12s ease,
+          transform 0.12s ease;
+      }
+      .lane:hover {
+        border-color: var(--faint);
+      }
+      .lane:focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
       }
       .lane > .rail {
         height: 3px;
@@ -230,7 +246,7 @@
         animation: pulse 1.2s ease-in-out infinite;
       }
       .lane.done .dot {
-        background: var(--c-axi);
+        background: var(--ok);
       }
       .lane.error .dot {
         background: var(--bad);
@@ -251,14 +267,90 @@
         color: var(--muted);
         font-weight: 400;
       }
+      /* Compact peek: lanes stay short so Results never sits below the
+         longest transcript. The full log lives in the pop-out overlay. */
       .transcript {
         font: 12.5px/1.5 var(--mono);
         padding: 10px 12px;
-        height: 340px;
+        height: 112px;
         overflow-y: auto;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        flex: 1;
+        flex: none;
+      }
+      /* Top-fade the peek once it has real content, to signal there's more
+         above the last lines. Idle copy stays un-faded. */
+      .lane.running .transcript,
+      .lane.done .transcript,
+      .lane.error .transcript {
+        -webkit-mask-image: linear-gradient(
+          to bottom,
+          transparent 0,
+          #000 18px
+        );
+        mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+      }
+      .lane-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 7px 12px;
+        border-top: 1px solid var(--line);
+        background: var(--panel-2);
+        min-height: 34px;
+      }
+      .lane-foot .metrics {
+        font: 11px var(--mono);
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .lane-foot .metrics b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .lane-foot .metrics.err {
+        color: var(--bad);
+      }
+      .lane-foot .expand {
+        margin-left: auto;
+      }
+      .expand {
+        background: none;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        color: var(--muted);
+        font: 12px var(--mono);
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      .expand:hover {
+        color: var(--ink);
+      }
+      dialog {
+        background: var(--panel);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        width: min(900px, 92vw);
+        padding: 0;
+      }
+      dialog::backdrop {
+        background: rgba(6, 9, 14, 0.7);
+      }
+      dialog h3 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 600 15px var(--ui);
+        margin: 0;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      dialog h3 button {
+        margin-left: auto;
+      }
+      dialog .transcript {
+        height: 70vh;
       }
       .transcript .t-tool {
         color: var(--muted);
@@ -326,6 +418,7 @@
         align-items: center;
         gap: 8px;
         font-weight: 600;
+        margin-right: 8px;
       }
       .swatch {
         width: 10px;
@@ -356,7 +449,7 @@
       }
       .low::before {
         content: "✓ ";
-        color: var(--c-axi);
+        color: var(--ok);
       }
       footer {
         margin-top: 20px;
@@ -407,6 +500,15 @@
               <option value="">Default profile</option>
             </select>
           </div>
+          <div>
+            <label for="model">Model</label>
+            <select id="model">
+              <option value="">Default model</option>
+              <option value="claude-sonnet-4-5">Sonnet 4.5</option>
+              <option value="claude-opus-4-1">Opus 4.1</option>
+              <option value="claude-haiku-4-5">Haiku 4.5</option>
+            </select>
+          </div>
           <div style="align-self: flex-end">
             <button id="run" disabled>Run task 3 ways</button>
           </div>
@@ -416,7 +518,12 @@
       <p class="runmeta" id="runmeta" aria-live="polite"></p>
 
       <div class="lanes">
-        <section class="lane raw-cli" id="lane-raw-cli">
+        <section
+          class="lane raw-cli"
+          id="lane-raw-cli"
+          role="group"
+          aria-label="raw CLI"
+        >
           <div class="rail"></div>
           <h2>
             <span class="dot"></span> raw CLI
@@ -427,8 +534,23 @@
               The official databricks CLI over bash. No reshaping.
             </div>
           </div>
+          <div class="lane-foot">
+            <span class="metrics" aria-live="polite"></span>
+            <button
+              class="expand"
+              data-pane="raw-cli"
+              aria-label="Expand raw CLI transcript"
+            >
+              expand ⤢
+            </button>
+          </div>
         </section>
-        <section class="lane mcp" id="lane-mcp">
+        <section
+          class="lane mcp"
+          id="lane-mcp"
+          role="group"
+          aria-label="MCP server"
+        >
           <div class="rail"></div>
           <h2>
             <span class="dot"></span> MCP server
@@ -440,8 +562,23 @@
               context.
             </div>
           </div>
+          <div class="lane-foot">
+            <span class="metrics" aria-live="polite"></span>
+            <button
+              class="expand"
+              data-pane="mcp"
+              aria-label="Expand MCP server transcript"
+            >
+              expand ⤢
+            </button>
+          </div>
         </section>
-        <section class="lane databricks-axi" id="lane-databricks-axi">
+        <section
+          class="lane databricks-axi"
+          id="lane-databricks-axi"
+          role="group"
+          aria-label="databricks-axi"
+        >
           <div class="rail"></div>
           <h2>
             <span class="dot"></span> databricks-axi
@@ -453,15 +590,25 @@
               next steps.
             </div>
           </div>
+          <div class="lane-foot">
+            <span class="metrics" aria-live="polite"></span>
+            <button
+              class="expand"
+              data-pane="databricks-axi"
+              aria-label="Expand databricks-axi transcript"
+            >
+              expand ⤢
+            </button>
+          </div>
         </section>
       </div>
 
       <section class="compare" id="compare" hidden aria-label="comparison">
-        <h2>The finish table</h2>
+        <h2>Results</h2>
         <table id="ctable">
           <caption>
-            One run each, same task, same workspace. Lower is better on every
-            column.
+            One run each, same task, same workspace, random run order. Lower is
+            better on every column.
           </caption>
           <thead>
             <tr>
@@ -484,6 +631,15 @@
       </footer>
     </div>
 
+    <dialog id="dlg">
+      <h3>
+        <span class="swatch" id="dlg-swatch"></span>
+        <span id="dlg-title"></span>
+        <button class="expand" id="dlg-close">close</button>
+      </h3>
+      <div class="transcript" id="dlg-body"></div>
+    </dialog>
+
     <script>
       "use strict";
       const NONCE = "%%ARENA_NONCE%%";
@@ -502,7 +658,19 @@
       const lane = (id) => document.getElementById("lane-" + id);
       let ready = false;
       let running = false;
+      let openPane = null;
       const disabled = new Set();
+
+      // Demo mode: only when the file is opened raw (the nonce placeholder was
+      // never substituted by the server). The placeholder is split so the
+      // server's global replace can't rewrite this comparison in production.
+      const DEMO = NONCE === "%%ARENA_" + "NONCE%%";
+      if (DEMO) installDemo();
+
+      const tokTotal = (m) =>
+        (m.tokens_in || 0) +
+        (m.tokens_cache_create || 0) +
+        (m.tokens_cache_read || 0);
 
       function setState(id, cls, text) {
         const el = lane(id);
@@ -522,6 +690,29 @@
         d.textContent = text;
         t.appendChild(d);
         t.scrollTop = t.scrollHeight;
+        if (dlg.open && openPane === id) syncDialog(id);
+      }
+
+      function setFoot(id, m) {
+        const foot = lane(id).querySelector(".lane-foot .metrics");
+        if (!foot) return;
+        if (m.is_error) {
+          foot.className = "metrics err";
+          foot.textContent = "failed";
+          return;
+        }
+        foot.className = "metrics";
+        foot.innerHTML =
+          "<b>" +
+          fmt(m.num_turns) +
+          "</b> turns · <b>" +
+          fmt(tokTotal(m)) +
+          "</b> tok · <b>" +
+          m.wall_s +
+          "s</b>" +
+          (typeof m.cost_usd === "number"
+            ? " · <b>$" + m.cost_usd.toFixed(3) + "</b>"
+            : "");
       }
 
       function gate() {
@@ -566,10 +757,52 @@
             o.textContent = p.name + " — " + p.host.replace(/^https:\/\//, "");
             $("#profile").appendChild(o);
           }
+          // A named profile pins one workspace; the bare "default" entry can be
+          // an expired/ambiguous config, so prefer a real profile when present.
+          if (profiles.length) {
+            $("#profile").querySelector('option[value=""]').remove();
+            $("#profile").value = profiles[0].name;
+          }
         } catch {
           /* no profiles: default option stands */
         }
       }
+
+      const dlg = $("#dlg");
+      function syncDialog(pane) {
+        const body = $("#dlg-body");
+        body.innerHTML = lane(pane).querySelector(".transcript").innerHTML;
+        body.scrollTop = body.scrollHeight;
+      }
+      function openTranscript(pane) {
+        openPane = pane;
+        $("#dlg-title").textContent = NAMES[pane] + " transcript";
+        $("#dlg-swatch").style.background = COLORS[pane];
+        syncDialog(pane);
+        if (!dlg.open) dlg.showModal();
+      }
+      // The whole lane is a click target; the explicit expand button is the
+      // accessible control and keyboard path.
+      for (const el of document.querySelectorAll(".lane")) {
+        el.addEventListener("click", (e) => {
+          if (e.target.closest("button, a")) return;
+          if (window.getSelection && String(window.getSelection())) return;
+          openTranscript(el.id.replace("lane-", ""));
+        });
+      }
+      for (const btn of document.querySelectorAll(".expand[data-pane]")) {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openTranscript(btn.dataset.pane);
+        });
+      }
+      $("#dlg-close").addEventListener("click", () => dlg.close());
+      dlg.addEventListener("click", (e) => {
+        if (e.target === dlg) dlg.close();
+      });
+      dlg.addEventListener("close", () => {
+        openPane = null;
+      });
 
       function fmt(n) {
         return typeof n === "number" ? n.toLocaleString("en-US") : "—";
@@ -592,12 +825,20 @@
           const m = data.conditions[c];
           const tr = document.createElement("tr");
           const name = document.createElement("td");
+          const badges =
+            (data.lowest_tokens === c
+              ? '<span class="low">fewest tokens</span>'
+              : "") +
+            (data.lowest_turns === c
+              ? '<span class="low">fewest turns</span>'
+              : "");
           name.innerHTML =
             '<span class="cond"><span class="swatch" style="background:' +
             COLORS[c] +
             '"></span>' +
             NAMES[c] +
-            "</span>";
+            "</span>" +
+            badges;
           tr.appendChild(name);
           if (!m || m.is_error) {
             const td = document.createElement("td");
@@ -612,8 +853,6 @@
           const tokTd = document.createElement("td");
           tokTd.className = "num";
           tokTd.textContent = fmt(t);
-          if (data.lowest_tokens === c)
-            tokTd.innerHTML += '<span class="low">lowest</span>';
           tr.appendChild(tokTd);
           const meterTd = document.createElement("td");
           meterTd.innerHTML =
@@ -626,8 +865,6 @@
           const turns = document.createElement("td");
           turns.className = "num";
           turns.textContent = fmt(m.num_turns);
-          if (data.lowest_turns === c)
-            turns.innerHTML += '<span class="low">lowest</span>';
           tr.appendChild(turns);
           const wall = document.createElement("td");
           wall.className = "num";
@@ -650,10 +887,12 @@
         for (const c of CONDS) {
           if (disabled.has(c)) continue;
           lane(c).querySelector(".transcript").textContent = "";
+          lane(c).querySelector(".lane-foot .metrics").textContent = "";
           setState(c, "", "queued");
         }
         const body = { task: $("#task").value.trim() };
         if ($("#profile").value) body.profile = $("#profile").value;
+        if ($("#model").value) body.model = $("#model").value;
         let runId;
         try {
           const res = await fetch("/run", {
@@ -677,9 +916,13 @@
           const e = JSON.parse(ev.data);
           if (e.kind === "started") {
             const meta = $("#runmeta");
-            meta.textContent = e.profile
-              ? "Running against profile " + e.profile + " — "
-              : "Running — ";
+            const order = Array.isArray(e.order)
+              ? " · order: " + e.order.map((c) => NAMES[c]).join(" → ")
+              : "";
+            meta.textContent =
+              (e.profile ? "Running against profile " + e.profile : "Running") +
+              order +
+              " — ";
             if (typeof e.host === "string" && e.host.startsWith("https://")) {
               const link = document.createElement("a");
               link.href = e.host;
@@ -700,6 +943,7 @@
                 ? "failed"
                 : m.wall_s + "s · " + m.num_turns + " turns",
             );
+            setFoot(e.pane, m);
             if (m.is_error && m.error_line)
               addLine(e.pane, m.error_line, "t-error");
           } else if (e.kind === "comparison") {
@@ -735,6 +979,148 @@
       });
       preflight();
       profiles();
+
+      // ---- Demo mode -------------------------------------------------------
+      // Stubs /preflight, /profiles, /run and the SSE stream with a scripted
+      // sample run, so the populated state is viewable without the server.
+      // Never runs in production (see DEMO guard above).
+      function installDemo() {
+        const jsonRes = (obj) =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(obj),
+          });
+        const realFetch = window.fetch.bind(window);
+        window.fetch = (url, opts) => {
+          if (url === "/preflight")
+            return jsonRes({
+              databricks: { ok: true },
+              claude: { ok: true, version: "2.1.207" },
+              axi: { ok: true, mode: "path" },
+              mcp: { ok: true, name: "databricks", mode: "inherit" },
+            });
+          if (url === "/profiles")
+            return jsonRes({
+              profiles: [
+                { name: "FREE", host: "https://demo.cloud.databricks.com" },
+              ],
+            });
+          if (url === "/run") return jsonRes({ runId: "demo" });
+          return realFetch(url, opts);
+        };
+
+        const order = ["mcp", "raw-cli", "databricks-axi"];
+        const scripts = {
+          mcp: [
+            "ASSISTANT: I'll use the Databricks MCP tools to list warehouses.",
+            "TOOL mcp__databricks__list_warehouses: {}",
+            "RESULT: 3 warehouses returned (1.2 KB JSON schema-wrapped)",
+            "ASSISTANT: warehouse-a RUNNING · warehouse-b STOPPED · warehouse-c RUNNING",
+          ],
+          "raw-cli": [
+            "ASSISTANT: I'll shell out to the databricks CLI and parse the JSON.",
+            "TOOL Bash: databricks warehouses list -o json",
+            'RESULT: [ {"id":"a","name":"warehouse-a","state":"RUNNING", ...}, ... ]  (4.1 KB)',
+            "ASSISTANT: Now filtering down to name + state.",
+            "TOOL Bash: databricks warehouses list -o json | jq -r '.[]|\"\\(.name) \\(.state)\"'",
+            "RESULT: warehouse-a RUNNING / warehouse-b STOPPED / warehouse-c RUNNING",
+          ],
+          "databricks-axi": [
+            "ASSISTANT: Listing warehouses.",
+            "TOOL Bash: databricks-axi warehouses list",
+            "RESULT: TOON — 3 rows (name,state): warehouse-a,RUNNING · warehouse-b,STOPPED · warehouse-c,RUNNING",
+            "ASSISTANT: Done — 3 warehouses, 2 running.",
+          ],
+        };
+        const metrics = {
+          "raw-cli": {
+            exit: 0,
+            wall_s: 14,
+            num_turns: 6,
+            tokens_in: 5200,
+            tokens_cache_create: 800,
+            tokens_cache_read: 2400,
+            tokens_out: 640,
+            cost_usd: 0.021,
+            is_error: false,
+          },
+          mcp: {
+            exit: 0,
+            wall_s: 11,
+            num_turns: 4,
+            tokens_in: 8600,
+            tokens_cache_create: 1500,
+            tokens_cache_read: 3000,
+            tokens_out: 520,
+            cost_usd: 0.03,
+            is_error: false,
+          },
+          "databricks-axi": {
+            exit: 0,
+            wall_s: 8,
+            num_turns: 3,
+            tokens_in: 3100,
+            tokens_cache_create: 600,
+            tokens_cache_read: 1500,
+            tokens_out: 410,
+            cost_usd: 0.012,
+            is_error: false,
+          },
+        };
+
+        window.EventSource = class {
+          constructor() {
+            this.onmessage = null;
+            this.onerror = null;
+            this._timers = [];
+            const seq = [];
+            let t = 200;
+            const at = (gap, ev) => {
+              seq.push([t, ev]);
+              t += gap;
+            };
+            at(400, {
+              kind: "started",
+              pane: null,
+              profile: "FREE",
+              host: "https://demo.cloud.databricks.com",
+              order,
+            });
+            for (const c of order) {
+              for (const line of scripts[c])
+                at(430, { kind: "line", pane: c, text: line });
+              at(350, { kind: "done", pane: c, metrics: metrics[c] });
+            }
+            at(0, {
+              kind: "comparison",
+              pane: null,
+              conditions: metrics,
+              lowest_tokens: "databricks-axi",
+              lowest_turns: "databricks-axi",
+            });
+            for (const [ms, ev] of seq)
+              this._timers.push(
+                setTimeout(() => {
+                  if (this.onmessage)
+                    this.onmessage({ data: JSON.stringify(ev) });
+                }, ms),
+              );
+          }
+          close() {
+            this._timers.forEach(clearTimeout);
+          }
+        };
+
+        // Prefill a task and auto-run so the populated state is visible.
+        addEventListener("DOMContentLoaded", () => {
+          $("#task").value = "list the SQL warehouses and their states";
+          gate();
+          setTimeout(() => {
+            if (!running) run();
+          }, 700);
+        });
+      }
     </script>
   </body>
 </html>

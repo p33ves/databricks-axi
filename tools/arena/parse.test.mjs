@@ -84,6 +84,30 @@ describe("condense", () => {
     expect(result.endsWith("[...truncated]")).toBe(true);
   });
 
+  it("renders a ToolSearch tool_reference result as tool names, not blank", () => {
+    const line = JSON.stringify({
+      type: "user",
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            content: [
+              {
+                type: "tool_reference",
+                tool_name: "mcp__databricks__list_jobs",
+              },
+              { type: "tool_reference", tool_name: "mcp__databricks__get_job" },
+            ],
+          },
+        ],
+      },
+    });
+    const [result] = condenseEvent(JSON.parse(line));
+    expect(result).toBe(
+      "RESULT: matched tools: mcp__databricks__list_jobs, mcp__databricks__get_job",
+    );
+  });
+
   it("ignores events with no message content array", () => {
     expect(condenseEvent({ type: "system" })).toEqual([]);
   });

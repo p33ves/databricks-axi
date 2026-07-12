@@ -59,9 +59,26 @@ export function condenseEvent(ev) {
       const input = item.input?.command ?? JSON.stringify(item.input);
       out.push(`TOOL ${item.name}: ${input}`);
     } else if (ev.type === "user" && item.type === "tool_result") {
-      let text = Array.isArray(item.content)
-        ? item.content.map((c) => c.text ?? "").join("\n")
-        : String(item.content ?? "");
+      let text;
+      if (Array.isArray(item.content)) {
+        // ToolSearch returns `tool_reference` items (no `.text`) — surfacing
+        // only `.text` left the first MCP result rendering blank. Fall back
+        // to the tool name so the reference list is visible.
+        const parts = item.content
+          .map((c) =>
+            typeof c.text === "string"
+              ? c.text
+              : c.type === "tool_reference"
+                ? c.tool_name
+                : "",
+          )
+          .filter(Boolean);
+        text = item.content.every((c) => c.type === "tool_reference")
+          ? `matched tools: ${parts.join(", ")}`
+          : parts.join("\n");
+      } else {
+        text = String(item.content ?? "");
+      }
       if (text.length > 1500) text = text.slice(0, 1500) + "\n[...truncated]";
       out.push(`RESULT: ${text}`);
     }
@@ -370,7 +387,7 @@ function axiPathPrefix(axiStatus) {
   return dir;
 }
 
-function conditionArgv(id, task, mcpName) {
+function conditionArgv(id, task, mcpName, model) {
   const argv = [
     "-p",
     task,
@@ -384,7 +401,10 @@ function conditionArgv(id, task, mcpName) {
     "--max-turns",
     String(ARENA_MAX_TURNS),
   ];
-  if (ARENA_MODEL) argv.push("--model", ARENA_MODEL);
+  // Per-run model (from the page dropdown) wins over the ARENA_MODEL env
+  // default; both panes share whichever is chosen so the comparison is fair.
+  const chosen = model || ARENA_MODEL;
+  if (chosen) argv.push("--model", chosen);
   if (id === "mcp" && ARENA_MCP_CONFIG) {
     argv.push("--strict-mcp-config", "--mcp-config", ARENA_MCP_CONFIG);
   }
@@ -394,7 +414,12 @@ function conditionArgv(id, task, mcpName) {
 // Runs one condition's `claude -p` child, forwarding condensed transcript
 // lines to onLine as they arrive. Resolves with the metrics for the
 // comparison row/results JSONL.
-async function runCondition(id, task, { mcpName, axiStatus, profile }, onLine) {
+async function runCondition(
+  id,
+  task,
+  { mcpName, axiStatus, profile, model },
+  onLine,
+) {
   const cwd = mkdtempSync(join(tmpdir(), `arena-${id}-`));
   let pathPrefix = null;
   try {
@@ -412,7 +437,7 @@ async function runCondition(id, task, { mcpName, axiStatus, profile }, onLine) {
     // configured independently of any CLI profile.
     if (profile) env.DATABRICKS_CONFIG_PROFILE = profile;
 
-    const argv = conditionArgv(id, task, mcpName);
+    const argv = conditionArgv(id, task, mcpName, model);
     const rawLines = [];
     const started = Date.now();
     const result = await new Promise((resolve) => {
@@ -517,10 +542,14 @@ function readBody(req) {
   });
 }
 
-async function startRun(task, profile) {
+async function startRun(task, profile, model) {
   const runId = randomUUID();
   const run = { subscribers: new Set(), buffer: [], task };
   runs.set(runId, run);
+
+  // Per-run random order: a fixed order would let the last condition ride
+  // any cross-session warmup or cache advantage on every single run.
+  const order = [...CONDITION_ORDER].sort(() => Math.random() - 0.5);
 
   (async () => {
     const host = await resolveHost(profile);
@@ -529,11 +558,12 @@ async function startRun(task, profile) {
       kind: "started",
       profile: profile ?? "default",
       host, // a URL, not a secret — surfaced so the UI can link "open workspace"
+      order,
     });
     const preflight = await runPreflight();
     const mcpName = preflight.mcp.name ?? "databricks";
     const metrics = {};
-    for (const id of CONDITION_ORDER) {
+    for (const id of order) {
       const status = {
         "raw-cli": preflight.databricks,
         mcp: preflight.mcp,
@@ -548,7 +578,7 @@ async function startRun(task, profile) {
         const m = await runCondition(
           id,
           task,
-          { mcpName, axiStatus: preflight.axi, profile },
+          { mcpName, axiStatus: preflight.axi, profile, model },
           (text) => broadcast(run, { pane: id, kind: "line", text }),
         );
         metrics[id] = m;
@@ -684,7 +714,13 @@ export function createArenaServer() {
         typeof body.profile === "string" && body.profile.trim()
           ? body.profile.trim()
           : null;
-      const runId = await startRun(task, profile);
+      // Model id is agent-facing config, not a shell/path value, but keep it
+      // to a conservative charset so nothing odd reaches the child argv.
+      const model =
+        typeof body.model === "string" && /^[\w.:-]{1,64}$/.test(body.model)
+          ? body.model
+          : null;
+      const runId = await startRun(task, profile, model);
       jsonResponse(res, 200, { runId });
       return;
     }
