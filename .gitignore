@@ -3,6 +3,7 @@ dist/
 docs/superpowers/
 .superpowers/
 .claude/
+.claude.json*
 .cache/
 .databricks*
 .npm/
