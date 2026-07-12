@@ -46,6 +46,55 @@ live behind the same CLI, triaging a failed run stays a jobs-API call, no
 `system`-table workaround needed. See Benchmarks below for how that plays
 out in tokens, cost, and turns.
 
+## What the agent sees
+
+Same workspace, same question, both CLIs. The raw CLI:
+
+```console
+$ databricks jobs list -o json
+[
+  {
+    "created_time": 1783396339626,
+    "creator_user_name": "you@example.com",
+    "job_id": 517790498477266,
+    "settings": {
+      "email_notifications": {},
+      "format": "MULTI_TASK",
+      "max_concurrent_runs": 1,
+      "name": "axi-bench-etl",
+      "queue": {
+        "enabled": true
+      },
+      "timeout_seconds": 0
+    }
+  }
+]
+```
+
+databricks-axi:
+
+```console
+$ databricks-axi jobs list
+jobs[1]{job_id,name,creator_user_name}:
+  517790498477266,axi-bench-etl,you@example.com
+count: 1
+help[2]: databricks-axi jobs view <job_id>,databricks-axi jobs runs <job_id>
+```
+
+TOON rows instead of nested JSON, a minimal default schema (`--fields`
+expands it), and the next two commands an agent would reach for. Errors
+follow the same contract:
+
+```console
+$ databricks-axi catalog table view workspace.default.does_not_exist
+error: "Error: Table 'workspace.default.does_not_exist' does not exist."
+code: NOT_FOUND
+help[1]: databricks-axi catalog tables workspace.default
+```
+
+Exit code 1, a stable `code` field, and the recovery command. Nothing to
+parse out of prose, nothing to guess.
+
 ## Benchmarks
 
 Agent ergonomics is measurable. The benchmark follows the
