@@ -2,41 +2,734 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>databricks-axi Demo Arena</title>
+    <title>databricks-axi arena</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      /* Tokens. Condition hues are the data encoding (validated: dataviz
+         six-checks, dark surface #10151d — CVD ΔE 38+, contrast ≥3:1). */
+      :root {
+        --surface: #10151d;
+        --panel: #161d28;
+        --panel-2: #1b2432;
+        --line: #232c3a;
+        --ink: #e8e4da;
+        --muted: #8b94a3;
+        --faint: #5c6573;
+        --c-raw: #4a90dd;
+        --c-mcp: #b8801f;
+        --c-axi: #1fa878;
+        --bad: #d06565;
+        --ui: system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        --mono:
+          ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--surface);
+        color: var(--ink);
+        font-family: var(--ui);
+        font-size: 15px;
+        line-height: 1.45;
+      }
+      a {
+        color: var(--c-raw);
+      }
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 28px 20px 48px;
+      }
+
+      /* Header */
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 22px;
+      }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 2px;
+      }
+      h1 {
+        font-size: 42px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+        margin: 0;
+        line-height: 1;
+      }
+      h1 .ticks {
+        letter-spacing: 0;
+        font-weight: 400;
+      }
+      h1 .ticks b:nth-child(1) {
+        color: var(--c-raw);
+      }
+      h1 .ticks b:nth-child(2) {
+        color: var(--c-mcp);
+      }
+      h1 .ticks b:nth-child(3) {
+        color: var(--c-axi);
+      }
+      .subline {
+        color: var(--muted);
+        margin: 6px 0 0;
+      }
+      .preflight {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        font-size: 12px;
+        font-family: var(--mono);
+        padding: 4px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        background: var(--panel);
+      }
+      .chip.ok {
+        color: var(--ink);
+      }
+      .chip.ok::before {
+        content: "● ";
+        color: var(--c-axi);
+      }
+      .chip.bad::before {
+        content: "● ";
+        color: var(--bad);
+      }
+
+      /* Controls */
+      .controls {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 10px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      input[type="text"],
+      select {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--ink);
+        font: 14px var(--mono);
+        padding: 10px 12px;
+      }
+      input[type="text"] {
+        flex: 1;
+        min-width: 260px;
+      }
+      button {
+        background: var(--c-axi);
+        border: none;
+        border-radius: 6px;
+        color: #06231a;
+        font: 600 14px var(--ui);
+        padding: 10px 18px;
+        cursor: pointer;
+      }
+      button:disabled {
+        background: var(--panel-2);
+        color: var(--faint);
+        cursor: not-allowed;
+      }
+      :is(a, button, input, select):focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 2px;
+      }
+      .cost {
+        margin: 12px 0 0;
+        font-size: 13px;
+        color: var(--muted);
+        border-left: 3px solid var(--c-mcp);
+        padding-left: 10px;
+      }
+      .cost strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .runmeta {
+        min-height: 22px;
+        margin: 10px 2px 16px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      /* Lanes — the signature: three heats sharing one start light */
+      .lanes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 22px;
+      }
+      @media (max-width: 900px) {
+        .lanes {
+          grid-template-columns: 1fr;
+        }
+      }
+      .lane {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .lane > .rail {
+        height: 3px;
+      }
+      .lane.raw-cli > .rail {
+        background: var(--c-raw);
+      }
+      .lane.mcp > .rail {
+        background: var(--c-mcp);
+      }
+      .lane.databricks-axi > .rail {
+        background: var(--c-axi);
+      }
+      .lane h2 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 600 14px var(--ui);
+        margin: 0;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--faint);
+        flex: none;
+      }
+      .lane.running .dot {
+        background: var(--ink);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .lane.done .dot {
+        background: var(--c-axi);
+      }
+      .lane.error .dot {
+        background: var(--bad);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .lane.running .dot {
+          animation: none;
+        }
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.3;
+        }
+      }
+      .lane .state {
+        margin-left: auto;
+        font: 12px var(--mono);
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .transcript {
+        font: 12.5px/1.5 var(--mono);
+        padding: 10px 12px;
+        height: 340px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        flex: 1;
+      }
+      .transcript .t-tool {
+        color: var(--muted);
+      }
+      .transcript .t-result {
+        color: var(--faint);
+      }
+      .transcript .t-error {
+        color: var(--bad);
+      }
+      .transcript .idle {
+        color: var(--faint);
+      }
+      .transcript div {
+        margin-bottom: 6px;
+      }
+
+      /* Comparison — one finish table, bars inside semantic cells */
+      .compare {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px;
+      }
+      .compare h2 {
+        font: 600 16px var(--ui);
+        margin: 0 0 12px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      caption {
+        text-align: left;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      th,
+      td {
+        text-align: left;
+        font-size: 13px;
+        padding: 8px 10px;
+        border-top: 1px solid var(--line);
+        vertical-align: middle;
+      }
+      thead th {
+        border-top: none;
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 12px;
+      }
+      td.num,
+      th.num {
+        text-align: right;
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .cond {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+      .swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .meter {
+        background: var(--surface);
+        border-radius: 4px;
+        height: 10px;
+        min-width: 120px;
+      }
+      .meter > i {
+        display: block;
+        height: 100%;
+        border-radius: 4px;
+        border-right: 2px solid var(--panel);
+      }
+      .low {
+        display: inline-block;
+        font: 600 11px var(--ui);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 1px 8px;
+        margin-left: 8px;
+      }
+      .low::before {
+        content: "✓ ";
+        color: var(--c-axi);
+      }
+      footer {
+        margin-top: 20px;
+        font-size: 12px;
+        color: var(--faint);
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
   </head>
   <body>
-    <!--
-      Placeholder page. The real 3-pane arena UI (task input, transcript
-      panes, safety notice, tokens/turns/duration comparison charts) is
-      built separately with the frontend-design and dataviz skills
-      (spec §4.1) — this file only names the contract it must consume.
-      Full contract detail: tools/arena/README.md.
-    -->
-    <h1>databricks-axi Demo Arena</h1>
-    <p>UI not yet built. This server serves the following contract:</p>
-    <ul>
-      <li><code>GET /</code> — this page (embeds the CSRF nonce below)</li>
-      <li>
-        <code>GET /preflight</code> —
-        <code>{ databricks, claude, axi, mcp }</code> status
-      </li>
-      <li>
-        <code>GET /profiles</code> — <code>{ profiles: [{ name, host }] }</code>
-      </li>
-      <li>
-        <code>POST /run</code> — body <code>{ task, profile? }</code>, header
-        <code>x-arena-nonce</code>; returns <code>{ runId }</code>
-      </li>
-      <li>
-        <code>GET /events/:runId</code> — <code>text/event-stream</code>,
-        <code>{ pane, kind, ... }</code> per <code>data:</code> line, kinds
-        <code>started | line | done | comparison | error</code>
-      </li>
-    </ul>
+    <div class="wrap">
+      <header>
+        <div>
+          <p class="eyebrow">databricks-axi · demo</p>
+          <h1>
+            arena <span class="ticks"><b>/</b><b>/</b><b>/</b></span>
+          </h1>
+          <p class="subline">
+            One task, three agents, your workspace: raw CLI, MCP, and
+            databricks-axi, side by side.
+          </p>
+        </div>
+        <div class="preflight" id="preflight" aria-label="setup checks"></div>
+      </header>
+
+      <section class="controls" aria-label="run a task">
+        <div class="row">
+          <div style="flex: 1; min-width: 260px">
+            <label for="task">Task, in your own words</label>
+            <input
+              id="task"
+              type="text"
+              style="width: 100%"
+              placeholder="e.g. list the SQL warehouses and their states"
+            />
+          </div>
+          <div>
+            <label for="profile">Databricks profile</label>
+            <select id="profile">
+              <option value="">Default profile</option>
+            </select>
+          </div>
+          <div style="align-self: flex-end">
+            <button id="run" disabled>Run task 3 ways</button>
+          </div>
+        </div>
+        <p class="cost">
+          A run is <strong>three real claude agent sessions</strong> spending
+          your tokens, and it
+          <strong>executes this task against your workspace</strong>. Prefer
+          read-only tasks.
+        </p>
+      </section>
+
+      <p class="runmeta" id="runmeta" aria-live="polite"></p>
+
+      <div class="lanes">
+        <section class="lane raw-cli" id="lane-raw-cli">
+          <div class="rail"></div>
+          <h2>
+            <span class="dot"></span> raw CLI
+            <span class="state">idle</span>
+          </h2>
+          <div class="transcript" role="log" aria-live="polite">
+            <div class="idle">
+              The official databricks CLI over bash. No reshaping.
+            </div>
+          </div>
+        </section>
+        <section class="lane mcp" id="lane-mcp">
+          <div class="rail"></div>
+          <h2>
+            <span class="dot"></span> MCP server
+            <span class="state">idle</span>
+          </h2>
+          <div class="transcript" role="log" aria-live="polite">
+            <div class="idle">
+              Your configured Databricks MCP server, tool schemas loaded into
+              context.
+            </div>
+          </div>
+        </section>
+        <section class="lane databricks-axi" id="lane-databricks-axi">
+          <div class="rail"></div>
+          <h2>
+            <span class="dot"></span> databricks-axi
+            <span class="state">idle</span>
+          </h2>
+          <div class="transcript" role="log" aria-live="polite">
+            <div class="idle">
+              The same CLI, reshaped for agents: TOON output, structured errors,
+              next steps.
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="compare" id="compare" hidden aria-label="comparison">
+        <h2>The finish table</h2>
+        <table id="ctable">
+          <caption>
+            One run each, same task, same workspace. Lower is better on every
+            column.
+          </caption>
+          <thead>
+            <tr>
+              <th>Condition</th>
+              <th class="num">Input tokens</th>
+              <th aria-hidden="true"></th>
+              <th class="num">Turns</th>
+              <th class="num">Wall</th>
+              <th class="num">Cost</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <footer>
+        A demo, not a benchmark: one run, no repeats, no grading. Metrics per
+        run are appended to tools/arena/results/runs.jsonl (local, gitignored);
+        transcripts are never persisted.
+      </footer>
+    </div>
+
     <script>
-      window.__ARENA_NONCE__ = "%%ARENA_NONCE%%";
-      window.__ARENA_PORT__ = "%%ARENA_PORT%%";
+      "use strict";
+      const NONCE = "%%ARENA_NONCE%%";
+      const CONDS = ["raw-cli", "mcp", "databricks-axi"];
+      const NAMES = {
+        "raw-cli": "raw CLI",
+        mcp: "MCP server",
+        "databricks-axi": "databricks-axi",
+      };
+      const COLORS = {
+        "raw-cli": "var(--c-raw)",
+        mcp: "var(--c-mcp)",
+        "databricks-axi": "var(--c-axi)",
+      };
+      const $ = (s) => document.querySelector(s);
+      const lane = (id) => document.getElementById("lane-" + id);
+      let ready = false;
+      let running = false;
+      const disabled = new Set();
+
+      function setState(id, cls, text) {
+        const el = lane(id);
+        el.classList.remove("running", "done", "error");
+        if (cls) el.classList.add(cls);
+        el.querySelector(".state").textContent = text;
+      }
+
+      function addLine(id, text, cls) {
+        const t = lane(id).querySelector(".transcript");
+        const idle = t.querySelector(".idle");
+        if (idle) idle.remove();
+        const d = document.createElement("div");
+        if (cls) d.className = cls;
+        else if (text.startsWith("TOOL ")) d.className = "t-tool";
+        else if (text.startsWith("RESULT")) d.className = "t-result";
+        d.textContent = text;
+        t.appendChild(d);
+        t.scrollTop = t.scrollHeight;
+      }
+
+      function gate() {
+        $("#run").disabled =
+          !ready || running || $("#task").value.trim() === "";
+      }
+
+      async function preflight() {
+        const box = $("#preflight");
+        try {
+          const pf = await (await fetch("/preflight")).json();
+          box.textContent = "";
+          for (const [key, st] of Object.entries(pf)) {
+            const c = document.createElement("span");
+            c.className = "chip " + (st.ok ? "ok" : "bad");
+            c.textContent = key;
+            if (!st.ok) c.title = st.reason || "unavailable";
+            box.appendChild(c);
+            if (!st.ok && (key === "axi" || key === "mcp")) {
+              const id = key === "axi" ? "databricks-axi" : "mcp";
+              disabled.add(id);
+              setState(id, "error", "disabled");
+              addLine(id, st.reason || "unavailable", "t-error");
+            }
+          }
+          ready = pf.databricks?.ok && pf.claude?.ok;
+          if (!ready)
+            $("#runmeta").textContent =
+              "Fix the failing checks above to enable runs (hover a red chip for the fix).";
+        } catch {
+          $("#runmeta").textContent = "Preflight failed: is the server up?";
+        }
+        gate();
+      }
+
+      async function profiles() {
+        try {
+          const { profiles } = await (await fetch("/profiles")).json();
+          for (const p of profiles) {
+            const o = document.createElement("option");
+            o.value = p.name;
+            o.textContent = p.name + " — " + p.host.replace(/^https:\/\//, "");
+            $("#profile").appendChild(o);
+          }
+        } catch {
+          /* no profiles: default option stands */
+        }
+      }
+
+      function fmt(n) {
+        return typeof n === "number" ? n.toLocaleString("en-US") : "—";
+      }
+
+      function comparison(data) {
+        const rows = $("#ctable tbody");
+        rows.textContent = "";
+        const tok = (m) =>
+          (m.tokens_in || 0) +
+          (m.tokens_cache_create || 0) +
+          (m.tokens_cache_read || 0);
+        const max = Math.max(
+          1,
+          ...CONDS.map((c) =>
+            data.conditions[c] ? tok(data.conditions[c]) : 0,
+          ),
+        );
+        for (const c of CONDS) {
+          const m = data.conditions[c];
+          const tr = document.createElement("tr");
+          const name = document.createElement("td");
+          name.innerHTML =
+            '<span class="cond"><span class="swatch" style="background:' +
+            COLORS[c] +
+            '"></span>' +
+            NAMES[c] +
+            "</span>";
+          tr.appendChild(name);
+          if (!m || m.is_error) {
+            const td = document.createElement("td");
+            td.colSpan = 5;
+            td.className = "t-error";
+            td.textContent = (m && m.error_line) || "did not finish";
+            tr.appendChild(td);
+            rows.appendChild(tr);
+            continue;
+          }
+          const t = tok(m);
+          const tokTd = document.createElement("td");
+          tokTd.className = "num";
+          tokTd.textContent = fmt(t);
+          if (data.lowest_tokens === c)
+            tokTd.innerHTML += '<span class="low">lowest</span>';
+          tr.appendChild(tokTd);
+          const meterTd = document.createElement("td");
+          meterTd.innerHTML =
+            '<div class="meter"><i style="width:' +
+            Math.max(3, Math.round((t / max) * 100)) +
+            "%;background:" +
+            COLORS[c] +
+            '"></i></div>';
+          tr.appendChild(meterTd);
+          const turns = document.createElement("td");
+          turns.className = "num";
+          turns.textContent = fmt(m.num_turns);
+          if (data.lowest_turns === c)
+            turns.innerHTML += '<span class="low">lowest</span>';
+          tr.appendChild(turns);
+          const wall = document.createElement("td");
+          wall.className = "num";
+          wall.textContent = m.wall_s + "s";
+          tr.appendChild(wall);
+          const cost = document.createElement("td");
+          cost.className = "num";
+          cost.textContent =
+            typeof m.cost_usd === "number" ? "$" + m.cost_usd.toFixed(3) : "—";
+          tr.appendChild(cost);
+          rows.appendChild(tr);
+        }
+        $("#compare").hidden = false;
+      }
+
+      async function run() {
+        running = true;
+        gate();
+        $("#compare").hidden = true;
+        for (const c of CONDS) {
+          if (disabled.has(c)) continue;
+          lane(c).querySelector(".transcript").textContent = "";
+          setState(c, "", "queued");
+        }
+        const body = { task: $("#task").value.trim() };
+        if ($("#profile").value) body.profile = $("#profile").value;
+        let runId;
+        try {
+          const res = await fetch("/run", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-arena-nonce": NONCE,
+            },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error("run rejected: " + res.status);
+          runId = (await res.json()).runId;
+        } catch (e) {
+          $("#runmeta").textContent = String(e.message || e);
+          running = false;
+          gate();
+          return;
+        }
+        const es = new EventSource("/events/" + runId);
+        es.onmessage = (ev) => {
+          const e = JSON.parse(ev.data);
+          if (e.kind === "started") {
+            const link = document.createElement("a");
+            link.href = e.host;
+            link.target = "_blank";
+            link.rel = "noopener";
+            link.textContent = "open workspace ↗";
+            const meta = $("#runmeta");
+            meta.textContent = e.profile
+              ? "Running against profile " + e.profile + " — "
+              : "Running — ";
+            meta.appendChild(link);
+          } else if (e.kind === "line") {
+            setState(e.pane, "running", "running");
+            addLine(e.pane, e.text);
+          } else if (e.kind === "done") {
+            const m = e.metrics;
+            setState(
+              e.pane,
+              m.is_error ? "error" : "done",
+              m.is_error
+                ? "failed"
+                : m.wall_s + "s · " + m.num_turns + " turns",
+            );
+            if (m.is_error && m.error_line)
+              addLine(e.pane, m.error_line, "t-error");
+          } else if (e.kind === "comparison") {
+            comparison(e);
+            es.close();
+            running = false;
+            gate();
+          } else if (e.kind === "error") {
+            if (e.pane) {
+              setState(e.pane, "error", "disabled");
+              addLine(e.pane, e.reason, "t-error");
+            } else {
+              $("#runmeta").textContent = "Run failed: " + e.reason;
+              es.close();
+              running = false;
+              gate();
+            }
+          }
+        };
+        es.onerror = () => {
+          if (!running) return;
+          $("#runmeta").textContent = "Event stream dropped; check the server.";
+          es.close();
+          running = false;
+          gate();
+        };
+      }
+
+      $("#run").addEventListener("click", run);
+      $("#task").addEventListener("input", gate);
+      $("#task").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !$("#run").disabled) run();
+      });
+      preflight();
+      profiles();
     </script>
   </body>
 </html>
