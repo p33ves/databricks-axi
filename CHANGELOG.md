@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/p33ves/databricks-axi/compare/v0.9.0...v0.9.1) (2026-07-12)
+
+
+### Bug Fixes
+
+* **commands:** report reached state for clusters and sql warehouses start/stop --wait ([#38](https://github.com/p33ves/databricks-axi/issues/38)) ([7217d6c](https://github.com/p33ves/databricks-axi/commit/7217d6c6517257a5eb1984c9244347f492f0692f))
+
 ## [0.9.0](https://github.com/p33ves/databricks-axi/compare/v0.8.1...v0.9.0) (2026-07-11)
 
 
