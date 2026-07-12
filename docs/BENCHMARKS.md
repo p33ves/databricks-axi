@@ -211,5 +211,3 @@ doesn't cover: `setup hooks`, `sql exec` plus `sql statement view`,
 classic-cluster cycle on `AWS2`: `clusters start --wait` through to
 `RUNNING`, then `clusters stop --wait` back to `TERMINATED`. All 9 checks
 passed.
-
-</content>
