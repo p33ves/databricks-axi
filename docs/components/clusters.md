@@ -43,10 +43,16 @@ one being smuggled onto argv as a flag), not a strict id pattern.
   bounds, else the raw `num_workers`), `autotermination_minutes`,
   `creator_user_name`, and a `help` suggestion (`stop` if `RUNNING`, else
   `start`).
-- `start`/`stop`: with `--no-wait` upstream returns empty stdout
-  (`runDatabricks` yields `null`); the code calls `runClusters` and
+- `start`/`stop`: with `--no-wait` (the default) upstream returns empty
+  stdout (`runDatabricks` yields `null`); the code calls `runClusters` and
   discards the result rather than `assertObject`-ing it, and takes
-  `cluster_id` from the argv positional, never from a response.
+  `cluster_id` from the argv positional, never from a response. Status is
+  `"start requested"` / `"stop requested"`.
+- `start`/`stop` with `--wait`: upstream blocks and only exits 0 once the
+  cluster reaches the target state, so the reported status is the reached
+  state, not the request: `"started, cluster RUNNING"` /
+  `"stopped, cluster TERMINATED"` (live-verified 2026-07-12 on AWS2,
+  `--wait` blocked ~8 min to `RUNNING`).
 
 ## Errors
 

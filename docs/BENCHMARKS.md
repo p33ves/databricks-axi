@@ -9,15 +9,15 @@ Each task is a real Databricks operation (list jobs, triage a failed run,
 count rows, read a notebook, cycle a cluster, ...) run through up to four
 interface setups:
 
-- **databricks-axi** — this tool
-- **raw-cli** — the official `databricks` CLI, unmodified
-- **mcp-managed** — Databricks' workspace-managed SQL MCP server
+- **databricks-axi**: this tool
+- **raw-cli**: the official `databricks` CLI, unmodified
+- **mcp-managed**: Databricks' workspace-managed SQL MCP server
   (`/api/2.0/mcp/sql`), SQL-only
-- **mcp-aidevkit** — Databricks Field Engineering's
+- **mcp-aidevkit**: Databricks Field Engineering's
   [ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit), a
   ~40-tool stdio MCP server covering jobs/clusters/SQL/UC/pipelines/serving
 
-An agent (`claude-sonnet-5`) runs each task cold, 3 repeats per
+An agent (`claude-sonnet-5`) runs each task cold, 5 repeats per
 task/condition pair, against seeded fixtures. Success is graded
 deterministically where the answer is machine-checkable (row counts, IDs,
 statuses), by an LLM judge otherwise. Not every condition can run every
@@ -25,157 +25,191 @@ task: `mcp-managed` is SQL-only, so it's excluded from job/cluster-mutating
 tasks and every AWS-profile task; both MCP servers are excluded from
 `api-current-user-aws` and `notebook-discovery-aws` (no matching tool).
 
-## Latest run: CP2 (2026-07-10, v0.6.1)
+## Latest run: CP3 (2026-07-11, v0.9.0)
 
-**291/291 runs passed (100%)** across 32 tasks and three workspaces (a
-Databricks Free Edition workspace plus two paid trial workspaces used for
-cluster and extension-domain tasks).
+**564/565 runs passed (99.8%)** across 37 tasks and three workspaces: a
+Databricks Free Edition workspace (`FREE`) plus two paid trial workspaces
+(`AWS`, a serverless workspace; `AWS2`, a classic-cluster workspace used for
+cluster tasks). Every databricks-axi cell passed (185/185). The one failed
+cell across all conditions was `clusters-view-aws / mcp-aidevkit`, one of
+five repeats: the agent's final answer omitted the node type, DBR version,
+and max-worker count after a 15-turn tool-discovery loop, graded
+deterministically. Run to run variance in that condition, not a tool error.
 
-### The six comparable tasks (all four conditions)
+Tool versions: databricks-axi @ 96bde97 (v0.9.0), official `databricks` CLI
+v1.6.0, `ai-dev-kit` pinned at `a7e1d51`.
 
-Mean over 3 repeats:
+### The seven comparable tasks (all four conditions)
 
-| Task             | Condition          | Turns   | Wall (s) | Input tok  | Output tok | Cost   |
-| ---------------- | ------------------ | ------- | -------- | ---------- | ---------- | ------ |
-| home-orientation | raw-cli            | 5.7     | 18       | 171,131    | 960        | $0.196 |
-| home-orientation | **databricks-axi** | **2.0** | **11**   | **59,528** | 484        | $0.172 |
-| home-orientation | mcp-managed        | 3.3     | 19       | 113,871    | 1,295      | $0.291 |
-| home-orientation | mcp-aidevkit       | 4.3     | 21       | 190,362    | 1,048      | $0.398 |
-| find-failed-run  | raw-cli            | 6.7     | 33       | 199,269    | 2,009      | $0.222 |
-| find-failed-run  | databricks-axi     | 7.3     | 32       | 229,158    | 1,324      | $0.232 |
-| find-failed-run  | mcp-managed        | 10.0    | 64       | 580,550    | 2,176      | $0.573 |
-| find-failed-run  | mcp-aidevkit       | 9.3     | 38       | 599,101    | 1,643      | $0.697 |
-| sql-count        | raw-cli            | 4.3     | 20       | 129,408    | 916        | $0.181 |
-| sql-count        | **databricks-axi** | **2.0** | **13**   | **59,019** | 430        | $0.143 |
-| sql-count        | mcp-managed        | 3.0     | 12       | 91,233     | 461        | $0.198 |
-| sql-count        | mcp-aidevkit       | 4.0     | 19       | 148,576    | 574        | $0.294 |
-| table-schema     | raw-cli            | 2.0     | 9        | 58,981     | 331        | $0.149 |
-| table-schema     | databricks-axi     | 2.0     | 9        | 58,934     | 324        | $0.141 |
-| table-schema     | mcp-managed        | 3.0     | 11       | 88,303     | 430        | $0.189 |
-| table-schema     | mcp-aidevkit       | 3.7     | 22       | 123,433    | 596        | $0.283 |
-| error-recovery   | raw-cli            | 2.0     | 9        | 56,340     | 406        | $0.134 |
-| error-recovery   | databricks-axi     | 3.0     | 12       | 88,646     | 493        | $0.153 |
-| error-recovery   | mcp-managed        | 3.0     | 13       | 88,187     | 563        | $0.190 |
-| error-recovery   | mcp-aidevkit       | 4.0     | 20       | 138,241    | 583        | $0.320 |
-| table-list       | raw-cli            | 2.0     | 8        | 62,545     | 304        | $0.170 |
-| table-list       | databricks-axi     | 2.0     | 9        | 58,792     | 251        | $0.139 |
-| table-list       | mcp-managed        | 3.0     | 10       | 102,498    | 419        | $0.233 |
-| table-list       | mcp-aidevkit       | 6.0     | 30       | 259,670    | 859        | $0.364 |
+Mean over 5 repeats:
 
-`find-failed-run` is the one task where axi doesn't win outright: it needs
-several jobs-API calls (list runs → filter failed → view → read the error),
-so raw-cli's dense `-o json` output happens to answer more of that in fewer
-round trips. Both MCP servers still cost noticeably more on it (+191-201%
+| task             | condition      | pass | turns       | wall_s     | tok_in          | tok_out       | cost_usd |
+| ---------------- | -------------- | ---- | ----------- | ---------- | --------------- | ------------- | -------- |
+| home-orientation | raw-cli        | 5/5  | 5.2         | 16         | 135,463         | 846           | 0.162    |
+| home-orientation | databricks-axi | 5/5  | 2.2 (-58%)  | 9 (-45%)   | 60,684 (-55%)   | 449 (-47%)    | 0.089    |
+| home-orientation | mcp-managed    | 5/5  | 5.0 (-4%)   | 26 (+60%)  | 182,049 (+34%)  | 1,501 (+77%)  | 0.264    |
+| home-orientation | mcp-aidevkit   | 5/5  | 3.8 (-27%)  | 19 (+16%)  | 164,741 (+22%)  | 877 (+4%)     | 0.316    |
+| find-failed-run  | raw-cli        | 5/5  | 6.2         | 28         | 193,849         | 1,620         | 0.205    |
+| find-failed-run  | databricks-axi | 5/5  | 6.4 (+3%)   | 28 (+1%)   | 203,695 (+5%)   | 1,198 (-26%)  | 0.203    |
+| find-failed-run  | mcp-managed    | 5/5  | 10.8 (+74%) | 69 (+147%) | 600,135 (+210%) | 2,445 (+51%)  | 0.507    |
+| find-failed-run  | mcp-aidevkit   | 5/5  | 10.2 (+65%) | 40 (+45%)  | 659,709 (+240%) | 1,756 (+8%)   | 0.649    |
+| sql-count        | raw-cli        | 5/5  | 4.4         | 20         | 129,731         | 829           | 0.152    |
+| sql-count        | databricks-axi | 5/5  | 2.0 (-55%)  | 17 (-13%)  | 59,844 (-54%)   | 383 (-54%)    | 0.121    |
+| sql-count        | mcp-managed    | 5/5  | 3.0 (-32%)  | 10 (-47%)  | 90,851 (-30%)   | 420 (-49%)    | 0.139    |
+| sql-count        | mcp-aidevkit   | 5/5  | 4.8 (+9%)   | 21 (+8%)   | 172,779 (+33%)  | 691 (-17%)    | 0.248    |
+| table-schema     | raw-cli        | 5/5  | 2.0         | 9          | 58,987          | 388           | 0.126    |
+| table-schema     | databricks-axi | 5/5  | 2.0 (+0%)   | 7 (-21%)   | 59,751 (+1%)    | 306 (-21%)    | 0.119    |
+| table-schema     | mcp-managed    | 5/5  | 3.0 (+50%)  | 11 (+17%)  | 87,997 (+49%)   | 409 (+6%)     | 0.131    |
+| table-schema     | mcp-aidevkit   | 5/5  | 4.4 (+120%) | 26 (+179%) | 152,563 (+159%) | 688 (+78%)    | 0.216    |
+| error-recovery   | raw-cli        | 5/5  | 2.0         | 8          | 56,273          | 382           | 0.109    |
+| error-recovery   | databricks-axi | 5/5  | 3.0 (+50%)  | 13 (+59%)  | 89,881 (+60%)   | 502 (+31%)    | 0.132    |
+| error-recovery   | mcp-managed    | 5/5  | 3.0 (+50%)  | 11 (+29%)  | 87,835 (+56%)   | 472 (+23%)    | 0.131    |
+| error-recovery   | mcp-aidevkit   | 5/5  | 4.0 (+100%) | 22 (+168%) | 137,494 (+144%) | 576 (+51%)    | 0.209    |
+| table-list       | raw-cli        | 5/5  | 2.0         | 9          | 62,460          | 269           | 0.145    |
+| table-list       | databricks-axi | 5/5  | 2.0 (+0%)   | 10 (+4%)   | 59,691 (-4%)    | 309 (+15%)    | 0.119    |
+| table-list       | mcp-managed    | 5/5  | 3.0 (+50%)  | 10 (+4%)   | 103,336 (+65%)  | 401 (+49%)    | 0.179    |
+| table-list       | mcp-aidevkit   | 5/5  | 5.4 (+170%) | 29 (+215%) | 238,345 (+282%) | 853 (+217%)   | 0.314    |
+| catalog-browse   | raw-cli        | 5/5  | 3.0         | 12         | 90,980          | 418           | 0.141    |
+| catalog-browse   | databricks-axi | 5/5  | 3.0 (+0%)   | 12 (+0%)   | 66,100 (-27%)   | 402 (-4%)     | 0.124    |
+| catalog-browse   | mcp-managed    | 5/5  | 4.2 (+40%)  | 16 (+26%)  | 150,156 (+65%)  | 540 (+29%)    | 0.199    |
+| catalog-browse   | mcp-aidevkit   | 5/5  | 9.0 (+200%) | 38 (+206%) | 416,160 (+357%) | 1,228 (+194%) | 0.444    |
+
+`find-failed-run` is one task where axi doesn't win outright: it needs
+several jobs-API calls (list runs, filter failed, view, read the error), so
+raw-cli's dense `-o json` output happens to answer more of that in fewer
+round trips. Both MCP servers still cost noticeably more on it (+210-240%
 input tokens) since job triage over MCP means more individual tool calls.
 
-### Other tasks: raw-cli and axi, plus mcp-aidevkit where available
+### Other tasks: raw-cli and axi, plus MCP where available
 
-Five more tasks fall outside the six-condition core. None have a
-`mcp-managed` condition: they mutate state or read filesystem-like surfaces
-(`fs`, `workspace`) the SQL-only managed server can't reach. Three
-(`run-and-confirm`, `cluster-cycle`, `volume-read`) do have an
-`mcp-aidevkit` condition; `notebook-read` and `fs-error-recovery` have no
-matching tool in either MCP server.
+The remaining tasks fall outside the seven-condition core. Some have no
+`mcp-managed` condition because they mutate state or read filesystem-like
+surfaces (`fs`, `workspace`) the SQL-only managed server can't reach.
 
-| Task              | Condition      | Turns | Wall (s) | Input tok | Output tok | Cost   |
-| ----------------- | -------------- | ----- | -------- | --------- | ---------- | ------ |
-| run-and-confirm   | raw-cli        | 3.3   | 48       | 95,682    | 863        | $0.160 |
-| run-and-confirm   | databricks-axi | 4.0   | 16       | 118,979   | 703        | $0.167 |
-| run-and-confirm   | mcp-aidevkit   | 6.0   | 25       | 274,604   | 865        | $0.387 |
-| cluster-cycle     | raw-cli        | 2.0   | 9        | 56,836    | 280        | $0.135 |
-| cluster-cycle     | databricks-axi | 2.0   | 9        | 58,963    | 300        | $0.141 |
-| cluster-cycle     | mcp-aidevkit   | 4.0   | 19       | 130,643   | 502        | $0.295 |
-| notebook-read     | raw-cli        | 4.3   | 21       | 127,005   | 1,215      | $0.181 |
-| notebook-read     | databricks-axi | 3.0   | 17       | 89,399    | 879        | $0.163 |
-| volume-read       | raw-cli        | 4.3   | 16       | 123,824   | 815        | $0.164 |
-| volume-read       | databricks-axi | 2.0   | 10       | 58,968    | 391        | $0.142 |
-| volume-read       | mcp-aidevkit   | 9.3   | 35       | 545,700   | 1,566      | $0.563 |
-| fs-error-recovery | raw-cli        | 2.7   | 14       | 75,809    | 718        | $0.147 |
-| fs-error-recovery | databricks-axi | 2.3   | 12       | 68,952    | 511        | $0.148 |
+| task               | condition      | pass | turns       | wall_s     | tok_in          | tok_out       | cost_usd |
+| ------------------ | -------------- | ---- | ----------- | ---------- | --------------- | ------------- | -------- |
+| run-and-confirm    | raw-cli        | 5/5  | 3.6         | 50         | 103,782         | 847           | 0.139    |
+| run-and-confirm    | databricks-axi | 5/5  | 4.0 (+11%)  | 16 (-69%)  | 120,407 (+16%)  | 602 (-29%)    | 0.144    |
+| run-and-confirm    | mcp-aidevkit   | 5/5  | 9.2 (+156%) | 37 (-27%)  | 501,653 (+383%) | 1,312 (+55%)  | 0.504    |
+| warehouse-cycle    | raw-cli        | 5/5  | 2.0         | 8          | 56,839          | 357           | 0.112    |
+| warehouse-cycle    | databricks-axi | 5/5  | 2.0 (+0%)   | 8 (-3%)    | 59,782 (+5%)    | 274 (-23%)    | 0.119    |
+| warehouse-cycle    | mcp-aidevkit   | 5/5  | 4.8 (+140%) | 19 (+140%) | 168,376 (+196%) | 557 (+56%)    | 0.202    |
+| notebook-read      | raw-cli        | 5/5  | 4.0         | 19         | 115,328         | 1,056         | 0.145    |
+| notebook-read      | databricks-axi | 5/5  | 3.0 (-25%)  | 15 (-18%)  | 90,580 (-21%)   | 798 (-24%)    | 0.140    |
+| volume-read        | raw-cli        | 5/5  | 3.2         | 14         | 90,787          | 665           | 0.126    |
+| volume-read        | databricks-axi | 5/5  | 2.0 (-38%)  | 8 (-41%)   | 59,754 (-34%)   | 339 (-49%)    | 0.120    |
+| volume-read        | mcp-aidevkit   | 5/5  | 9.6 (+200%) | 30 (+113%) | 584,559 (+544%) | 1,356 (+104%) | 0.553    |
+| fs-error-recovery  | raw-cli        | 5/5  | 2.6         | 13         | 73,913          | 702           | 0.122    |
+| fs-error-recovery  | databricks-axi | 5/5  | 2.0 (-23%)  | 11 (-16%)  | 59,759 (-19%)   | 442 (-37%)    | 0.121    |
+| home-dashboard     | raw-cli        | 5/5  | 6.8         | 22         | 122,943         | 1,423         | 0.171    |
+| home-dashboard     | databricks-axi | 5/5  | 3.6 (-47%)  | 18 (-18%)  | 109,753 (-11%)  | 1,072 (-25%)  | 0.151    |
+| home-dashboard     | mcp-aidevkit   | 5/5  | 10.2 (+50%) | 43 (+91%)  | 333,110 (+171%) | 2,334 (+64%)  | 0.431    |
+| job-cancel-noop    | raw-cli        | 5/5  | 2.6         | 11         | 75,233          | 481           | 0.126    |
+| job-cancel-noop    | databricks-axi | 5/5  | 2.0 (-23%)  | 9 (-13%)   | 59,810 (-20%)   | 322 (-33%)    | 0.120    |
+| job-cancel-noop    | mcp-aidevkit   | 5/5  | 6.0 (+131%) | 25 (+131%) | 287,231 (+282%) | 955 (+98%)    | 0.415    |
+| job-run-why-failed | raw-cli        | 5/5  | 4.2         | 20         | 126,358         | 1,019         | 0.166    |
+| job-run-why-failed | databricks-axi | 5/5  | 2.6 (-38%)  | 19 (-6%)   | 79,399 (-37%)   | 562 (-45%)    | 0.138    |
+| job-run-why-failed | mcp-aidevkit   | 5/5  | 8.2 (+95%)  | 41 (+103%) | 423,263 (+235%) | 1,503 (+48%)  | 0.496    |
 
 `run-and-confirm` triggers a real job run and polls for completion; axi's
-async-by-default flow takes 3x more turns than raw-cli's blocking call but
-finishes in a third of the wall time.
+async-by-default flow takes more turns than raw-cli's blocking call but
+finishes well inside the wall time.
 
-### AWS-profile tasks (clusters, pipelines, serving, 0.9.0 extensions)
+### AWS-profile tasks (clusters, pipelines, serving, extension domains)
 
-21 tasks run against the two paid trial workspaces, comparing axi and
-raw-cli, with mcp-aidevkit where a matching tool exists (mcp-managed is
-SQL-only and excluded from every AWS task; `api-current-user-aws` and
-`notebook-discovery-aws` have no mcp-aidevkit tool either). Mean over 3
+Tasks run against the two paid trial workspaces, comparing axi and raw-cli,
+with mcp-aidevkit where a matching tool exists (mcp-managed is SQL-only and
+excluded from every AWS task; `api-current-user-aws` and
+`notebook-discovery-aws` have no mcp-aidevkit tool either). Mean over 5
 repeats:
 
-| Task                   | Condition      | Turns | Wall (s) | Input tok | Output tok | Cost   |
-| ---------------------- | -------------- | ----- | -------- | --------- | ---------- | ------ |
-| home-orientation-aws   | raw-cli        | 6.0   | 19       | 141,152   | 1,050      | $0.205 |
-| home-orientation-aws   | databricks-axi | 2.3   | 8        | 59,640    | 409        | $0.146 |
-| home-orientation-aws   | mcp-aidevkit   | 4.0   | 19       | 165,045   | 944        | $0.397 |
-| table-schema-aws       | raw-cli        | 2.0   | 8        | 59,044    | 355        | $0.149 |
-| table-schema-aws       | databricks-axi | 2.0   | 8        | 58,937    | 309        | $0.141 |
-| table-schema-aws       | mcp-aidevkit   | 4.0   | 27       | 130,256   | 612        | $0.296 |
-| sql-count-aws          | raw-cli        | 4.0   | 19       | 116,078   | 862        | $0.168 |
-| sql-count-aws          | databricks-axi | 2.3   | 13       | 69,021    | 497        | $0.148 |
-| sql-count-aws          | mcp-aidevkit   | 4.3   | 20       | 163,649   | 701        | $0.314 |
-| table-list-aws         | raw-cli        | 2.0   | 8        | 62,626    | 312        | $0.170 |
-| table-list-aws         | databricks-axi | 2.0   | 8        | 58,800    | 233        | $0.139 |
-| table-list-aws         | mcp-aidevkit   | 6.3   | 26       | 294,219   | 887        | $0.414 |
-| error-recovery-aws     | raw-cli        | 2.0   | 10       | 56,336    | 373        | $0.133 |
-| error-recovery-aws     | databricks-axi | 3.0   | 12       | 88,680    | 538        | $0.154 |
-| error-recovery-aws     | mcp-aidevkit   | 4.0   | 19       | 130,948   | 616        | $0.298 |
-| volume-read-aws        | raw-cli        | 3.7   | 15       | 104,341   | 733        | $0.156 |
-| volume-read-aws        | databricks-axi | 2.0   | 10       | 59,002    | 409        | $0.143 |
-| volume-read-aws        | mcp-aidevkit   | 8.7   | 29       | 449,549   | 1,373      | $0.534 |
-| notebook-read-aws      | raw-cli        | 6.0   | 25       | 166,717   | 1,689      | $0.201 |
-| notebook-read-aws      | databricks-axi | 7.7   | 25       | 203,046   | 1,409      | $0.214 |
-| clusters-list-aws      | raw-cli        | 2.0   | 8        | 57,564    | 255        | $0.139 |
-| clusters-list-aws      | databricks-axi | 2.7   | 10       | 78,915    | 373        | $0.149 |
-| clusters-list-aws      | mcp-aidevkit   | 4.7   | 17       | 178,784   | 727        | $0.302 |
-| clusters-view-aws      | raw-cli        | 2.3   | 9        | 66,784    | 366        | $0.142 |
-| clusters-view-aws      | databricks-axi | 3.3   | 13       | 98,922    | 491        | $0.158 |
-| clusters-view-aws      | mcp-aidevkit   | 11.3  | 174      | 551,655   | 5,206      | $0.574 |
-| cluster-stop-noop-aws  | raw-cli        | 2.0   | 9        | 57,338    | 463        | $0.141 |
-| cluster-stop-noop-aws  | databricks-axi | 3.3   | 13       | 99,272    | 478        | $0.158 |
-| cluster-stop-noop-aws  | mcp-aidevkit   | 5.0   | 17       | 203,308   | 714        | $0.329 |
-| job-list-aws           | raw-cli        | 2.0   | 8        | 56,892    | 352        | $0.136 |
-| job-list-aws           | databricks-axi | 2.0   | 9        | 58,933    | 428        | $0.143 |
-| job-list-aws           | mcp-aidevkit   | 5.7   | 22       | 272,363   | 773        | $0.409 |
-| notebook-discovery-aws | raw-cli        | 3.0   | 13       | 86,463    | 623        | $0.153 |
-| notebook-discovery-aws | databricks-axi | 4.0   | 15       | 90,345    | 757        | $0.166 |
-| dag-shape-aws          | raw-cli        | 3.0   | 13       | 85,526    | 531        | $0.149 |
-| dag-shape-aws          | databricks-axi | 4.0   | 14       | 119,137   | 630        | $0.168 |
-| dag-shape-aws          | mcp-aidevkit   | 6.3   | 20       | 356,583   | 877        | $0.530 |
-| find-failed-run-aws    | raw-cli        | 5.3   | 23       | 155,531   | 1,479      | $0.193 |
-| find-failed-run-aws    | databricks-axi | 6.3   | 28       | 195,436   | 1,385      | $0.220 |
-| find-failed-run-aws    | mcp-aidevkit   | 6.0   | 24       | 312,950   | 1,018      | $0.458 |
-| run-and-confirm-aws    | raw-cli        | 3.3   | 43       | 95,977    | 917        | $0.162 |
-| run-and-confirm-aws    | databricks-axi | 4.0   | 15       | 118,988   | 677        | $0.167 |
-| run-and-confirm-aws    | mcp-aidevkit   | 8.3   | 26       | 447,478   | 1,216      | $0.527 |
-| pipeline-status-aws    | raw-cli        | 4.7   | 18       | 127,360   | 1,160      | $0.178 |
-| pipeline-status-aws    | databricks-axi | 4.7   | 24       | 143,903   | 1,379      | $0.182 |
-| pipeline-status-aws    | mcp-aidevkit   | 7.7   | 23       | 307,316   | 1,232      | $0.403 |
-| serving-status-aws     | raw-cli        | 2.0   | 8        | 56,750    | 359        | $0.135 |
-| serving-status-aws     | databricks-axi | 2.7   | 12       | 80,159    | 650        | $0.159 |
-| serving-status-aws     | mcp-aidevkit   | 4.0   | 16       | 149,593   | 548        | $0.305 |
-| api-current-user-aws   | raw-cli        | 2.0   | 6        | 56,658    | 252        | $0.133 |
-| api-current-user-aws   | databricks-axi | 2.0   | 8        | 59,119    | 370        | $0.143 |
-| query-history-aws      | raw-cli        | 8.7   | 28       | 259,178   | 1,722      | $0.236 |
-| query-history-aws      | databricks-axi | 7.7   | 34       | 246,304   | 1,870      | $0.247 |
-| query-history-aws      | mcp-aidevkit   | 6.7   | 37       | 304,412   | 1,268      | $0.440 |
-| volumes-metadata-aws   | raw-cli        | 2.0   | 8        | 56,766    | 340        | $0.135 |
-| volumes-metadata-aws   | databricks-axi | 2.7   | 13       | 79,703    | 769        | $0.159 |
-| volumes-metadata-aws   | mcp-aidevkit   | 4.3   | 18       | 174,395   | 654        | $0.335 |
-| function-view-aws      | raw-cli        | 3.3   | 13       | 102,044   | 490        | $0.193 |
-| function-view-aws      | databricks-axi | 2.3   | 12       | 69,192    | 573        | $0.150 |
-| function-view-aws      | mcp-aidevkit   | 5.0   | 22       | 217,540   | 726        | $0.452 |
+| task                   | condition      | pass | turns        | wall_s       | tok_in          | tok_out        | cost_usd |
+| ---------------------- | -------------- | ---- | ------------ | ------------ | --------------- | -------------- | -------- |
+| home-orientation-aws   | raw-cli        | 5/5  | 5.6          | 22           | 152,534         | 962            | 0.180    |
+| home-orientation-aws   | databricks-axi | 5/5  | 2.2 (-61%)   | 9 (-58%)     | 60,683 (-60%)   | 400 (-58%)     | 0.126    |
+| home-orientation-aws   | mcp-aidevkit   | 5/5  | 4.6 (-18%)   | 20 (-8%)     | 198,826 (+30%)  | 934 (-3%)      | 0.342    |
+| table-schema-aws       | raw-cli        | 5/5  | 2.0          | 8            | 58,985          | 342            | 0.125    |
+| table-schema-aws       | databricks-axi | 5/5  | 2.0 (+0%)    | 7 (-3%)      | 59,751 (+1%)    | 287 (-16%)     | 0.119    |
+| table-schema-aws       | mcp-aidevkit   | 5/5  | 3.4 (+70%)   | 23 (+197%)   | 115,899 (+96%)  | 593 (+73%)     | 0.190    |
+| sql-count-aws          | raw-cli        | 5/5  | 3.2          | 13           | 92,188          | 693            | 0.131    |
+| sql-count-aws          | databricks-axi | 5/5  | 2.0 (-38%)   | 10 (-26%)    | 59,829 (-35%)   | 350 (-49%)     | 0.120    |
+| sql-count-aws          | mcp-aidevkit   | 5/5  | 4.8 (+50%)   | 21 (+62%)    | 184,687 (+100%) | 720 (+4%)      | 0.265    |
+| table-list-aws         | raw-cli        | 5/5  | 2.0          | 8            | 62,563          | 301            | 0.146    |
+| table-list-aws         | databricks-axi | 5/5  | 2.0 (+0%)    | 8 (+2%)      | 59,636 (-5%)    | 244 (-19%)     | 0.118    |
+| table-list-aws         | mcp-aidevkit   | 5/5  | 4.8 (+140%)  | 22 (+166%)   | 216,398 (+246%) | 743 (+147%)    | 0.320    |
+| error-recovery-aws     | raw-cli        | 5/5  | 2.0          | 8            | 56,277          | 366            | 0.109    |
+| error-recovery-aws     | databricks-axi | 5/5  | 2.2 (+10%)   | 9 (+13%)     | 65,761 (+17%)   | 445 (+21%)     | 0.123    |
+| error-recovery-aws     | mcp-aidevkit   | 5/5  | 3.6 (+80%)   | 19 (+141%)   | 125,908 (+124%) | 553 (+51%)     | 0.170    |
+| volume-read-aws        | raw-cli        | 5/5  | 3.4          | 14           | 123,603         | 618            | 0.136    |
+| volume-read-aws        | databricks-axi | 5/5  | 2.2 (-35%)   | 9 (-36%)     | 65,916 (-47%)   | 426 (-31%)     | 0.124    |
+| volume-read-aws        | mcp-aidevkit   | 5/5  | 9.2 (+171%)  | 31 (+124%)   | 632,845 (+412%) | 1,481 (+140%)  | 0.553    |
+| notebook-read-aws      | raw-cli        | 5/5  | 6.2          | 29           | 231,616         | 1,560          | 0.194    |
+| notebook-read-aws      | databricks-axi | 5/5  | 6.0 (-3%)    | 28 (-6%)     | 232,382 (+0%)   | 1,286 (-18%)   | 0.199    |
+| clusters-list-aws      | raw-cli        | 5/5  | 2.0          | 9            | 73,457          | 275            | 0.121    |
+| clusters-list-aws      | databricks-axi | 5/5  | 2.2 (+10%)   | 8 (-5%)      | 83,238 (+13%)   | 242 (-12%)     | 0.126    |
+| clusters-list-aws      | mcp-aidevkit   | 5/5  | 4.2 (+110%)  | 17 (+93%)    | 195,739 (+166%) | 543 (+97%)     | 0.248    |
+| clusters-view-aws      | raw-cli        | 5/5  | 2.0          | 8            | 72,904          | 328            | 0.118    |
+| clusters-view-aws      | databricks-axi | 5/5  | 3.4 (+70%)   | 13 (+50%)    | 129,256 (+77%)  | 415 (+27%)     | 0.144    |
+| clusters-view-aws      | mcp-aidevkit   | 4/5  | 12.4 (+520%) | 147 (+1655%) | 744,836 (+922%) | 4,501 (+1272%) | 0.565    |
+| cluster-stop-noop-aws  | raw-cli        | 5/5  | 2.0          | 10           | 72,982          | 456            | 0.120    |
+| cluster-stop-noop-aws  | databricks-axi | 5/5  | 3.0 (+50%)   | 12 (+21%)    | 114,323 (+57%)  | 475 (+4%)      | 0.141    |
+| cluster-stop-noop-aws  | mcp-aidevkit   | 5/5  | 3.6 (+80%)   | 18 (+85%)    | 163,390 (+124%) | 543 (+19%)     | 0.229    |
+| job-list-aws           | raw-cli        | 5/5  | 2.0          | 8            | 72,767          | 344            | 0.118    |
+| job-list-aws           | databricks-axi | 5/5  | 2.0 (+0%)    | 10 (+17%)    | 75,648 (+4%)    | 334 (-3%)      | 0.125    |
+| job-list-aws           | mcp-aidevkit   | 5/5  | 5.0 (+150%)  | 17 (+107%)   | 265,705 (+265%) | 742 (+116%)    | 0.343    |
+| notebook-discovery-aws | raw-cli        | 5/5  | 3.6          | 17           | 133,757         | 854            | 0.150    |
+| notebook-discovery-aws | databricks-axi | 5/5  | 4.2 (+17%)   | 16 (-4%)     | 115,209 (-14%)  | 580 (-32%)     | 0.149    |
+| dag-shape-aws          | raw-cli        | 5/5  | 3.2          | 13           | 116,899         | 564            | 0.136    |
+| dag-shape-aws          | databricks-axi | 5/5  | 4.2 (+31%)   | 17 (+30%)    | 160,553 (+37%)  | 652 (+16%)     | 0.161    |
+| dag-shape-aws          | mcp-aidevkit   | 5/5  | 6.6 (+106%)  | 22 (+65%)    | 397,283 (+240%) | 831 (+47%)     | 0.441    |
+| find-failed-run-aws    | raw-cli        | 5/5  | 7.6          | 35           | 294,334         | 2,099          | 0.238    |
+| find-failed-run-aws    | databricks-axi | 5/5  | 5.8 (-24%)   | 24 (-31%)    | 226,758 (-23%)  | 994 (-53%)     | 0.198    |
+| find-failed-run-aws    | mcp-aidevkit   | 5/5  | 7.2 (-5%)    | 31 (-11%)    | 442,730 (+50%)  | 1,387 (-34%)   | 0.479    |
+| run-and-confirm-aws    | raw-cli        | 5/5  | 3.4          | 42           | 124,512         | 762            | 0.143    |
+| run-and-confirm-aws    | databricks-axi | 5/5  | 4.0 (+18%)   | 16 (-62%)    | 152,436 (+22%)  | 635 (-17%)     | 0.155    |
+| run-and-confirm-aws    | mcp-aidevkit   | 5/5  | 7.4 (+118%)  | 28 (-33%)    | 426,518 (+243%) | 1,087 (+43%)   | 0.423    |
+| pipeline-status-aws    | raw-cli        | 5/5  | 3.8          | 16           | 140,968         | 852            | 0.152    |
+| pipeline-status-aws    | databricks-axi | 5/5  | 3.0 (-21%)   | 13 (-22%)    | 114,109 (-19%)  | 538 (-37%)     | 0.142    |
+| pipeline-status-aws    | mcp-aidevkit   | 5/5  | 8.8 (+132%)  | 32 (+95%)    | 471,081 (+234%) | 1,519 (+78%)   | 0.438    |
+| pipeline-stop-noop-aws | raw-cli        | 5/5  | 3.0          | 13           | 109,783         | 638            | 0.135    |
+| pipeline-stop-noop-aws | databricks-axi | 5/5  | 3.0 (+0%)    | 14 (+6%)     | 114,238 (+4%)   | 480 (-25%)     | 0.142    |
+| pipeline-stop-noop-aws | mcp-aidevkit   | 5/5  | 6.6 (+120%)  | 23 (+80%)    | 335,966 (+206%) | 1,187 (+86%)   | 0.376    |
+| serving-status-aws     | raw-cli        | 5/5  | 2.0          | 9            | 72,624          | 360            | 0.117    |
+| serving-status-aws     | databricks-axi | 5/5  | 2.0 (+0%)    | 9 (-7%)      | 75,644 (+4%)    | 237 (-34%)     | 0.124    |
+| serving-status-aws     | mcp-aidevkit   | 5/5  | 4.2 (+110%)  | 20 (+115%)   | 201,364 (+177%) | 673 (+87%)     | 0.267    |
+| api-current-user-aws   | raw-cli        | 5/5  | 2.0          | 8            | 72,540          | 254            | 0.115    |
+| api-current-user-aws   | databricks-axi | 5/5  | 5.6 (+180%)  | 79 (+908%)   | 230,140 (+217%) | 1,989 (+682%)  | 0.211    |
+| volumes-metadata-aws   | raw-cli        | 5/5  | 2.0          | 8            | 72,633          | 307            | 0.116    |
+| volumes-metadata-aws   | databricks-axi | 5/5  | 2.0 (+0%)    | 8 (+2%)      | 75,584 (+4%)    | 212 (-31%)     | 0.123    |
+| volumes-metadata-aws   | mcp-aidevkit   | 5/5  | 5.6 (+180%)  | 19 (+134%)   | 285,061 (+292%) | 783 (+155%)    | 0.316    |
+| function-view-aws      | raw-cli        | 5/5  | 2.6          | 11           | 104,594         | 444            | 0.177    |
+| function-view-aws      | databricks-axi | 5/5  | 3.0 (+15%)   | 11 (+2%)     | 113,878 (+9%)   | 416 (-6%)      | 0.139    |
+| function-view-aws      | mcp-aidevkit   | 5/5  | 5.0 (+92%)   | 24 (+125%)   | 282,256 (+170%) | 884 (+99%)     | 0.400    |
+| query-history-aws      | raw-cli        | 5/5  | 6.8          | 25           | 255,353         | 1,401          | 0.117    |
+| query-history-aws      | databricks-axi | 5/5  | 2.0 (-71%)   | 11 (-57%)    | 75,838 (-70%)   | 397 (-72%)     | 0.032    |
+| query-history-aws      | mcp-aidevkit   | 5/5  | 6.0 (-12%)   | 46 (+81%)    | 304,606 (+19%)  | 1,709 (+22%)   | 0.282    |
 
 A few patterns worth naming: axi wins or ties raw-cli on turns and input
 tokens for single-purpose lookups (`table-schema-aws`, `table-list-aws`,
-`job-list-aws`, `api-current-user-aws`, `query-history-aws`), and pays a
-modest turns/token premium on multi-step or newly-added cluster/extension
-tasks (`clusters-list-aws`, `clusters-view-aws`, `cluster-stop-noop-aws`,
-`serving-status-aws`, `volumes-metadata-aws`). The one real outlier:
-mcp-aidevkit spent 174s and 11.3 turns on `clusters-view-aws` hunting for the
-right `manage_cluster` verb (+386% turns, +1912% wall vs raw-cli) — a real
-cost of a 40-tool consolidated-verb schema, not an axi comparison point.
+`job-list-aws`, `volumes-metadata-aws`), and pays a modest turns/token
+premium on multi-step or cluster/extension tasks (`clusters-view-aws`,
+`cluster-stop-noop-aws`, `dag-shape-aws`, `function-view-aws`). The widest
+gap this pass is `query-history-aws` (-71% turns, -70% input tokens vs
+raw-cli). The one real outlier: mcp-aidevkit spent 147s and 12.4 turns on
+`clusters-view-aws` (one of five repeats failed there too) hunting for the
+right `manage_cluster` verb (+520% turns, +1655% wall vs raw-cli), a real
+cost of a 40-tool consolidated-verb schema, not an axi comparison point. A
+second, smaller outlier: `api-current-user-aws` is the one task where axi's
+guided path costs more than a single raw `api get` call (+908% wall), since
+looking up the current user has no dedicated axi command yet.
+
+### Post-matrix live smoke: 9/9 PASS
+
+After the matrix, a separate live smoke pass exercised paths the matrix
+doesn't cover: `setup hooks`, `sql exec` plus `sql statement view`,
+`pipelines events`, a `pipelines start` run to `COMPLETED`, and a live
+classic-cluster cycle on `AWS2`: `clusters start --wait` through to
+`RUNNING`, then `clusters stop --wait` back to `TERMINATED`. All 9 checks
+passed.
 
 </content>
