@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: home (ambient workspace dashboard: auth context, recent runs, warehouses, running clusters), jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement view, history), catalog (catalogs, schemas, tables, table view, volumes, volume view, functions, function view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), pipelines (list, view, start, stop, events - Lakeflow/DLT), serving (list, view - model serving endpoints, read-only), setup (hooks - session-start ambient context for Claude Code, Codex, OpenCode), api (raw REST passthrough). Run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: home (ambient workspace dashboard: auth context, recent runs, warehouses, running clusters), whoami (caller's own identity: user, groups, entitlements), jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement view, history), catalog (catalogs, schemas, tables, table view, volumes, volume view, functions, function view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), pipelines (list, view, start, stop, events - Lakeflow/DLT), serving (list, view - model serving endpoints, read-only), setup (hooks - session-start ambient context for Claude Code, Codex, OpenCode), api (raw REST passthrough). Run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model, hooks]
+    tags: [databricks, spark, whoami, identity, current-user, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model, hooks]
     category: data
 ---
 
@@ -23,7 +23,7 @@ databricks-axi requires the official [`databricks` CLI](https://docs.databricks.
 
 ## Status
 
-Pre-1.0: the full v1 command surface is implemented (home, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
+Pre-1.0: the full v1 command surface is implemented (home, whoami, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
 
 ## Commands
 
