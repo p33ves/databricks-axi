@@ -282,12 +282,13 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
     start_time: iso(r.start_time),
     duration_s: durationSeconds(r),
   }));
-  const rows = renderRows(flattened, flags, [
-    "run_id",
-    "state",
-    "start_time",
-    "duration_s",
-  ]);
+  // In bulk mode (no job_id filter) lead with job_id so runs map back to
+  // their jobs in one call — cross-job questions ("which jobs never ran")
+  // otherwise force an N+1 walk. When filtered to one job it is redundant.
+  const defaultFields = jobId
+    ? ["run_id", "state", "start_time", "duration_s"]
+    : ["job_id", "run_id", "state", "start_time", "duration_s"];
+  const rows = renderRows(flattened, flags, defaultFields);
   const p = profileSuffix(flags.get("profile"));
   const help = [`databricks-axi jobs runs view <run_id>${p}`];
   const firstFailed = runs.find(isFailed);
