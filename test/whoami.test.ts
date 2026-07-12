@@ -4,8 +4,8 @@ import { setupCli } from "./helpers/fake-databricks.js";
 const t = setupCli();
 
 const ME = {
-  userName: "itsvigneshperumal@gmail.com",
-  displayName: "Vignesh Perumal",
+  userName: "ada@example.com",
+  displayName: "Ada Example",
   active: true,
   groups: [
     {
@@ -21,7 +21,7 @@ const ME = {
     { value: "allow-cluster-create" },
     { value: "allow-instance-pool-create" },
   ],
-  emails: [{ value: "itsvigneshperumal@gmail.com", primary: true }],
+  emails: [{ value: "ada@example.com", primary: true }],
   id: "1234567890",
   schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
 };
@@ -32,8 +32,8 @@ describe("whoami", () => {
     const { out, exitCode } = await t.run(["whoami"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([["current-user", "me", "-o", "json"]]);
-    expect(out).toContain("user_name: itsvigneshperumal@gmail.com");
-    expect(out).toContain("display_name: Vignesh Perumal");
+    expect(out).toContain("user_name: ada@example.com");
+    expect(out).toContain("display_name: Ada Example");
     expect(out).toContain("active: true");
     expect(out).toContain("groups[3]{display,type}:");
     expect(out).toContain("account users,direct");
