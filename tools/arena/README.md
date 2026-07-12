@@ -96,7 +96,8 @@ but allowed.
 
 The page is built against this contract (server and page ship in the same
 commit; the SSE event shape is intentionally not frozen for any other
-consumer — see the design spec §4/§11(c)).
+consumer — see the design spec §4/§11(c), which is local-only and not
+committed).
 
 ### `GET /`
 
