@@ -271,6 +271,9 @@
       }
       .transcript .idle {
         color: var(--faint);
+        /* Idle copy is authored as indented HTML; without this, pre-wrap
+           renders the source indentation as stray leading whitespace. */
+        white-space: normal;
       }
       .transcript div {
         margin-bottom: 6px;

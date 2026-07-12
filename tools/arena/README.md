@@ -30,6 +30,10 @@ button; it is not optional copy.
 
 - `databricks` CLI authenticated (`databricks auth login`), and `claude`
   installed and logged in.
+  - If your Databricks config is project-local rather than `~/.databrickscfg`,
+    launch with `DATABRICKS_CONFIG_FILE=/path/to/.databrickscfg node
+tools/arena/server.mjs`. Do not override `HOME`: the `claude` children
+    read your Claude login from your real home directory.
 - `databricks-axi` on `PATH`, or built in this repo (`pnpm run build`,
   which produces `dist/bin/databricks-axi.js`). If neither is available the
   axi pane is disabled; the other panes still run.
