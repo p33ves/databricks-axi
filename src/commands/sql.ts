@@ -212,9 +212,16 @@ async function warehousesStartStop(
       `databricks-axi sql warehouses view ${id}${p}`,
     ],
   });
+  // Same contract as clusters start/stop: with --wait upstream exits 0 only
+  // once the terminal state (RUNNING/STOPPED) is reached — a timeout raises
+  // above via WAIT_TIMEOUT_MS — so report the reached state, not the request.
   return {
     id,
-    status: `${verb} requested`,
+    status: wait
+      ? verb === "start"
+        ? "started, warehouse RUNNING"
+        : "stopped, warehouse STOPPED"
+      : `${verb} requested`,
     help: [`databricks-axi sql warehouses view ${id}${p}`],
   };
 }
