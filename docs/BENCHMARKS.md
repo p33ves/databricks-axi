@@ -189,6 +189,11 @@ repeats:
 | query-history-aws      | databricks-axi | 5/5  | 2.0 (-71%)   | 11 (-57%)    | 75,838 (-70%)   | 397 (-72%)     | 0.032    |
 | query-history-aws      | mcp-aidevkit   | 5/5  | 6.0 (-12%)   | 46 (+81%)    | 304,606 (+19%)  | 1,709 (+22%)   | 0.282    |
 
+Note: the two `api-current-user-aws` rows were re-measured on 1.0
+(whoami-enabled) code, since the `whoami` command added in this release
+closed the CP3/v0.9.0 outlier; the rest of the table is the original CP3
+v0.9.0 matrix.
+
 A few patterns worth naming: axi wins or ties raw-cli on turns and input
 tokens for single-purpose lookups (`table-schema-aws`, `table-list-aws`,
 `job-list-aws`, `volumes-metadata-aws`), and pays a modest turns/token
