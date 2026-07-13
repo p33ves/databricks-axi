@@ -23,7 +23,7 @@ databricks-axi requires the official [`databricks` CLI](https://docs.databricks.
 
 ## Status
 
-Pre-1.0: the full v1 command surface is implemented (home, whoami, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
+The full v1 command surface is implemented (home, whoami, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
 
 ## Commands
 
