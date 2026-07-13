@@ -324,28 +324,33 @@ const RUNS = {
 };
 
 describe("jobs runs", () => {
-  it("lists runs with compact state, ISO time, and duration", async () => {
+  it("lists runs across jobs with job_id first so runs map back to jobs", async () => {
     t.fake.respond("jobs list-runs", RUNS);
     const { out, exitCode } = await t.run(["jobs", "runs"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
       ["jobs", "list-runs", "--limit", "20", "-o", "json"],
     ]);
-    expect(out).toContain("runs[2]{run_id,state,start_time,duration_s}:");
+    // Bulk mode (no job_id positional): job_id is in the default columns so
+    // an agent can answer cross-job questions ("jobs never run") in one call.
+    expect(out).toContain(
+      "runs[2]{job_id,run_id,state,start_time,duration_s}:",
+    );
     // Row assertions stay tolerant of TOON's string-quoting rules for the
     // ISO timestamp cell: assert the pieces, not the exact joined row.
-    expect(out).toContain("901,SUCCESS");
+    expect(out).toContain("101,901,SUCCESS");
     expect(out).toContain("2025-07-06T00:00:00.000Z");
-    expect(out).toContain("902,FAILED");
+    expect(out).toContain("101,902,FAILED");
     expect(out).toContain("2025-07-06T01:00:00.000Z");
   });
 
-  it("filters by job id and suggests logs for the first failed run", async () => {
+  it("omits job_id when filtered to one job (redundant) and suggests logs", async () => {
     t.fake.respond("jobs list-runs", RUNS);
     const { out } = await t.run(["jobs", "runs", "101"]);
     expect(t.fake.calls()).toEqual([
       ["jobs", "list-runs", "--limit", "20", "--job-id", "101", "-o", "json"],
     ]);
+    expect(out).toContain("runs[2]{run_id,state,start_time,duration_s}:");
     expect(out).toContain("jobs logs 902");
   });
 

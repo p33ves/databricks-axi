@@ -52,8 +52,12 @@ upstream's own ~20-minute block on `run-now`.
   follow-up.
 - `runs`: rows are the raw upstream items with the derived display fields
   (`state`, `start_time` as ISO, `duration_s`) merged in, so `--fields` can
-  select either raw upstream keys or the derived ones. Default fields are
-  `run_id`, `state`, `start_time`, `duration_s`.
+  select either raw upstream keys or the derived ones. Default fields depend
+  on mode: in bulk mode (no `job_id`) they are `job_id`, `run_id`, `state`,
+  `start_time`, `duration_s` so runs map back to their jobs in one call
+  (cross-job questions otherwise force an N+1 walk); filtered to one
+  `job_id` the `job_id` column is redundant and dropped, leaving `run_id`,
+  `state`, `start_time`, `duration_s`.
 - `runs view`: `run_id`, `job_id`, `state`, `start_time` (ISO),
   `duration_s`, and a flattened `tasks` array (`task_key`, `state`,
   `duration_s`).
@@ -97,7 +101,8 @@ upstream's own ~20-minute block on `run-now`.
 a fresh fake `databricks` on PATH per test, `respond`/`respondError` to seed
 canned JSON or stderr, `t.run(argv)` to invoke the CLI, and `calls()` to
 assert exact argv. Covers list pagination (`has_more`), field selection and
-rejection, empty states, auth-error mapping, job/run views, the `--wait`
-timeout path, log truncation and `--full`, the already-terminated cancel
+rejection, the bulk vs single-job `runs` default columns (`job_id` leads
+only in bulk mode), empty states, auth-error mapping, job/run views, the
+`--wait` timeout path, log truncation and `--full`, the already-terminated cancel
 no-op, the decimal-only `--limit` guard (rejecting `1e3`), and an
 unknown-flag rejection.
