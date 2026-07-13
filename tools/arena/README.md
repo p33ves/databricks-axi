@@ -49,9 +49,29 @@ tools/arena/server.mjs`. Do not override `HOME`: the `claude` children
   which produces `dist/bin/databricks-axi.js`). If neither is available the
   axi pane is disabled; the other panes still run.
 - A Databricks MCP server, **named literally `databricks`**, configured for
-  Claude Code (`claude mcp add databricks ...`). Claude Code derives the
-  `mcp__<name>` tool prefix from the server's name, so any other name won't
-  match and the mcp pane will be disabled with setup instructions.
+  Claude Code. Claude Code derives the `mcp__<name>` tool prefix from the
+  server's name, so any other name won't match and the mcp pane will be
+  disabled with setup instructions.
+
+  Databricks does not publish an MCP server you can `claude mcp add` by name.
+  Use Databricks Field Engineering's
+  [ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit), the same
+  server the benchmark's `mcp-aidevkit` condition runs. Clone it, then register
+  it user-scoped (the arena runs each condition in a throwaway temp directory,
+  so a project-scoped server is invisible to it):
+
+  ```
+  git clone https://github.com/databricks-solutions/ai-dev-kit
+  claude mcp add databricks -s user \
+    -e DATABRICKS_CONFIG_FILE=/path/to/.databrickscfg \
+    -e DATABRICKS_CONFIG_PROFILE=<profile> \
+    -- uv run --directory /path/to/ai-dev-kit python databricks-mcp-server/run_server.py
+  ```
+
+  Requires [`uv`](https://docs.astral.sh/uv/). Passing the config file and
+  profile keeps auth on the Databricks CLI's own credential chain, so no token
+  is written into your Claude config. Check it with `claude mcp list`; the
+  arena looks for a line starting with `databricks:`.
   - **Inherit mode (default):** the mcp condition runs without
     `--mcp-config`, so it loads your already-configured, **user-scoped**
     Databricks MCP server. Each run executes in a throwaway temp directory,
@@ -61,6 +81,7 @@ tools/arena/server.mjs`. Do not override `HOME`: the `claude` children
     to run with `--strict-mcp-config --mcp-config $ARENA_MCP_CONFIG`
     instead, for a clean single-server session. The arena only points
     `claude` at your file; it never reads or copies it.
+
 - Databricks CLI profiles: if you use named profiles in `~/.databrickscfg`,
   `GET /profiles` lists them for the page's profile picker (§ below).
 

@@ -311,15 +311,31 @@ async function checkMcp() {
   if (ARENA_MCP_CONFIG) {
     return { ok: true, name: "databricks", mode: "scoped" };
   }
-  const r = await spawnCapture("claude", ["mcp", "list"]);
+  // `claude mcp list` health-checks every registered server and has no flag to
+  // skip it, so it scales with how many the viewer has: ~14s with three of
+  // them. The 10s preflight budget killed it mid-probe and reported a
+  // correctly-configured server as missing.
+  // ponytail: fixed 30s ceiling, not a per-server budget. Someone with a dozen
+  // slow servers can still time out; make it adaptive only if that shows up.
+  const r = await spawnCapture("claude", ["mcp", "list"], {
+    timeoutMs: 30_000,
+  });
   const configured = r.out
     .split("\n")
     .some((line) => /^databricks:/.test(line));
   if (configured) return { ok: true, name: "databricks", mode: "inherit" };
+  if (r.timedOut) {
+    return {
+      ok: false,
+      reason:
+        "`claude mcp list` did not finish in 30s (it health-checks every " +
+        "configured server) — set ARENA_MCP_CONFIG to a scoped mcp.json to skip the probe",
+    };
+  }
   return {
     ok: false,
     reason:
-      'no "databricks" MCP server configured — run `claude mcp add databricks ...`, ' +
+      'no "databricks" MCP server configured — see tools/arena/README.md (install ai-dev-kit), ' +
       "or set ARENA_MCP_CONFIG to a scoped mcp.json",
   };
 }

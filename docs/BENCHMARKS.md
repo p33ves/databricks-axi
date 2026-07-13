@@ -27,11 +27,11 @@ condition was not run for that task. `mcp-managed` is SQL-only, so it ran
 only on the tasks its SQL surface can actually answer; both MCP servers sit
 out tasks they have no matching tool for.
 
-Two conventions in the tables: the `databricks-axi` column is bolded because
-it is the tool under test, not because it wins the row. The `axi vs cli`
-column is databricks-axi measured against `raw-cli` on that row, where
-negative means axi is lower (fewer tokens, fewer turns, less time, less
-money) and positive means it is higher.
+One convention in the tables: the `databricks-axi` column is bolded because
+it is the tool under test, not because it wins the row. Input tokens is the
+table that carries the argument, so it stays open; turns, wall clock, and cost
+fold away below it. There is no percentage column: every number you would
+divide is sitting in the same row.
 
 ## Latest run: CP3 (2026-07-11, v0.9.0)
 
@@ -62,177 +62,186 @@ that task; every other row is the original CP3 matrix.
 
 Mean over repeats. `—` = not run for this condition.
 
-| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit | axi vs cli |
-| ---------------------- | -------------- | ------- | ----------- | ------------ | ---------- |
-| home-orientation       | **60,684**     | 135,463 | 182,049     | 164,741      | -55%       |
-| find-failed-run        | **203,695**    | 193,849 | 600,135     | 659,709      | +5%        |
-| run-and-confirm        | **120,407**    | 103,782 | —           | 501,653      | +16%       |
-| sql-count              | **59,844**     | 129,731 | 90,851      | 172,779      | -54%       |
-| table-schema           | **59,751**     | 58,987  | 87,997      | 152,563      | +1%        |
-| error-recovery         | **89,881**     | 56,273  | 87,835      | 137,494      | +60%       |
-| table-list             | **59,691**     | 62,460  | 103,336     | 238,345      | -4%        |
-| warehouse-cycle        | **59,782**     | 56,839  | —           | 168,376      | +5%        |
-| notebook-read          | **90,580**     | 115,328 | —           | —            | -21%       |
-| volume-read            | **59,754**     | 90,787  | —           | 584,559      | -34%       |
-| fs-error-recovery      | **59,759**     | 73,913  | —           | —            | -19%       |
-| home-dashboard         | **109,753**    | 122,943 | —           | 333,110      | -11%       |
-| job-cancel-noop        | **59,810**     | 75,233  | —           | 287,231      | -20%       |
-| job-run-why-failed     | **79,399**     | 126,358 | —           | 423,263      | -37%       |
-| catalog-browse         | **66,100**     | 90,980  | 150,156     | 416,160      | -27%       |
-| home-orientation-aws   | **60,683**     | 152,534 | —           | 198,826      | -60%       |
-| table-schema-aws       | **59,751**     | 58,985  | —           | 115,899      | +1%        |
-| sql-count-aws          | **59,829**     | 92,188  | —           | 184,687      | -35%       |
-| table-list-aws         | **59,636**     | 62,563  | —           | 216,398      | -5%        |
-| error-recovery-aws     | **65,761**     | 56,277  | —           | 125,908      | +17%       |
-| volume-read-aws        | **65,916**     | 123,603 | —           | 632,845      | -47%       |
-| notebook-read-aws      | **232,382**    | 231,616 | —           | —            | +0%        |
-| clusters-list-aws      | **83,238**     | 73,457  | —           | 195,739      | +13%       |
-| clusters-view-aws      | **129,256**    | 72,904  | —           | 744,836      | +77%       |
-| cluster-stop-noop-aws  | **114,323**    | 72,982  | —           | 163,390      | +57%       |
-| job-list-aws           | **75,648**     | 72,767  | —           | 265,705      | +4%        |
-| notebook-discovery-aws | **115,209**    | 133,757 | —           | —            | -14%       |
-| dag-shape-aws          | **160,553**    | 116,899 | —           | 397,283      | +37%       |
-| find-failed-run-aws    | **226,758**    | 294,334 | —           | 442,730      | -23%       |
-| run-and-confirm-aws    | **152,436**    | 124,512 | —           | 426,518      | +22%       |
-| pipeline-status-aws    | **114,109**    | 140,968 | —           | 471,081      | -19%       |
-| pipeline-stop-noop-aws | **114,238**    | 109,783 | —           | 335,966      | +4%        |
-| serving-status-aws     | **75,644**     | 72,624  | —           | 201,364      | +4%        |
-| api-current-user-aws   | **75,694**     | 72,508  | —           | —            | +4%        |
-| volumes-metadata-aws   | **75,584**     | 72,633  | —           | 285,061      | +4%        |
-| function-view-aws      | **113,878**    | 104,594 | —           | 282,256      | +9%        |
-| query-history-aws      | **75,838**     | 255,353 | —           | 304,606      | -70%       |
+| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit |
+| ---------------------- | -------------- | ------- | ----------- | ------------ |
+| home-orientation       | **60,684**     | 135,463 | 182,049     | 164,741      |
+| find-failed-run        | **203,695**    | 193,849 | 600,135     | 659,709      |
+| run-and-confirm        | **120,407**    | 103,782 | —           | 501,653      |
+| sql-count              | **59,844**     | 129,731 | 90,851      | 172,779      |
+| table-schema           | **59,751**     | 58,987  | 87,997      | 152,563      |
+| error-recovery         | **89,881**     | 56,273  | 87,835      | 137,494      |
+| table-list             | **59,691**     | 62,460  | 103,336     | 238,345      |
+| warehouse-cycle        | **59,782**     | 56,839  | —           | 168,376      |
+| notebook-read          | **90,580**     | 115,328 | —           | —            |
+| volume-read            | **59,754**     | 90,787  | —           | 584,559      |
+| fs-error-recovery      | **59,759**     | 73,913  | —           | —            |
+| home-dashboard         | **109,753**    | 122,943 | —           | 333,110      |
+| job-cancel-noop        | **59,810**     | 75,233  | —           | 287,231      |
+| job-run-why-failed     | **79,399**     | 126,358 | —           | 423,263      |
+| catalog-browse         | **66,100**     | 90,980  | 150,156     | 416,160      |
+| home-orientation-aws   | **60,683**     | 152,534 | —           | 198,826      |
+| table-schema-aws       | **59,751**     | 58,985  | —           | 115,899      |
+| sql-count-aws          | **59,829**     | 92,188  | —           | 184,687      |
+| table-list-aws         | **59,636**     | 62,563  | —           | 216,398      |
+| error-recovery-aws     | **65,761**     | 56,277  | —           | 125,908      |
+| volume-read-aws        | **65,916**     | 123,603 | —           | 632,845      |
+| notebook-read-aws      | **232,382**    | 231,616 | —           | —            |
+| clusters-list-aws      | **83,238**     | 73,457  | —           | 195,739      |
+| clusters-view-aws      | **129,256**    | 72,904  | —           | 744,836      |
+| cluster-stop-noop-aws  | **114,323**    | 72,982  | —           | 163,390      |
+| job-list-aws           | **75,648**     | 72,767  | —           | 265,705      |
+| notebook-discovery-aws | **115,209**    | 133,757 | —           | —            |
+| dag-shape-aws          | **160,553**    | 116,899 | —           | 397,283      |
+| find-failed-run-aws    | **226,758**    | 294,334 | —           | 442,730      |
+| run-and-confirm-aws    | **152,436**    | 124,512 | —           | 426,518      |
+| pipeline-status-aws    | **114,109**    | 140,968 | —           | 471,081      |
+| pipeline-stop-noop-aws | **114,238**    | 109,783 | —           | 335,966      |
+| serving-status-aws     | **75,644**     | 72,624  | —           | 201,364      |
+| api-current-user-aws   | **75,694**     | 72,508  | —           | —            |
+| volumes-metadata-aws   | **75,584**     | 72,633  | —           | 285,061      |
+| function-view-aws      | **113,878**    | 104,594 | —           | 282,256      |
+| query-history-aws      | **75,838**     | 255,353 | —           | 304,606      |
 
-### Turns
-
-Mean over repeats. `—` = not run for this condition.
-
-| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit | axi vs cli |
-| ---------------------- | -------------- | ------- | ----------- | ------------ | ---------- |
-| home-orientation       | **2.2**        | 5.2     | 5.0         | 3.8          | -58%       |
-| find-failed-run        | **6.4**        | 6.2     | 10.8        | 10.2         | +3%        |
-| run-and-confirm        | **4.0**        | 3.6     | —           | 9.2          | +11%       |
-| sql-count              | **2.0**        | 4.4     | 3.0         | 4.8          | -55%       |
-| table-schema           | **2.0**        | 2.0     | 3.0         | 4.4          | +0%        |
-| error-recovery         | **3.0**        | 2.0     | 3.0         | 4.0          | +50%       |
-| table-list             | **2.0**        | 2.0     | 3.0         | 5.4          | +0%        |
-| warehouse-cycle        | **2.0**        | 2.0     | —           | 4.8          | +0%        |
-| notebook-read          | **3.0**        | 4.0     | —           | —            | -25%       |
-| volume-read            | **2.0**        | 3.2     | —           | 9.6          | -38%       |
-| fs-error-recovery      | **2.0**        | 2.6     | —           | —            | -23%       |
-| home-dashboard         | **3.6**        | 6.8     | —           | 10.2         | -47%       |
-| job-cancel-noop        | **2.0**        | 2.6     | —           | 6.0          | -23%       |
-| job-run-why-failed     | **2.6**        | 4.2     | —           | 8.2          | -38%       |
-| catalog-browse         | **3.0**        | 3.0     | 4.2         | 9.0          | +0%        |
-| home-orientation-aws   | **2.2**        | 5.6     | —           | 4.6          | -61%       |
-| table-schema-aws       | **2.0**        | 2.0     | —           | 3.4          | +0%        |
-| sql-count-aws          | **2.0**        | 3.2     | —           | 4.8          | -38%       |
-| table-list-aws         | **2.0**        | 2.0     | —           | 4.8          | +0%        |
-| error-recovery-aws     | **2.2**        | 2.0     | —           | 3.6          | +10%       |
-| volume-read-aws        | **2.2**        | 3.4     | —           | 9.2          | -35%       |
-| notebook-read-aws      | **6.0**        | 6.2     | —           | —            | -3%        |
-| clusters-list-aws      | **2.2**        | 2.0     | —           | 4.2          | +10%       |
-| clusters-view-aws      | **3.4**        | 2.0     | —           | 12.4         | +70%       |
-| cluster-stop-noop-aws  | **3.0**        | 2.0     | —           | 3.6          | +50%       |
-| job-list-aws           | **2.0**        | 2.0     | —           | 5.0          | +0%        |
-| notebook-discovery-aws | **4.2**        | 3.6     | —           | —            | +17%       |
-| dag-shape-aws          | **4.2**        | 3.2     | —           | 6.6          | +31%       |
-| find-failed-run-aws    | **5.8**        | 7.6     | —           | 7.2          | -24%       |
-| run-and-confirm-aws    | **4.0**        | 3.4     | —           | 7.4          | +18%       |
-| pipeline-status-aws    | **3.0**        | 3.8     | —           | 8.8          | -21%       |
-| pipeline-stop-noop-aws | **3.0**        | 3.0     | —           | 6.6          | +0%        |
-| serving-status-aws     | **2.0**        | 2.0     | —           | 4.2          | +0%        |
-| api-current-user-aws   | **2.0**        | 2.0     | —           | —            | +0%        |
-| volumes-metadata-aws   | **2.0**        | 2.0     | —           | 5.6          | +0%        |
-| function-view-aws      | **3.0**        | 2.6     | —           | 5.0          | +15%       |
-| query-history-aws      | **2.0**        | 6.8     | —           | 6.0          | -71%       |
-
-### Wall clock (seconds)
+<details>
+<summary><b>Turns</b></summary>
 
 Mean over repeats. `—` = not run for this condition.
 
-| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit | axi vs cli |
-| ---------------------- | -------------- | ------- | ----------- | ------------ | ---------- |
-| home-orientation       | **8.8**        | 16.0    | 25.6        | 18.6         | -45%       |
-| find-failed-run        | **28.2**       | 27.8    | 68.6        | 40.2         | +1%        |
-| run-and-confirm        | **15.8**       | 50.2    | —           | 36.8         | -69%       |
-| sql-count              | **17.2**       | 19.8    | 10.4        | 21.4         | -13%       |
-| table-schema           | **7.4**        | 9.4     | 11.0        | 26.2         | -21%       |
-| error-recovery         | **13.0**       | 8.2     | 10.6        | 22.0         | +59%       |
-| table-list             | **9.6**        | 9.2     | 9.6         | 29.0         | +4%        |
-| warehouse-cycle        | **7.8**        | 8.0     | —           | 19.2         | -3%        |
-| notebook-read          | **15.2**       | 18.6    | —           | —            | -18%       |
-| volume-read            | **8.2**        | 14.0    | —           | 29.8         | -41%       |
-| fs-error-recovery      | **10.8**       | 12.8    | —           | —            | -16%       |
-| home-dashboard         | **18.4**       | 22.4    | —           | 42.8         | -18%       |
-| job-cancel-noop        | **9.4**        | 10.8    | —           | 25.0         | -13%       |
-| job-run-why-failed     | **19.0**       | 20.2    | —           | 41.0         | -6%        |
-| catalog-browse         | **12.4**       | 12.4    | 15.6        | 38.0         | +0%        |
-| home-orientation-aws   | **9.2**        | 22.0    | —           | 20.2         | -58%       |
-| table-schema-aws       | **7.4**        | 7.6     | —           | 22.6         | -3%        |
-| sql-count-aws          | **9.8**        | 13.2    | —           | 21.4         | -26%       |
-| table-list-aws         | **8.4**        | 8.2     | —           | 21.8         | +2%        |
-| error-recovery-aws     | **8.8**        | 7.8     | —           | 18.8         | +13%       |
-| volume-read-aws        | **9.0**        | 14.0    | —           | 31.4         | -36%       |
-| notebook-read-aws      | **27.6**       | 29.4    | —           | —            | -6%        |
-| clusters-list-aws      | **8.2**        | 8.6     | —           | 16.6         | -5%        |
-| clusters-view-aws      | **12.6**       | 8.4     | —           | 147.4        | +50%       |
-| cluster-stop-noop-aws  | **11.6**       | 9.6     | —           | 17.8         | +21%       |
-| job-list-aws           | **9.6**        | 8.2     | —           | 17.0         | +17%       |
-| notebook-discovery-aws | **16.2**       | 16.8    | —           | —            | -4%        |
-| dag-shape-aws          | **17.2**       | 13.2    | —           | 21.8         | +30%       |
-| find-failed-run-aws    | **24.0**       | 34.6    | —           | 30.8         | -31%       |
-| run-and-confirm-aws    | **15.8**       | 41.8    | —           | 28.0         | -62%       |
-| pipeline-status-aws    | **12.6**       | 16.2    | —           | 31.6         | -22%       |
-| pipeline-stop-noop-aws | **13.6**       | 12.8    | —           | 23.0         | +6%        |
-| serving-status-aws     | **8.6**        | 9.2     | —           | 19.8         | -7%        |
-| api-current-user-aws   | **8.8**        | 8.8     | —           | —            | +0%        |
-| volumes-metadata-aws   | **8.4**        | 8.2     | —           | 19.2         | +2%        |
-| function-view-aws      | **10.8**       | 10.6    | —           | 23.8         | +2%        |
-| query-history-aws      | **10.8**       | 25.2    | —           | 45.6         | -57%       |
+| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit |
+| ---------------------- | -------------- | ------- | ----------- | ------------ |
+| home-orientation       | **2.2**        | 5.2     | 5.0         | 3.8          |
+| find-failed-run        | **6.4**        | 6.2     | 10.8        | 10.2         |
+| run-and-confirm        | **4.0**        | 3.6     | —           | 9.2          |
+| sql-count              | **2.0**        | 4.4     | 3.0         | 4.8          |
+| table-schema           | **2.0**        | 2.0     | 3.0         | 4.4          |
+| error-recovery         | **3.0**        | 2.0     | 3.0         | 4.0          |
+| table-list             | **2.0**        | 2.0     | 3.0         | 5.4          |
+| warehouse-cycle        | **2.0**        | 2.0     | —           | 4.8          |
+| notebook-read          | **3.0**        | 4.0     | —           | —            |
+| volume-read            | **2.0**        | 3.2     | —           | 9.6          |
+| fs-error-recovery      | **2.0**        | 2.6     | —           | —            |
+| home-dashboard         | **3.6**        | 6.8     | —           | 10.2         |
+| job-cancel-noop        | **2.0**        | 2.6     | —           | 6.0          |
+| job-run-why-failed     | **2.6**        | 4.2     | —           | 8.2          |
+| catalog-browse         | **3.0**        | 3.0     | 4.2         | 9.0          |
+| home-orientation-aws   | **2.2**        | 5.6     | —           | 4.6          |
+| table-schema-aws       | **2.0**        | 2.0     | —           | 3.4          |
+| sql-count-aws          | **2.0**        | 3.2     | —           | 4.8          |
+| table-list-aws         | **2.0**        | 2.0     | —           | 4.8          |
+| error-recovery-aws     | **2.2**        | 2.0     | —           | 3.6          |
+| volume-read-aws        | **2.2**        | 3.4     | —           | 9.2          |
+| notebook-read-aws      | **6.0**        | 6.2     | —           | —            |
+| clusters-list-aws      | **2.2**        | 2.0     | —           | 4.2          |
+| clusters-view-aws      | **3.4**        | 2.0     | —           | 12.4         |
+| cluster-stop-noop-aws  | **3.0**        | 2.0     | —           | 3.6          |
+| job-list-aws           | **2.0**        | 2.0     | —           | 5.0          |
+| notebook-discovery-aws | **4.2**        | 3.6     | —           | —            |
+| dag-shape-aws          | **4.2**        | 3.2     | —           | 6.6          |
+| find-failed-run-aws    | **5.8**        | 7.6     | —           | 7.2          |
+| run-and-confirm-aws    | **4.0**        | 3.4     | —           | 7.4          |
+| pipeline-status-aws    | **3.0**        | 3.8     | —           | 8.8          |
+| pipeline-stop-noop-aws | **3.0**        | 3.0     | —           | 6.6          |
+| serving-status-aws     | **2.0**        | 2.0     | —           | 4.2          |
+| api-current-user-aws   | **2.0**        | 2.0     | —           | —            |
+| volumes-metadata-aws   | **2.0**        | 2.0     | —           | 5.6          |
+| function-view-aws      | **3.0**        | 2.6     | —           | 5.0          |
+| query-history-aws      | **2.0**        | 6.8     | —           | 6.0          |
 
-### Cost per task (USD)
+</details>
+
+<details>
+<summary><b>Wall clock (seconds)</b></summary>
 
 Mean over repeats. `—` = not run for this condition.
 
-| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit | axi vs cli |
-| ---------------------- | -------------- | ------- | ----------- | ------------ | ---------- |
-| home-orientation       | **0.089**      | 0.162   | 0.264       | 0.316        | -45%       |
-| find-failed-run        | **0.203**      | 0.205   | 0.507       | 0.649        | -1%        |
-| run-and-confirm        | **0.144**      | 0.139   | —           | 0.504        | +4%        |
-| sql-count              | **0.121**      | 0.152   | 0.139       | 0.248        | -21%       |
-| table-schema           | **0.119**      | 0.126   | 0.131       | 0.216        | -5%        |
-| error-recovery         | **0.132**      | 0.109   | 0.131       | 0.209        | +21%       |
-| table-list             | **0.119**      | 0.145   | 0.179       | 0.314        | -18%       |
-| warehouse-cycle        | **0.119**      | 0.112   | —           | 0.202        | +6%        |
-| notebook-read          | **0.140**      | 0.145   | —           | —            | -3%        |
-| volume-read            | **0.120**      | 0.126   | —           | 0.553        | -5%        |
-| fs-error-recovery      | **0.121**      | 0.122   | —           | —            | 0%         |
-| home-dashboard         | **0.151**      | 0.171   | —           | 0.431        | -12%       |
-| job-cancel-noop        | **0.120**      | 0.126   | —           | 0.415        | -5%        |
-| job-run-why-failed     | **0.138**      | 0.166   | —           | 0.496        | -17%       |
-| catalog-browse         | **0.124**      | 0.141   | 0.199       | 0.444        | -12%       |
-| home-orientation-aws   | **0.126**      | 0.180   | —           | 0.342        | -30%       |
-| table-schema-aws       | **0.119**      | 0.125   | —           | 0.190        | -5%        |
-| sql-count-aws          | **0.120**      | 0.131   | —           | 0.265        | -9%        |
-| table-list-aws         | **0.118**      | 0.146   | —           | 0.320        | -19%       |
-| error-recovery-aws     | **0.123**      | 0.109   | —           | 0.170        | +13%       |
-| volume-read-aws        | **0.124**      | 0.136   | —           | 0.553        | -9%        |
-| notebook-read-aws      | **0.199**      | 0.194   | —           | —            | +2%        |
-| clusters-list-aws      | **0.126**      | 0.121   | —           | 0.248        | +4%        |
-| clusters-view-aws      | **0.144**      | 0.118   | —           | 0.565        | +22%       |
-| cluster-stop-noop-aws  | **0.141**      | 0.120   | —           | 0.229        | +17%       |
-| job-list-aws           | **0.125**      | 0.118   | —           | 0.343        | +6%        |
-| notebook-discovery-aws | **0.149**      | 0.150   | —           | —            | -1%        |
-| dag-shape-aws          | **0.161**      | 0.136   | —           | 0.441        | +18%       |
-| find-failed-run-aws    | **0.198**      | 0.238   | —           | 0.479        | -17%       |
-| run-and-confirm-aws    | **0.155**      | 0.143   | —           | 0.423        | +8%        |
-| pipeline-status-aws    | **0.142**      | 0.152   | —           | 0.438        | -7%        |
-| pipeline-stop-noop-aws | **0.142**      | 0.135   | —           | 0.376        | +5%        |
-| serving-status-aws     | **0.124**      | 0.117   | —           | 0.267        | +6%        |
-| api-current-user-aws   | **0.124**      | 0.114   | —           | —            | +8%        |
-| volumes-metadata-aws   | **0.123**      | 0.116   | —           | 0.316        | +6%        |
-| function-view-aws      | **0.139**      | 0.177   | —           | 0.400        | -21%       |
-| query-history-aws      | **0.032**      | 0.117   | —           | 0.282        | -73%       |
+| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit |
+| ---------------------- | -------------- | ------- | ----------- | ------------ |
+| home-orientation       | **8.8**        | 16.0    | 25.6        | 18.6         |
+| find-failed-run        | **28.2**       | 27.8    | 68.6        | 40.2         |
+| run-and-confirm        | **15.8**       | 50.2    | —           | 36.8         |
+| sql-count              | **17.2**       | 19.8    | 10.4        | 21.4         |
+| table-schema           | **7.4**        | 9.4     | 11.0        | 26.2         |
+| error-recovery         | **13.0**       | 8.2     | 10.6        | 22.0         |
+| table-list             | **9.6**        | 9.2     | 9.6         | 29.0         |
+| warehouse-cycle        | **7.8**        | 8.0     | —           | 19.2         |
+| notebook-read          | **15.2**       | 18.6    | —           | —            |
+| volume-read            | **8.2**        | 14.0    | —           | 29.8         |
+| fs-error-recovery      | **10.8**       | 12.8    | —           | —            |
+| home-dashboard         | **18.4**       | 22.4    | —           | 42.8         |
+| job-cancel-noop        | **9.4**        | 10.8    | —           | 25.0         |
+| job-run-why-failed     | **19.0**       | 20.2    | —           | 41.0         |
+| catalog-browse         | **12.4**       | 12.4    | 15.6        | 38.0         |
+| home-orientation-aws   | **9.2**        | 22.0    | —           | 20.2         |
+| table-schema-aws       | **7.4**        | 7.6     | —           | 22.6         |
+| sql-count-aws          | **9.8**        | 13.2    | —           | 21.4         |
+| table-list-aws         | **8.4**        | 8.2     | —           | 21.8         |
+| error-recovery-aws     | **8.8**        | 7.8     | —           | 18.8         |
+| volume-read-aws        | **9.0**        | 14.0    | —           | 31.4         |
+| notebook-read-aws      | **27.6**       | 29.4    | —           | —            |
+| clusters-list-aws      | **8.2**        | 8.6     | —           | 16.6         |
+| clusters-view-aws      | **12.6**       | 8.4     | —           | 147.4        |
+| cluster-stop-noop-aws  | **11.6**       | 9.6     | —           | 17.8         |
+| job-list-aws           | **9.6**        | 8.2     | —           | 17.0         |
+| notebook-discovery-aws | **16.2**       | 16.8    | —           | —            |
+| dag-shape-aws          | **17.2**       | 13.2    | —           | 21.8         |
+| find-failed-run-aws    | **24.0**       | 34.6    | —           | 30.8         |
+| run-and-confirm-aws    | **15.8**       | 41.8    | —           | 28.0         |
+| pipeline-status-aws    | **12.6**       | 16.2    | —           | 31.6         |
+| pipeline-stop-noop-aws | **13.6**       | 12.8    | —           | 23.0         |
+| serving-status-aws     | **8.6**        | 9.2     | —           | 19.8         |
+| api-current-user-aws   | **8.8**        | 8.8     | —           | —            |
+| volumes-metadata-aws   | **8.4**        | 8.2     | —           | 19.2         |
+| function-view-aws      | **10.8**       | 10.6    | —           | 23.8         |
+| query-history-aws      | **10.8**       | 25.2    | —           | 45.6         |
+
+</details>
+
+<details>
+<summary><b>Cost per task (USD)</b></summary>
+
+Mean over repeats. `—` = not run for this condition.
+
+| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit |
+| ---------------------- | -------------- | ------- | ----------- | ------------ |
+| home-orientation       | **0.089**      | 0.162   | 0.264       | 0.316        |
+| find-failed-run        | **0.203**      | 0.205   | 0.507       | 0.649        |
+| run-and-confirm        | **0.144**      | 0.139   | —           | 0.504        |
+| sql-count              | **0.121**      | 0.152   | 0.139       | 0.248        |
+| table-schema           | **0.119**      | 0.126   | 0.131       | 0.216        |
+| error-recovery         | **0.132**      | 0.109   | 0.131       | 0.209        |
+| table-list             | **0.119**      | 0.145   | 0.179       | 0.314        |
+| warehouse-cycle        | **0.119**      | 0.112   | —           | 0.202        |
+| notebook-read          | **0.140**      | 0.145   | —           | —            |
+| volume-read            | **0.120**      | 0.126   | —           | 0.553        |
+| fs-error-recovery      | **0.121**      | 0.122   | —           | —            |
+| home-dashboard         | **0.151**      | 0.171   | —           | 0.431        |
+| job-cancel-noop        | **0.120**      | 0.126   | —           | 0.415        |
+| job-run-why-failed     | **0.138**      | 0.166   | —           | 0.496        |
+| catalog-browse         | **0.124**      | 0.141   | 0.199       | 0.444        |
+| home-orientation-aws   | **0.126**      | 0.180   | —           | 0.342        |
+| table-schema-aws       | **0.119**      | 0.125   | —           | 0.190        |
+| sql-count-aws          | **0.120**      | 0.131   | —           | 0.265        |
+| table-list-aws         | **0.118**      | 0.146   | —           | 0.320        |
+| error-recovery-aws     | **0.123**      | 0.109   | —           | 0.170        |
+| volume-read-aws        | **0.124**      | 0.136   | —           | 0.553        |
+| notebook-read-aws      | **0.199**      | 0.194   | —           | —            |
+| clusters-list-aws      | **0.126**      | 0.121   | —           | 0.248        |
+| clusters-view-aws      | **0.144**      | 0.118   | —           | 0.565        |
+| cluster-stop-noop-aws  | **0.141**      | 0.120   | —           | 0.229        |
+| job-list-aws           | **0.125**      | 0.118   | —           | 0.343        |
+| notebook-discovery-aws | **0.149**      | 0.150   | —           | —            |
+| dag-shape-aws          | **0.161**      | 0.136   | —           | 0.441        |
+| find-failed-run-aws    | **0.198**      | 0.238   | —           | 0.479        |
+| run-and-confirm-aws    | **0.155**      | 0.143   | —           | 0.423        |
+| pipeline-status-aws    | **0.142**      | 0.152   | —           | 0.438        |
+| pipeline-stop-noop-aws | **0.142**      | 0.135   | —           | 0.376        |
+| serving-status-aws     | **0.124**      | 0.117   | —           | 0.267        |
+| api-current-user-aws   | **0.124**      | 0.114   | —           | —            |
+| volumes-metadata-aws   | **0.123**      | 0.116   | —           | 0.316        |
+| function-view-aws      | **0.139**      | 0.177   | —           | 0.400        |
+| query-history-aws      | **0.032**      | 0.117   | —           | 0.282        |
+
+</details>
 
 ## Reading the tables
 
