@@ -149,11 +149,14 @@ Request body:
   the official CLI and `databricks-axi`). The mcp condition's server is
   configured independently of any CLI profile, so this is best-effort
   there. Omitted: current/default profile behavior, unchanged.
-- `model` (string, optional): a Claude model id from the page's Model
+- `model` (string, optional): a Claude model choice from the page's Model
   dropdown, applied as `--model` to every condition equally (so the
-  comparison stays fair). Overrides the `ARENA_MODEL` env default. Omitted:
-  the viewer's Claude default. Validated against
-  `^[A-Za-z0-9][\w.:-]{0,63}$`; a value starting with a dash is a `400`.
+  comparison stays fair). The dropdown offers the CLI-maintained aliases
+  (`sonnet`, `opus`, `haiku`), which `claude` resolves to the latest model
+  of each family, so no model id is hardcoded to go stale. Overrides the
+  `ARENA_MODEL` env default. Omitted: the viewer's Claude default.
+  Validated against `^[A-Za-z0-9][\w.:-]{0,63}$`; a value starting with a
+  dash is a `400`.
 
 Headers required: `x-arena-nonce: <the page's embedded nonce>`, plus a
 same-origin `Origin`/`Sec-Fetch-Site` (browsers set these automatically for
