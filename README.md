@@ -110,12 +110,12 @@ cluster-detail task, agent variance rather than a tool error. Over the seven
 tasks all four setups can run, databricks-axi posts the lowest input tokens,
 cost, turns, and duration:
 
-| Condition                    | Avg Input Tokens | Avg Cost/Task | Avg Duration | Avg Turns | Success  |
-| ---------------------------- | ---------------- | ------------- | ------------ | --------- | -------- |
-| **databricks-axi**           | **85,664**       | **$0.130**    | **14s**      | **2.9**   | **100%** |
-| databricks CLI (raw)         | 103,963          | $0.148        | 15s          | 3.5       | 100%     |
-| Databricks managed MCP (SQL) | 186,051          | $0.221        | 22s          | 4.6       | 100%     |
-| Databricks ai-dev-kit MCP    | 277,399          | $0.342        | 28s          | 5.9       | 100%     |
+| Condition                    | Avg Input Tokens | Avg Cost/Task | Avg Duration | Avg Turns | Success (7 tasks) |
+| ---------------------------- | ---------------- | ------------- | ------------ | --------- | ----------------- |
+| **databricks-axi**           | **85,664**       | **$0.130**    | **14s**      | **2.9**   | **35/35**         |
+| databricks CLI (raw)         | 103,963          | $0.148        | 15s          | 3.5       | 35/35             |
+| Databricks managed MCP (SQL) | 186,051          | $0.221        | 22s          | 4.6       | 35/35             |
+| Databricks ai-dev-kit MCP    | 277,399          | $0.342        | 28s          | 5.9       | 35/35             |
 
 Against the raw `databricks` CLI, the very CLI this tool wraps, that's 18%
 fewer input tokens, 17% fewer turns, and 12% lower cost. Against the MCP
