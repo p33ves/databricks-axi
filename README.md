@@ -9,11 +9,6 @@ Wraps the official [`databricks` CLI](https://docs.databricks.com/dev-tools/cli/
 Auth, transport, and API coverage stay upstream; this tool reshapes the
 experience for agents.
 
-> **Status: pre-release.** The `home` ambient dashboard, `jobs`, `clusters`,
-> `sql`, `catalog`, `workspace`, `fs`, `pipelines`, `serving`, and `setup`
-> domains and the `api` passthrough are implemented.
-> Run `npx -y databricks-axi --help` to see what's available today.
-
 ## Why databricks-axi
 
 An agent working with Databricks today has three options, and each has a
