@@ -47,7 +47,7 @@ that task; every other row is the original CP3 matrix.
 
 ### Input tokens
 
-Mean over repeats. `—` = condition cannot run this task.
+Mean over repeats. `—` = not run for this condition.
 
 | task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit | axi vs cli |
 | ---------------------- | -------------- | ------- | ----------- | ------------ | ---------- |
@@ -91,7 +91,7 @@ Mean over repeats. `—` = condition cannot run this task.
 
 ### Turns
 
-Mean over repeats. `—` = condition cannot run this task.
+Mean over repeats. `—` = not run for this condition.
 
 | task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit | axi vs cli |
 | ---------------------- | -------------- | ------- | ----------- | ------------ | ---------- |
@@ -133,9 +133,53 @@ Mean over repeats. `—` = condition cannot run this task.
 | function-view-aws      | **3.0**        | 2.6     | —           | 5.0          | +15%       |
 | query-history-aws      | **2.0**        | 6.8     | —           | 6.0          | -71%       |
 
+### Wall clock (seconds)
+
+Mean over repeats. `—` = not run for this condition.
+
+| task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit | axi vs cli |
+| ---------------------- | -------------- | ------- | ----------- | ------------ | ---------- |
+| home-orientation       | **9**          | 16      | 26          | 19           | -45%       |
+| find-failed-run        | **28**         | 28      | 69          | 40           | +1%        |
+| run-and-confirm        | **16**         | 50      | —           | 37           | -69%       |
+| sql-count              | **17**         | 20      | 10          | 21           | -13%       |
+| table-schema           | **7**          | 9       | 11          | 26           | -21%       |
+| error-recovery         | **13**         | 8       | 11          | 22           | +59%       |
+| table-list             | **10**         | 9       | 10          | 29           | +4%        |
+| warehouse-cycle        | **8**          | 8       | —           | 19           | -3%        |
+| notebook-read          | **15**         | 19      | —           | —            | -18%       |
+| volume-read            | **8**          | 14      | —           | 30           | -41%       |
+| fs-error-recovery      | **11**         | 13      | —           | —            | -16%       |
+| home-dashboard         | **18**         | 22      | —           | 43           | -18%       |
+| job-cancel-noop        | **9**          | 11      | —           | 25           | -13%       |
+| job-run-why-failed     | **19**         | 20      | —           | 41           | -6%        |
+| catalog-browse         | **12**         | 12      | —           | 38           | +0%        |
+| home-orientation-aws   | **9**          | 22      | —           | 20           | -58%       |
+| table-schema-aws       | **7**          | 8       | —           | 23           | -3%        |
+| sql-count-aws          | **10**         | 13      | —           | 21           | -26%       |
+| table-list-aws         | **8**          | 8       | —           | 22           | +2%        |
+| error-recovery-aws     | **9**          | 8       | —           | 19           | +13%       |
+| volume-read-aws        | **9**          | 14      | —           | 31           | -36%       |
+| notebook-read-aws      | **28**         | 29      | —           | —            | -6%        |
+| clusters-list-aws      | **8**          | 9       | —           | 17           | -5%        |
+| clusters-view-aws      | **13**         | 8       | —           | 147          | +50%       |
+| cluster-stop-noop-aws  | **12**         | 10      | —           | 18           | +21%       |
+| job-list-aws           | **10**         | 8       | —           | 17           | +17%       |
+| notebook-discovery-aws | **16**         | 17      | —           | —            | -4%        |
+| dag-shape-aws          | **17**         | 13      | —           | 22           | +30%       |
+| find-failed-run-aws    | **24**         | 35      | —           | 31           | -31%       |
+| run-and-confirm-aws    | **16**         | 42      | —           | 28           | -62%       |
+| pipeline-status-aws    | **13**         | 16      | —           | 32           | -22%       |
+| pipeline-stop-noop-aws | **14**         | 13      | —           | 23           | +6%        |
+| serving-status-aws     | **9**          | 9       | —           | 20           | -7%        |
+| api-current-user-aws   | **9**          | 9       | —           | —            | +0%        |
+| volumes-metadata-aws   | **8**          | 8       | —           | 19           | +2%        |
+| function-view-aws      | **11**         | 11      | —           | 24           | +2%        |
+| query-history-aws      | **11**         | 25      | —           | 46           | -57%       |
+
 ### Cost per task (USD)
 
-Mean over repeats. `—` = condition cannot run this task.
+Mean over repeats. `—` = not run for this condition.
 
 | task                   | databricks-axi | raw-cli | mcp-managed | mcp-aidevkit | axi vs cli |
 | ---------------------- | -------------- | ------- | ----------- | ------------ | ---------- |
@@ -190,7 +234,8 @@ several calls and read past a lot of JSON it does not need.
 `cluster-stop-noop-aws` (+57%), `dag-shape-aws` (+37%). `find-failed-run` is
 the notable one, roughly a tie (+5% tokens, +3% turns): it needs several
 jobs-API calls, so raw-cli's dense `-o json` output happens to answer more per
-round trip. Both MCP servers still cost 3x on it.
+round trip. Both MCP servers still cost more on it: $0.507 for mcp-managed and
+$0.649 for mcp-aidevkit, against axi's $0.203.
 
 **Where the MCP servers land.** Above axi on input tokens almost everywhere,
 and the gap widens with tool count. The structural reason is in the README: an
@@ -199,13 +244,15 @@ ai-dev-kit. The largest multiple is `volume-read`, where mcp-aidevkit spends
 584,559 input tokens against axi's 59,754.
 
 **The one real outlier.** mcp-aidevkit spent 12.4 turns and 147s on
-`clusters-view-aws` hunting for the right `manage_cluster` verb (+1655% wall
-vs raw-cli), which is also where its single failed repeat landed. That is the
-cost of a 40-tool consolidated-verb schema, not an axi comparison point.
+`clusters-view-aws`, against raw-cli's 8s, hunting for the right
+`manage_cluster` verb. That is also where its single failed repeat landed, and
+it is the cost of a 40-tool consolidated-verb schema, not an axi comparison
+point.
 
-**Why `run-and-confirm` takes more turns.** It triggers a real job run and polls for completion; axi's
-async-by-default flow takes more turns than raw-cli's blocking call but
-finishes well inside the wall time (16s vs 50s).
+**Why `run-and-confirm` takes more turns.** It triggers a real job run and
+polls for completion; axi's async-by-default flow takes more turns than
+raw-cli's blocking call but finishes well inside the wall time (16s against
+50s).
 
 ## Post-matrix live smoke: 9/9 PASS
 
