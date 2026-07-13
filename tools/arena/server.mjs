@@ -400,7 +400,8 @@ function conditionArgv(id, task, mcpName, model) {
     String(ARENA_MAX_TURNS),
   ];
   // Per-run model (from the page dropdown) wins over the ARENA_MODEL env
-  // default; both panes share whichever is chosen so the comparison is fair.
+  // default; all conditions share whichever is chosen so the comparison is
+  // fair.
   const chosen = model || ARENA_MODEL;
   if (chosen) argv.push("--model", chosen);
   if (id === "mcp" && ARENA_MCP_CONFIG) {

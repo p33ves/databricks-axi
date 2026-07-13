@@ -19,6 +19,11 @@ node tools/arena/server.mjs
 Open the printed `http://127.0.0.1:<port>` URL. The server binds to
 `127.0.0.1` only and picks an ephemeral port.
 
+To preview the UI without a server, open `tools/arena/index.html` directly:
+the unsubstituted nonce placeholder switches the page into a canned demo
+mode that fakes every fetch and replays a scripted run. It contacts
+nothing and spends nothing.
+
 ## What it costs
 
 Every run is **three real `claude -p` agent sessions** against your own
@@ -156,7 +161,8 @@ Request body:
   of each family, so no model id is hardcoded to go stale. Overrides the
   `ARENA_MODEL` env default. Omitted: the viewer's Claude default.
   Validated against `^[A-Za-z0-9][\w.:-]{0,63}$`; a value starting with a
-  dash is a `400`.
+  dash is a `400`, and any other non-matching value is ignored (the default
+  model is used).
 
 Headers required: `x-arena-nonce: <the page's embedded nonce>`, plus a
 same-origin `Origin`/`Sec-Fetch-Site` (browsers set these automatically for
@@ -234,5 +240,6 @@ pnpm test
 ```
 
 runs `tools/arena/parse.test.mjs`, a hermetic check of the stream-json
-metric parse, the `condense`/`condenseEvent` transcript reducer, and the
-results-row shape. It never spawns `claude` or `databricks`.
+metric parse, the `condense`/`condenseEvent` transcript reducer, the
+results-row shape, and the comparison-highlight sets (`buildComparison`).
+It never spawns `claude` or `databricks`.
