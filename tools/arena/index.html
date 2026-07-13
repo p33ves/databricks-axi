@@ -757,8 +757,11 @@
           for (const p of profiles) {
             const o = document.createElement("option");
             o.value = p.name;
-            o.textContent =
-              p.name + " — " + (p.host || "").replace(/^https:\/\//, "");
+            // ARENA_HIDE_HOST nulls the host server-side; show the bare name
+            // rather than a dangling separator.
+            o.textContent = p.host
+              ? p.name + " — " + p.host.replace(/^https:\/\//, "")
+              : p.name;
             $("#profile").appendChild(o);
           }
           // A named profile pins one workspace; the bare "default" entry can be

@@ -334,6 +334,13 @@ async function runPreflight() {
   return { databricks, claude, axi, mcp };
 }
 
+// ARENA_HIDE_HOST=1 keeps the workspace hostname off screen entirely, for
+// screenshots and screen recordings. The host is a URL, not a secret, but it
+// identifies the workspace and a published screenshot is forever.
+const HIDE_HOST = process.env.ARENA_HIDE_HOST === "1";
+const hideHost = (s) =>
+  HIDE_HOST && s ? s.replace(/https:\/\/[^\s"']+/g, "<workspace>") : s;
+
 // GET /profiles: name + host only, from the databricks CLI's own profile
 // list (~/.databrickscfg) — never a token or any other config value.
 async function listProfiles() {
@@ -347,7 +354,7 @@ async function listProfiles() {
     const parsed = JSON.parse(r.out);
     return (parsed?.profiles ?? []).map((p) => ({
       name: p.name,
-      host: p.host,
+      host: HIDE_HOST ? null : p.host,
     }));
   } catch {
     return [];
@@ -359,6 +366,7 @@ async function listProfiles() {
 // same non-interactive `auth describe` preflight already runs — unlike that
 // check, the host IS surfaced here (a URL, not a secret), by explicit design.
 async function resolveHost(profile) {
+  if (HIDE_HOST) return null;
   const args = ["auth", "describe", "-o", "json"];
   if (profile) args.push("-p", profile);
   const r = await spawnCapture("databricks", args);
@@ -481,7 +489,10 @@ async function runCondition(
       // stays null there unless we fall back to the exit code, and a
       // force-killed condition must never render as a fast, cheap success.
       is_error: parsed.is_error ?? result.code !== 0,
-      error_line: result.code === 0 ? null : result.lastErrLine || null,
+      // Upstream stderr can end with a "Host: https://..." trailer, so the
+      // error pane is a second way the workspace hostname reaches the screen.
+      error_line:
+        result.code === 0 ? null : hideHost(result.lastErrLine) || null,
     };
     return metrics;
   } finally {

@@ -70,12 +70,26 @@ but allowed.
 
 ## Environment variables
 
-| Variable           | Default                 | Meaning                                                                                                                |
-| ------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `ARENA_MAX_TURNS`  | `20`                    | `--max-turns` passed to every condition's `claude -p`                                                                  |
-| `ARENA_MODEL`      | viewer's Claude default | `--model` override; omitted (not forced to a fixed model) unless set, so all three panes share whatever the default is |
-| `ARENA_TIMEOUT_MS` | `300000` (5 min)        | hard timeout per condition child; SIGKILL past this                                                                    |
-| `ARENA_MCP_CONFIG` | unset                   | path to a viewer-owned `mcp.json` for scoped MCP mode (see above)                                                      |
+| Variable           | Default                 | Meaning                                                                                                                                                                                                   |
+| ------------------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ARENA_MAX_TURNS`  | `20`                    | `--max-turns` passed to every condition's `claude -p`                                                                                                                                                     |
+| `ARENA_MODEL`      | viewer's Claude default | `--model` override; omitted (not forced to a fixed model) unless set, so all three panes share whatever the default is                                                                                    |
+| `ARENA_TIMEOUT_MS` | `300000` (5 min)        | hard timeout per condition child; SIGKILL past this                                                                                                                                                       |
+| `ARENA_MCP_CONFIG` | unset                   | path to a viewer-owned `mcp.json` for scoped MCP mode (see above)                                                                                                                                         |
+| `ARENA_HIDE_HOST`  | unset                   | set to `1` to keep the workspace hostname off screen: no "open workspace" link, no host in the profile picker, and any hostname stripped from an error line. Use it for screenshots and screen recordings |
+
+## What the duration means
+
+The duration each pane reports is end-to-end wall clock for that condition's
+`claude -p` session: process start to exit. It includes model inference, the
+agent's own thinking, and every tool call, which means it **includes the time
+Databricks takes to answer**. Nothing is subtracted.
+
+That is the honest number for "how long did I wait", but it is not a clean
+measure of the tool alone. A cold SQL warehouse or a slow cluster lands in
+whichever pane happens to hit it, and conditions that make more tool calls
+absorb more workspace latency. Read the duration row as a demo observation,
+not as a benchmark of the interfaces.
 
 ## Safety
 

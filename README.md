@@ -1,5 +1,9 @@
 # databricks-axi
 
+[![npm](https://img.shields.io/npm/v/databricks-axi)](https://www.npmjs.com/package/databricks-axi)
+[![CI](https://github.com/p33ves/databricks-axi/actions/workflows/ci.yml/badge.svg)](https://github.com/p33ves/databricks-axi/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 Token-efficient Databricks CLI for AI agents, implementing the
 [AXI standard](https://github.com/kunchenguid/axi) (Agent eXperience
 Interface): TOON output, minimal default schemas, structured errors,
@@ -49,14 +53,14 @@ Same workspace, same question, both CLIs. The raw CLI:
 $ databricks jobs list -o json
 [
   {
-    "created_time": 1783396339626,
+    "created_time": 1700000000000,
     "creator_user_name": "you@example.com",
-    "job_id": 517790498477266,
+    "job_id": 123456789012345,
     "settings": {
       "email_notifications": {},
       "format": "MULTI_TASK",
       "max_concurrent_runs": 1,
-      "name": "axi-bench-etl",
+      "name": "nightly-etl",
       "queue": {
         "enabled": true
       },
@@ -71,7 +75,7 @@ databricks-axi:
 ```console
 $ databricks-axi jobs list
 jobs[1]{job_id,name,creator_user_name}:
-  517790498477266,axi-bench-etl,you@example.com
+  123456789012345,nightly-etl,you@example.com
 count: 1
 help[2]: databricks-axi jobs view <job_id>,databricks-axi jobs runs <job_id>
 ```
