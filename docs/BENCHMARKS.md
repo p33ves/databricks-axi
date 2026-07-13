@@ -153,7 +153,7 @@ Mean over repeats. `—` = not run for this condition.
 | home-dashboard         | **18**         | 22      | —           | 43           | -18%       |
 | job-cancel-noop        | **9**          | 11      | —           | 25           | -13%       |
 | job-run-why-failed     | **19**         | 20      | —           | 41           | -6%        |
-| catalog-browse         | **12**         | 12      | —           | 38           | +0%        |
+| catalog-browse         | **12**         | 12      | 16          | 38           | +0%        |
 | home-orientation-aws   | **9**          | 22      | —           | 20           | -58%       |
 | table-schema-aws       | **7**          | 8       | —           | 23           | -3%        |
 | sql-count-aws          | **10**         | 13      | —           | 21           | -26%       |
