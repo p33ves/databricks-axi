@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/p33ves/databricks-axi/compare/v1.0.0...v1.0.1) (2026-07-13)
+
+
+### Bug Fixes
+
+* **skill:** drop stale pre-1.0 status wording for the 1.0 release ([#45](https://github.com/p33ves/databricks-axi/issues/45)) ([d59ed87](https://github.com/p33ves/databricks-axi/commit/d59ed87fd3bee98746c447b24e740c084bca7df8))
+
 ## [1.0.0](https://github.com/p33ves/databricks-axi/compare/v0.9.1...v1.0.0) (2026-07-13)
 
 
