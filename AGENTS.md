@@ -48,9 +48,9 @@ NOT_FOUND wrapper in a new domain; call `listResult`/`runWithNotFoundHelp`.
 of `has_more`.)
 
 Per-component detail (exports, sharp edges, test coverage) for every
-domain and the shared core layer lives under
-[docs/components/](docs/components/), one file per domain plus `core.md`
-for the shared/support modules.
+command and the shared core layer lives under
+[docs/components/](docs/components/), one file per domain or top-level
+verb (e.g. `whoami`) plus `core.md` for the shared/support modules.
 
 Tests mirror `src/` under `test/`. Domain tests call `setupCli()` from
 `test/helpers/fake-databricks.ts` for the standard rig (fresh fake

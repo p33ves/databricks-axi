@@ -44,8 +44,9 @@ hit its own 4s timeout) — the whole command never blocks on the default
   to non-`TERMINATED`. **Omitted entirely** (not even an empty array) when
   there are zero non-terminated clusters, so serverless/Free-Edition
   workspaces don't pay a "no clusters" line every session.
-- `commands`: a flat one-line summary of every wired domain and its
-  subcommands (`AVAILABLE_COMMANDS` in the source).
+- `commands`: a flat one-line summary of every wired command and its
+  subcommands, including the top-level `whoami` verb (`AVAILABLE_COMMANDS`
+  in the source).
 - `help`: three fixed top-level suggestions (`jobs list`, `sql exec`,
   `catalog catalogs`).
 
