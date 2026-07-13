@@ -13,6 +13,12 @@ Wraps the official [`databricks` CLI](https://docs.databricks.com/dev-tools/cli/
 Auth, transport, and API coverage stay upstream; this tool reshapes the
 experience for agents.
 
+[![The arena demo: one task run three ways, side by side](https://raw.githubusercontent.com/p33ves/databricks-axi/main/docs/images/arena.png)](tools/arena/)
+
+One task, three agents, one workspace, via the [arena](tools/arena/) demo you
+can run yourself. A demo, not a benchmark: one run each, no repeats, no
+grading. The measured numbers are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
 ## Why databricks-axi
 
 An agent working with Databricks today has three options, and each has a
