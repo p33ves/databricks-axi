@@ -23,17 +23,21 @@ deterministically where the answer is machine-checkable (row counts, IDs,
 statuses), by an LLM judge otherwise.
 
 Not every condition can run every task, and a `—` in the tables below means
-exactly that: `mcp-managed` is SQL-only, so it sits out every job- or
-cluster-mutating task and every AWS-profile task; both MCP servers sit out
-`api-current-user-aws` and `notebook-discovery-aws`, which have no matching
-tool.
+exactly that. `mcp-managed` is SQL-only: it sits out every job- or
+cluster-mutating task, every workspace and filesystem task (notebooks,
+volumes, DBFS), and every AWS-profile task, so it only covers the seven-task
+SQL/catalog core. Both MCP servers sit out the tasks they have no matching
+tool for: neither can read notebook source or the workspace filesystem
+(`notebook-read`, `notebook-read-aws`, `fs-error-recovery`,
+`notebook-discovery-aws`), and neither exposes a whoami equivalent
+(`api-current-user-aws`).
 
 ## Latest run: CP3 (2026-07-11, v0.9.0)
 
 37 tasks across three workspaces: a Databricks Free Edition workspace
 (`FREE`) plus two paid trial workspaces (`AWS`, serverless; `AWS2`, classic
-clusters, used for the cluster tasks). Every databricks-axi cell passed
-(185/185).
+clusters, used for the cluster tasks). 564 of 565 runs passed (99.8%). Every
+databricks-axi cell passed (185/185).
 
 The one failed cell across all conditions was `clusters-view-aws /
 mcp-aidevkit`, one of five repeats: after a 15-turn tool-discovery loop the
@@ -193,9 +197,11 @@ the notable one, roughly a tie (+5% tokens, +3% turns): it needs several
 jobs-API calls, so raw-cli's dense `-o json` output happens to answer more per
 round trip. Both MCP servers still cost 3x on it.
 
-**Where the MCP servers land.** Consistently 2-6x axi's input tokens, and the
-gap widens with tool count. `catalog-browse` is 416,160 tokens on ai-dev-kit
-against 66,100 on axi. The structural reason is in the README: an MCP server
+**Where the MCP servers land.** Above axi almost everywhere, and the gap
+widens with tool count. `mcp-managed` runs 1.5-3x axi's input tokens across
+the seven tasks it can do. `mcp-aidevkit` spans 1.4-9.8x, median ~3x, topping
+out on `volume-read` (584,559 tokens against 59,754) and `catalog-browse`
+(416,160 against 66,100). The structural reason is in the README: an MCP server
 loads its tool schemas into context every session, ~40 of them for ai-dev-kit.
 
 **The one real outlier.** mcp-aidevkit spent 12.4 turns and 147s on
@@ -203,7 +209,7 @@ loads its tool schemas into context every session, ~40 of them for ai-dev-kit.
 vs raw-cli), which is also where its single failed repeat landed. That is the
 cost of a 40-tool consolidated-verb schema, not an axi comparison point.
 
-`run-and-confirm` triggers a real job run and polls for completion; axi's
+**Why `run-and-confirm` takes more turns.** It triggers a real job run and polls for completion; axi's
 async-by-default flow takes more turns than raw-cli's blocking call but
 finishes well inside the wall time (16s vs 50s).
 
