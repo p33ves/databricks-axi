@@ -72,6 +72,13 @@ tools/arena/server.mjs`. Do not override `HOME`: the `claude` children
   profile keeps auth on the Databricks CLI's own credential chain, so no token
   is written into your Claude config. Check it with `claude mcp list`; the
   arena looks for a line starting with `databricks:`.
+
+  Preflight runs that same `claude mcp list`, which health-checks every server
+  you have registered and has no flag to skip it, so it slows down as you add
+  more (~14s with three). The probe gets 30s; past that the mcp pane is
+  disabled with a "did not finish in 30s" reason rather than a "not
+  configured" one. If you sit above that ceiling, scoped mode below skips the
+  probe entirely.
   - **Inherit mode (default):** the mcp condition runs without
     `--mcp-config`, so it loads your already-configured, **user-scoped**
     Databricks MCP server. Each run executes in a throwaway temp directory,
@@ -226,7 +233,7 @@ object, tagged `{ pane, kind, ... }`:
 
 | kind         | pane                   | payload                                     | meaning                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------ | ---------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `started`    | `null`                 | `{ profile, host, order }`                  | once, at run start; `host` is the resolved workspace URL for the chosen (or default) profile — render an "open workspace" link (`target="_blank"`), never an iframe/proxy of the workspace UI                                                                                                                                                                                                                                                   |
+| `started`    | `null`                 | `{ profile, host, order }`                  | once, at run start; `host` is the resolved workspace URL for the chosen (or default) profile — the page hangs the profile name's `href` off it (`target="_blank"`), so the host is never rendered as text; never an iframe/proxy of the workspace UI                                                                                                                                                                                            |
 | `line`       | condition id           | `{ text }`                                  | one condensed transcript line (`ASSISTANT: ...` / `TOOL <name>: ...` / `RESULT: ...`), pushed as the child's stdout arrives                                                                                                                                                                                                                                                                                                                     |
 | `done`       | condition id           | `{ metrics }`                               | that condition finished; `metrics` = `{ exit, wall_s, num_turns, tokens_in, tokens_cache_create, tokens_cache_read, tokens_out, cost_usd, is_error, error_line }`                                                                                                                                                                                                                                                                               |
 | `comparison` | `null`                 | `{ conditions, lowest_cost, lowest_turns }` | once, after all conditions finish; `conditions` mirrors the per-condition `metrics` above. `lowest_cost`/`lowest_turns` are each an **array** of the condition ids tied at the minimum (cost is the headline axis, not raw token count, since token classes are priced differently). Empty array when fewer than two conditions survive (a lone finisher has nothing to compare against), or when all candidates tie (a wash highlights nobody) |
@@ -287,5 +294,6 @@ pnpm test
 
 runs `tools/arena/parse.test.mjs`, a hermetic check of the stream-json
 metric parse, the `condense`/`condenseEvent` transcript reducer, the
-results-row shape, and the comparison-highlight sets (`buildComparison`).
-It never spawns `claude` or `databricks`.
+exit-code fallbacks for a child that dies without a result event
+(`buildMetrics`), the results-row shape, and the comparison-highlight sets
+(`buildComparison`). It never spawns `claude` or `databricks`.
