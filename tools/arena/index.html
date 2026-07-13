@@ -18,6 +18,9 @@
         --c-raw: #5aa2ff;
         --c-mcp: #f5b73a;
         --c-axi: #1fd6a0;
+        /* The three above are condition identity: a pane, its dot, its bar.
+           Anything that is not a condition must not borrow one of them. */
+        --c-warn: #ff6b5e;
         --bad: #d06565;
         /* Status success green — deliberately a *different* green from the
            databricks-axi condition hue, so "online / done / ✓" never reads as
@@ -168,7 +171,7 @@
         padding: 0 0 14px 10px;
         font-size: 13px;
         color: var(--muted);
-        border-left: 3px solid var(--c-mcp);
+        border-left: 3px solid var(--c-warn);
         border-bottom: 1px solid var(--line);
       }
       .cost strong {
@@ -757,11 +760,9 @@
           for (const p of profiles) {
             const o = document.createElement("option");
             o.value = p.name;
-            // ARENA_HIDE_HOST nulls the host server-side; show the bare name
-            // rather than a dangling separator.
-            o.textContent = p.host
-              ? p.name + " — " + p.host.replace(/^https:\/\//, "")
-              : p.name;
+            // Name only. The workspace is reachable by clicking the profile
+            // name in the run status line once a run starts.
+            o.textContent = p.name;
             $("#profile").appendChild(o);
           }
           // A named profile pins one workspace; the bare "default" entry can be
@@ -924,20 +925,31 @@
           const e = JSON.parse(ev.data);
           if (e.kind === "started") {
             const meta = $("#runmeta");
-            const order = Array.isArray(e.order)
-              ? " · order: " + e.order.map((c) => NAMES[c]).join(" → ")
-              : "";
-            meta.textContent =
-              (e.profile ? "Running against profile " + e.profile : "Running") +
-              order +
-              " — ";
-            if (typeof e.host === "string" && e.host.startsWith("https://")) {
-              const link = document.createElement("a");
-              link.href = e.host;
-              link.target = "_blank";
-              link.rel = "noopener";
-              link.textContent = "open workspace ↗";
-              meta.appendChild(link);
+            meta.textContent = "";
+            const linkable =
+              typeof e.host === "string" && e.host.startsWith("https://");
+            if (e.profile) {
+              meta.append("Running against profile ");
+              // The profile name IS the link to its workspace, so the hostname
+              // is never rendered as text. Degrades to plain text if the host
+              // could not be resolved.
+              if (linkable) {
+                const link = document.createElement("a");
+                link.href = e.host;
+                link.target = "_blank";
+                link.rel = "noopener";
+                link.textContent = e.profile;
+                meta.appendChild(link);
+              } else {
+                meta.append(e.profile);
+              }
+            } else {
+              meta.append("Running");
+            }
+            if (Array.isArray(e.order)) {
+              meta.append(
+                " · order: " + e.order.map((c) => NAMES[c]).join(" → "),
+              );
             }
           } else if (e.kind === "line") {
             setState(e.pane, "running", "running");

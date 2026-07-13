@@ -350,12 +350,12 @@ async function runPreflight() {
   return { databricks, claude, axi, mcp };
 }
 
-// ARENA_HIDE_HOST=1 keeps the workspace hostname off screen entirely, for
-// screenshots and screen recordings. The host is a URL, not a secret, but it
-// identifies the workspace and a published screenshot is forever.
-const HIDE_HOST = process.env.ARENA_HIDE_HOST === "1";
-const hideHost = (s) =>
-  HIDE_HOST && s ? s.replace(/https:\/\/[^\s"']+/g, "<workspace>") : s;
+// The workspace hostname is never rendered as text: the profile picker shows
+// the name, and the run status line links the name (host lives in the href).
+// Upstream stderr is the one surface that can still print it, so strip it
+// there. Cheap insurance for a page people screenshot and stream.
+const stripHosts = (s) =>
+  s ? s.replace(/https:\/\/[^\s"']+/g, "<workspace>") : s;
 
 // GET /profiles: name + host only, from the databricks CLI's own profile
 // list (~/.databrickscfg) — never a token or any other config value.
@@ -370,7 +370,7 @@ async function listProfiles() {
     const parsed = JSON.parse(r.out);
     return (parsed?.profiles ?? []).map((p) => ({
       name: p.name,
-      host: HIDE_HOST ? null : p.host,
+      host: p.host,
     }));
   } catch {
     return [];
@@ -382,7 +382,6 @@ async function listProfiles() {
 // same non-interactive `auth describe` preflight already runs — unlike that
 // check, the host IS surfaced here (a URL, not a secret), by explicit design.
 async function resolveHost(profile) {
-  if (HIDE_HOST) return null;
   const args = ["auth", "describe", "-o", "json"];
   if (profile) args.push("-p", profile);
   const r = await spawnCapture("databricks", args);

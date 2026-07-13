@@ -91,13 +91,18 @@ but allowed.
 
 ## Environment variables
 
-| Variable           | Default                 | Meaning                                                                                                                                                                                                   |
-| ------------------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ARENA_MAX_TURNS`  | `20`                    | `--max-turns` passed to every condition's `claude -p`                                                                                                                                                     |
-| `ARENA_MODEL`      | viewer's Claude default | `--model` override; omitted (not forced to a fixed model) unless set, so all three panes share whatever the default is                                                                                    |
-| `ARENA_TIMEOUT_MS` | `300000` (5 min)        | hard timeout per condition child; SIGKILL past this                                                                                                                                                       |
-| `ARENA_MCP_CONFIG` | unset                   | path to a viewer-owned `mcp.json` for scoped MCP mode (see above)                                                                                                                                         |
-| `ARENA_HIDE_HOST`  | unset                   | set to `1` to keep the workspace hostname off screen: no "open workspace" link, no host in the profile picker, and any hostname stripped from an error line. Use it for screenshots and screen recordings |
+| Variable           | Default                 | Meaning                                                                                                                |
+| ------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `ARENA_MAX_TURNS`  | `20`                    | `--max-turns` passed to every condition's `claude -p`                                                                  |
+| `ARENA_MODEL`      | viewer's Claude default | `--model` override; omitted (not forced to a fixed model) unless set, so all three panes share whatever the default is |
+| `ARENA_TIMEOUT_MS` | `300000` (5 min)        | hard timeout per condition child; SIGKILL past this                                                                    |
+| `ARENA_MCP_CONFIG` | unset                   | path to a viewer-owned `mcp.json` for scoped MCP mode (see above)                                                      |
+
+## The workspace hostname
+
+Never rendered as text: the profile picker shows the name, and the status line
+links that name (host lives in the `href`). Hostnames in error lines are
+replaced with `<workspace>`. Screenshots are safe by default.
 
 ## What the duration means
 
