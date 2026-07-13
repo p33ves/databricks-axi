@@ -101,7 +101,8 @@ upstream's own ~20-minute block on `run-now`.
 a fresh fake `databricks` on PATH per test, `respond`/`respondError` to seed
 canned JSON or stderr, `t.run(argv)` to invoke the CLI, and `calls()` to
 assert exact argv. Covers list pagination (`has_more`), field selection and
-rejection, empty states, auth-error mapping, job/run views, the `--wait`
-timeout path, log truncation and `--full`, the already-terminated cancel
+rejection, the bulk vs single-job `runs` default columns (`job_id` leads
+only in bulk mode), empty states, auth-error mapping, job/run views, the
+`--wait` timeout path, log truncation and `--full`, the already-terminated cancel
 no-op, the decimal-only `--limit` guard (rejecting `1e3`), and an
 unknown-flag rejection.
