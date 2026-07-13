@@ -27,6 +27,12 @@ condition was not run for that task. `mcp-managed` is SQL-only, so it ran
 only on the tasks its SQL surface can actually answer; both MCP servers sit
 out tasks they have no matching tool for.
 
+Two conventions in the tables: the `databricks-axi` column is bolded because
+it is the tool under test, not because it wins the row. The `axi vs cli`
+column is databricks-axi measured against `raw-cli` on that row, where
+negative means axi is lower (fewer tokens, fewer turns, less time, less
+money) and positive means it is higher.
+
 ## Latest run: CP3 (2026-07-11, v0.9.0)
 
 37 tasks across three workspaces: a Databricks Free Edition workspace
@@ -39,6 +45,13 @@ mcp-aidevkit`, one of five repeats: after a 15-turn tool-discovery loop the
 agent's final answer omitted the node type, DBR version, and max-worker
 count. Graded deterministically. Run-to-run variance in that condition, not
 a tool error.
+
+The README's headline table averages the seven tasks all four setups can run,
+the rows below carrying a number in every column: `home-orientation`,
+`find-failed-run`, `sql-count`, `table-schema`, `error-recovery`,
+`table-list`, and `catalog-browse`. Every condition passed all 35 of its runs
+on that subset (seven tasks, five repeats each), so its success column reads
+35/35 across the board. The one failure above lies outside the subset.
 
 Tool versions: databricks-axi @ 96bde97 (v0.9.0), official `databricks` CLI
 v1.6.0, `ai-dev-kit` pinned at `a7e1d51`. The `api-current-user-aws` row is
