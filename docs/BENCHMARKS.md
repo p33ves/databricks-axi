@@ -23,10 +23,9 @@ deterministically where the answer is machine-checkable (row counts, IDs,
 statuses), by an LLM judge otherwise.
 
 Not every condition can run every task, and a `—` in the tables below means
-exactly that. `mcp-managed` is SQL-only: it sits out every job- or
-cluster-mutating task, every workspace and filesystem task (notebooks,
-volumes, DBFS), and every AWS-profile task, so it only covers the seven-task
-SQL/catalog core. Both MCP servers sit out the tasks they have no matching
+exactly that. `mcp-managed` is SQL-only: it sits out every job and cluster
+task, every workspace and filesystem task (notebooks, volumes, DBFS), and
+every AWS-profile task, so it only covers the seven-task SQL/catalog core. Both MCP servers sit out the tasks they have no matching
 tool for: neither can read notebook source or the workspace filesystem
 (`notebook-read`, `notebook-read-aws`, `fs-error-recovery`,
 `notebook-discovery-aws`), and neither exposes a whoami equivalent
@@ -197,12 +196,11 @@ the notable one, roughly a tie (+5% tokens, +3% turns): it needs several
 jobs-API calls, so raw-cli's dense `-o json` output happens to answer more per
 round trip. Both MCP servers still cost 3x on it.
 
-**Where the MCP servers land.** Above axi almost everywhere, and the gap
-widens with tool count. `mcp-managed` runs 1.5-3x axi's input tokens across
-the seven tasks it can do. `mcp-aidevkit` spans 1.4-9.8x, median ~3x, topping
-out on `volume-read` (584,559 tokens against 59,754) and `catalog-browse`
-(416,160 against 66,100). The structural reason is in the README: an MCP server
-loads its tool schemas into context every session, ~40 of them for ai-dev-kit.
+**Where the MCP servers land.** Above axi on input tokens almost everywhere,
+and the gap widens with tool count. The structural reason is in the README: an
+MCP server loads its tool schemas into context every session, ~40 of them for
+ai-dev-kit. The widest cell is `volume-read`, where mcp-aidevkit spends 584,559
+input tokens against axi's 59,754.
 
 **The one real outlier.** mcp-aidevkit spent 12.4 turns and 147s on
 `clusters-view-aws` hunting for the right `manage_cluster` verb (+1655% wall
