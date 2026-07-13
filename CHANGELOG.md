@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.0.0](https://github.com/p33ves/databricks-axi/compare/v0.9.1...v1.0.0) (2026-07-13)
+
+
+### Features
+
+* **cli:** add top-level whoami command for caller identity ([#40](https://github.com/p33ves/databricks-axi/issues/40)) ([179d4b7](https://github.com/p33ves/databricks-axi/commit/179d4b7f44859d9fa933beec720e9511743c8b85))
+* **tools/arena:** add local demo arena comparing CLI, MCP, and databricks-axi runs ([#41](https://github.com/p33ves/databricks-axi/issues/41)) ([7b1a08a](https://github.com/p33ves/databricks-axi/commit/7b1a08a00076040e357b0fbfbd74afcb45e3fc7a))
+
+
+### Bug Fixes
+
+* **jobs:** include job_id in bulk `jobs runs` default columns ([#42](https://github.com/p33ves/databricks-axi/issues/42)) ([562dff3](https://github.com/p33ves/databricks-axi/commit/562dff33558e133b4fc0c0a102d29d51d1c99b0e))
+
+
+### Documentation
+
+* drop the pre-release status note for 1.0 ([#43](https://github.com/p33ves/databricks-axi/issues/43)) ([6bbda67](https://github.com/p33ves/databricks-axi/commit/6bbda6776ac3a169f814b348b13551e7a867170c))
+
 ## [0.9.1](https://github.com/p33ves/databricks-axi/compare/v0.9.0...v0.9.1) (2026-07-12)
 
 
