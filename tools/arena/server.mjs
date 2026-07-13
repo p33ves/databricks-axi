@@ -350,13 +350,6 @@ async function runPreflight() {
   return { databricks, claude, axi, mcp };
 }
 
-// The workspace hostname is never rendered as text: the profile picker shows
-// the name, and the run status line links the name (host lives in the href).
-// Upstream stderr is the one surface that can still print it, so strip it
-// there. Cheap insurance for a page people screenshot and stream.
-const stripHosts = (s) =>
-  s ? s.replace(/https:\/\/[^\s"']+/g, "<workspace>") : s;
-
 export function buildMetrics(result, wallS, rawLines) {
   const parsed = parseResultEvent(rawLines);
   return {
@@ -367,10 +360,7 @@ export function buildMetrics(result, wallS, rawLines) {
     // stays null there unless we fall back to the exit code, and a
     // force-killed condition must never render as a fast, cheap success.
     is_error: parsed.is_error ?? result.code !== 0,
-    // Upstream stderr can end with a "Host: https://..." trailer, so the
-    // error pane is a second way the workspace hostname reaches the screen.
-    error_line:
-      result.code === 0 ? null : stripHosts(result.lastErrLine) || null,
+    error_line: result.code === 0 ? null : result.lastErrLine || null,
   };
 }
 
@@ -395,7 +385,7 @@ async function listProfiles() {
 }
 
 // Resolves the effective host for a run (default profile, or the one the
-// viewer picked) so the UI can render an "open workspace" link. Reuses the
+// viewer picked) so the UI can link the profile name to it. Reuses the
 // same non-interactive `auth describe` preflight already runs — unlike that
 // check, the host IS surfaced here (a URL, not a secret), by explicit design.
 async function resolveHost(profile) {
@@ -589,7 +579,7 @@ async function startRun(task, profile, model) {
       pane: null,
       kind: "started",
       profile: profile ?? "default",
-      host, // a URL, not a secret — surfaced so the UI can link "open workspace"
+      host, // a URL, not a secret: the UI hangs the profile name's href off it
       order,
     });
     const preflight = await runPreflight();

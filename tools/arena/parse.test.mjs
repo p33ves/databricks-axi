@@ -141,23 +141,16 @@ describe("parseResultEvent", () => {
 });
 
 describe("buildMetrics", () => {
-  it("strips the host from error_line when the condition exits non-zero", () => {
-    const metrics = buildMetrics(
-      {
-        code: 1,
-        lastErrLine:
-          "Error: cannot authenticate. Host: https://dbc-abc123.cloud.databricks.com",
-      },
-      12,
-      ["not json, no result event"],
-    );
+  it("keeps the last stderr line verbatim when the condition exits non-zero", () => {
+    const line =
+      "Error: cannot authenticate. Host: https://dbc-abc123.cloud.databricks.com";
+    const metrics = buildMetrics({ code: 1, lastErrLine: line }, 12, [
+      "not json, no result event",
+    ]);
 
     expect(metrics.exit).toBe(1);
     expect(metrics.is_error).toBe(true);
-    expect(metrics.error_line).toBe(
-      "Error: cannot authenticate. Host: <workspace>",
-    );
-    expect(metrics.error_line).not.toMatch(/https:|ReferenceError/);
+    expect(metrics.error_line).toBe(line);
   });
 
   it("leaves error_line null on a clean exit", () => {

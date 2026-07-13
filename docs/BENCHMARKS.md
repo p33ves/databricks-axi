@@ -27,6 +27,12 @@ condition was not run for that task. `mcp-managed` is SQL-only, so it ran
 only on the tasks its SQL surface can actually answer; both MCP servers sit
 out tasks they have no matching tool for.
 
+Cost tracks the mix of fresh input, cache writes, and cache reads, not the
+token total: cache writes bill at 1.25x input and cache reads at 0.1x. So two
+rows with the same `tok_in` can differ several-fold in cost depending on how
+warm the prompt cache was. Input tokens is the more stable basis for
+comparison.
+
 One convention in the tables: the `databricks-axi` column is bolded because
 it is the tool under test, not because it wins the row. Input tokens is the
 table that carries the argument, so it stays open; turns, wall clock, and cost

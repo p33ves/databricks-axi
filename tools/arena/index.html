@@ -728,6 +728,7 @@
 
       async function preflight() {
         const box = $("#preflight");
+        box.textContent = "checking setup...";
         try {
           const pf = await (await fetch("/preflight")).json();
           box.textContent = "";
@@ -749,6 +750,7 @@
             $("#runmeta").textContent =
               "Fix the failing checks above to enable runs (hover a red chip for the fix).";
         } catch {
+          box.textContent = "";
           $("#runmeta").textContent = "Preflight failed: is the server up?";
         }
         gate();

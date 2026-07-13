@@ -102,13 +102,13 @@ but allowed.
 
 The page chrome does not show the host: the profile picker shows the profile
 name, and the status line links that name, so the host lives only in the
-link's `href`. Hostnames in error lines are replaced with `<workspace>`.
+link's `href`.
 
-An expanded transcript pane is the exception. It renders raw tool output, and
-Databricks output often carries the workspace URL (`run_page_url`, ai-dev-kit
-results, `Bash` echoes). A screenshot or recording is host-free only while the
-transcripts are collapsed, so keep them collapsed when capturing the page, or
-check what is on screen first.
+Error lines and expanded transcript panes are the exception. Both render
+upstream text verbatim, and Databricks output often carries the workspace URL
+(`run_page_url`, ai-dev-kit results, `Bash` echoes). A screenshot or recording
+is host-free only while the transcripts are collapsed and nothing failed, so
+check what is on screen before capturing the page.
 
 ## What the duration means
 
