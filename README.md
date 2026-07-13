@@ -179,6 +179,7 @@ v1 command surface (see the AXI standard for the principles each follows):
 | `serving`   | list, view ✅                                                                            |
 | `api`       | raw REST passthrough ✅                                                                  |
 | `setup`     | hooks install (Claude Code, Codex, OpenCode) ✅                                          |
+| `whoami`    | caller's own identity (SCIM Me): user, groups, entitlements ✅                           |
 
 ## Development
 

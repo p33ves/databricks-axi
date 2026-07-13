@@ -12,6 +12,7 @@ import { pipelinesCommand, PIPELINES_HELP } from "./commands/pipelines.js";
 import { servingCommand, SERVING_HELP } from "./commands/serving.js";
 import { setupCommand, SETUP_HELP } from "./commands/setup.js";
 import { sqlCommand, SQL_HELP } from "./commands/sql.js";
+import { whoamiCommand, WHOAMI_HELP } from "./commands/whoami.js";
 import { workspaceCommand, WORKSPACE_HELP } from "./commands/workspace.js";
 
 export const DESCRIPTION =
@@ -19,8 +20,9 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[38]:
+commands[39]:
   (none)=home
+  whoami [--profile <name>]
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
   jobs run <job_id> [--wait]
@@ -89,6 +91,7 @@ export const COMMANDS = {
   serving: servingCommand,
   setup: setupCommand,
   api: apiCommand,
+  whoami: whoamiCommand,
 };
 
 const COMMAND_HELP: Record<string, string> = {
@@ -103,6 +106,7 @@ const COMMAND_HELP: Record<string, string> = {
   serving: SERVING_HELP,
   setup: SETUP_HELP,
   api: API_HELP,
+  whoami: WHOAMI_HELP,
 };
 
 type CliStdout = { write: (chunk: string) => unknown };

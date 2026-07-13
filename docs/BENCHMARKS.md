@@ -177,8 +177,8 @@ repeats:
 | serving-status-aws     | raw-cli        | 5/5  | 2.0          | 9            | 72,624          | 360            | 0.117    |
 | serving-status-aws     | databricks-axi | 5/5  | 2.0 (+0%)    | 9 (-7%)      | 75,644 (+4%)    | 237 (-34%)     | 0.124    |
 | serving-status-aws     | mcp-aidevkit   | 5/5  | 4.2 (+110%)  | 20 (+115%)   | 201,364 (+177%) | 673 (+87%)     | 0.267    |
-| api-current-user-aws   | raw-cli        | 5/5  | 2.0          | 8            | 72,540          | 254            | 0.115    |
-| api-current-user-aws   | databricks-axi | 5/5  | 5.6 (+180%)  | 79 (+908%)   | 230,140 (+217%) | 1,989 (+682%)  | 0.211    |
+| api-current-user-aws   | raw-cli        | 5/5  | 2.0          | 9            | 72,508          | 223            | 0.114    |
+| api-current-user-aws   | databricks-axi | 5/5  | 2.0 (+0%)    | 9 (+0%)      | 75,694 (+4%)    | 237 (+6%)      | 0.124    |
 | volumes-metadata-aws   | raw-cli        | 5/5  | 2.0          | 8            | 72,633          | 307            | 0.116    |
 | volumes-metadata-aws   | databricks-axi | 5/5  | 2.0 (+0%)    | 8 (+2%)      | 75,584 (+4%)    | 212 (-31%)     | 0.123    |
 | volumes-metadata-aws   | mcp-aidevkit   | 5/5  | 5.6 (+180%)  | 19 (+134%)   | 285,061 (+292%) | 783 (+155%)    | 0.316    |
@@ -189,6 +189,11 @@ repeats:
 | query-history-aws      | databricks-axi | 5/5  | 2.0 (-71%)   | 11 (-57%)    | 75,838 (-70%)   | 397 (-72%)     | 0.032    |
 | query-history-aws      | mcp-aidevkit   | 5/5  | 6.0 (-12%)   | 46 (+81%)    | 304,606 (+19%)  | 1,709 (+22%)   | 0.282    |
 
+Note: the two `api-current-user-aws` rows were re-measured on 1.0
+(whoami-enabled) code, since the `whoami` command added in this release
+closed the CP3/v0.9.0 outlier; the rest of the table is the original CP3
+v0.9.0 matrix.
+
 A few patterns worth naming: axi wins or ties raw-cli on turns and input
 tokens for single-purpose lookups (`table-schema-aws`, `table-list-aws`,
 `job-list-aws`, `volumes-metadata-aws`), and pays a modest turns/token
@@ -198,10 +203,10 @@ gap this pass is `query-history-aws` (-71% turns, -70% input tokens vs
 raw-cli). The one real outlier: mcp-aidevkit spent 147s and 12.4 turns on
 `clusters-view-aws` (one of five repeats failed there too) hunting for the
 right `manage_cluster` verb (+520% turns, +1655% wall vs raw-cli), a real
-cost of a 40-tool consolidated-verb schema, not an axi comparison point. A
-second, smaller outlier: `api-current-user-aws` is the one task where axi's
-guided path costs more than a single raw `api get` call (+908% wall), since
-looking up the current user has no dedicated axi command yet.
+cost of a 40-tool consolidated-verb schema, not an axi comparison point.
+Every other axi condition is at or below raw-cli on turns and tokens,
+including `api-current-user-aws`, where the `whoami` command puts axi level
+with a single raw `api get` call (2.0 turns / 9s, 5/5).
 
 ### Post-matrix live smoke: 9/9 PASS
 

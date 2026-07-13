@@ -12,7 +12,7 @@ domain's own test suite, plus `test/home.test.ts` for `context.ts`).
 
 Wires every domain command into `runAxiCli` (from `axi-sdk-js`): the
 `COMMANDS` map (`home`, `jobs`, `clusters`, `sql`, `catalog`, `workspace`,
-`fs`, `pipelines`, `serving`, `setup`, `api`), the top-level help text
+`fs`, `pipelines`, `serving`, `setup`, `api`, `whoami`), the top-level help text
 (`TOP_HELP`), and per-command help lookup (`COMMAND_HELP`). Also resolves
 the package version by reading `package.json` from either one or two
 directories up from the compiled/source location (`readPackageVersion`),

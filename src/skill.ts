@@ -6,7 +6,8 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 const SKILL_DESCRIPTION =
   "Agent-ergonomic wrapper around the Databricks CLI. Implemented: home " +
   "(ambient workspace dashboard: auth context, recent runs, warehouses, " +
-  "running clusters), jobs (list, view, run, runs, logs, cancel), clusters " +
+  "running clusters), whoami (caller's own identity: user, groups, " +
+  "entitlements), jobs (list, view, run, runs, logs, cancel), clusters " +
   "(list, view, start, stop), sql (warehouses, exec, statement view, " +
   "history), catalog (catalogs, schemas, tables, table view, volumes, " +
   "volume view, functions, function view), workspace (ls, view " +
@@ -25,6 +26,9 @@ const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
 const HERMES_TAGS = [
   "databricks",
   "spark",
+  "whoami",
+  "identity",
+  "current-user",
   "jobs",
   "cluster",
   "compute",
@@ -97,7 +101,7 @@ databricks-axi requires the official [\`databricks\` CLI](https://docs.databrick
 
 ## Status
 
-Pre-1.0: the full v1 command surface is implemented (home, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run \`databricks-axi --help\` (per the invocation note above) for the current command list.
+Pre-1.0: the full v1 command surface is implemented (home, whoami, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run \`databricks-axi --help\` (per the invocation note above) for the current command list.
 
 ## Commands
 
