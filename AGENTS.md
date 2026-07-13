@@ -12,13 +12,13 @@ They are requirements, not suggestions.
 
 ## Commands
 
-| Command                                   | Purpose                                     |
-| ----------------------------------------- | ------------------------------------------- |
-| `pnpm test`                               | vitest run (unit + stub-driven e2e)         |
-| `pnpm run lint` / `pnpm run format:check` | eslint / prettier                           |
-| `pnpm run build`                          | tsc to `dist/`                              |
-| `pnpm run build:skill`                    | regenerate `skills/databricks-axi/SKILL.md` |
-| `pnpm run dev -- <args>`                  | run the CLI from source                     |
+| Command                                   | Purpose                                                |
+| ----------------------------------------- | ------------------------------------------------------ |
+| `pnpm test`                               | vitest run (unit + stub-driven e2e + arena self-check) |
+| `pnpm run lint` / `pnpm run format:check` | eslint / prettier                                      |
+| `pnpm run build`                          | tsc to `dist/`                                         |
+| `pnpm run build:skill`                    | regenerate `skills/databricks-axi/SKILL.md`            |
+| `pnpm run dev -- <args>`                  | run the CLI from source                                |
 
 The full gate (pinned in `.no-mistakes.yaml`, so the no-mistakes gate runs
 these instead of auto-detecting): `pnpm test`,
@@ -51,6 +51,14 @@ Per-component detail (exports, sharp edges, test coverage) for every
 command and the shared core layer lives under
 [docs/components/](docs/components/), one file per domain or top-level
 verb (e.g. `whoami`) plus `core.md` for the shared/support modules.
+
+`tools/arena/` is separate from the CLI: a local demo web app (stdlib
+`node:http` + one static page, no deps) that runs one task against a
+workspace three ways (raw CLI, MCP, databricks-axi) side by side. It is
+excluded from the npm package (`files` allowlist) and its `results/` dir is
+gitignored. Setup, safety model, and API contract live in
+[tools/arena/README.md](tools/arena/README.md); its hermetic self-check
+(`tools/arena/parse.test.mjs`) runs as part of `pnpm test`.
 
 Tests mirror `src/` under `test/`. Domain tests call `setupCli()` from
 `test/helpers/fake-databricks.ts` for the standard rig (fresh fake
