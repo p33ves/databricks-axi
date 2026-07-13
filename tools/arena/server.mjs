@@ -357,6 +357,23 @@ async function runPreflight() {
 const stripHosts = (s) =>
   s ? s.replace(/https:\/\/[^\s"']+/g, "<workspace>") : s;
 
+export function buildMetrics(result, wallS, rawLines) {
+  const parsed = parseResultEvent(rawLines);
+  return {
+    exit: result.code,
+    wall_s: wallS,
+    ...parsed,
+    // A killed/timed-out/crashed child emits no result event: is_error
+    // stays null there unless we fall back to the exit code, and a
+    // force-killed condition must never render as a fast, cheap success.
+    is_error: parsed.is_error ?? result.code !== 0,
+    // Upstream stderr can end with a "Host: https://..." trailer, so the
+    // error pane is a second way the workspace hostname reaches the screen.
+    error_line:
+      result.code === 0 ? null : stripHosts(result.lastErrLine) || null,
+  };
+}
+
 // GET /profiles: name + host only, from the databricks CLI's own profile
 // list (~/.databrickscfg) — never a token or any other config value.
 async function listProfiles() {
@@ -495,21 +512,7 @@ async function runCondition(
       });
     });
     const wallS = Math.round((Date.now() - started) / 1000);
-    const parsed = parseResultEvent(rawLines);
-    const metrics = {
-      exit: result.code,
-      wall_s: wallS,
-      ...parsed,
-      // A killed/timed-out/crashed child emits no result event: is_error
-      // stays null there unless we fall back to the exit code, and a
-      // force-killed condition must never render as a fast, cheap success.
-      is_error: parsed.is_error ?? result.code !== 0,
-      // Upstream stderr can end with a "Host: https://..." trailer, so the
-      // error pane is a second way the workspace hostname reaches the screen.
-      error_line:
-        result.code === 0 ? null : hideHost(result.lastErrLine) || null,
-    };
-    return metrics;
+    return buildMetrics(result, wallS, rawLines);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
     if (pathPrefix) rmSync(pathPrefix, { recursive: true, force: true });
