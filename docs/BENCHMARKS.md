@@ -22,14 +22,10 @@ task/condition pair, against seeded fixtures. Success is graded
 deterministically where the answer is machine-checkable (row counts, IDs,
 statuses), by an LLM judge otherwise.
 
-Not every condition can run every task, and a `—` in the tables below means
-exactly that. `mcp-managed` is SQL-only: it sits out every job and cluster
-task, every workspace and filesystem task (notebooks, volumes, DBFS), and
-every AWS-profile task, so it only covers the seven-task SQL/catalog core. Both MCP servers sit out the tasks they have no matching
-tool for: neither can read notebook source or the workspace filesystem
-(`notebook-read`, `notebook-read-aws`, `fs-error-recovery`,
-`notebook-discovery-aws`), and neither exposes a whoami equivalent
-(`api-current-user-aws`).
+Not every condition can run every task. A `—` in the tables below means the
+condition was not run for that task. `mcp-managed` is SQL-only, so it ran
+only on the tasks its SQL surface can actually answer; both MCP servers sit
+out tasks they have no matching tool for.
 
 ## Latest run: CP3 (2026-07-11, v0.9.0)
 
@@ -199,8 +195,8 @@ round trip. Both MCP servers still cost 3x on it.
 **Where the MCP servers land.** Above axi on input tokens almost everywhere,
 and the gap widens with tool count. The structural reason is in the README: an
 MCP server loads its tool schemas into context every session, ~40 of them for
-ai-dev-kit. The widest cell is `volume-read`, where mcp-aidevkit spends 584,559
-input tokens against axi's 59,754.
+ai-dev-kit. The largest multiple is `volume-read`, where mcp-aidevkit spends
+584,559 input tokens against axi's 59,754.
 
 **The one real outlier.** mcp-aidevkit spent 12.4 turns and 147s on
 `clusters-view-aws` hunting for the right `manage_cluster` verb (+1655% wall
