@@ -100,9 +100,15 @@ but allowed.
 
 ## The workspace hostname
 
-Never rendered as text: the profile picker shows the name, and the status line
-links that name (host lives in the `href`). Hostnames in error lines are
-replaced with `<workspace>`. Screenshots are safe by default.
+The page chrome does not show the host: the profile picker shows the profile
+name, and the status line links that name, so the host lives only in the
+link's `href`. Hostnames in error lines are replaced with `<workspace>`.
+
+An expanded transcript pane is the exception. It renders raw tool output, and
+Databricks output often carries the workspace URL (`run_page_url`, ai-dev-kit
+results, `Bash` echoes). A screenshot or recording is host-free only while the
+transcripts are collapsed, so keep them collapsed when capturing the page, or
+check what is on screen first.
 
 ## What the duration means
 
