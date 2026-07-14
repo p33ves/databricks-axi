@@ -18,11 +18,11 @@ that runs review, tests, lint, and docs checks in an isolated worktree before
 anything reaches the remote. Its test/lint/format commands are pinned in
 `.no-mistakes.yaml` (trusted only from the default branch) to the full gate
 documented in [AGENTS.md](AGENTS.md). CI rejects PRs without its signature
-(`.github/workflows/no-mistakes-required.yml`); release/dependency bots are
+(`.github/workflows/no-mistakes-required.yml`); only dependabot is
 exempt.
 
 `main` itself is protected by the `protect-main` ruleset: PR-only, no
-force-pushes or deletion, four required status checks. The ruleset applied
+force-pushes or deletion, three required status checks. The ruleset applied
 on GitHub is recorded as config-as-code in `.github/rulesets/main.json`
 (importable via GitHub's ruleset import UI).
 
