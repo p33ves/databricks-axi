@@ -476,7 +476,13 @@ async function doEnsureSkillsCheckout() {
   // Shallow clone at an exact commit: init + fetch --depth 1 <sha>, the
   // standard trick GitHub supports for a public repo, rather than a full
   // `git clone` (spec: reproducible, minimal network/disk).
-  const opts = { cwd: SKILLS_CACHE_DIR, timeoutMs: 120_000 };
+  // GIT_TERMINAL_PROMPT=0: a credential prompt (rate limit, middlebox)
+  // fails the step immediately instead of stalling the pane until SIGKILL.
+  const opts = {
+    cwd: SKILLS_CACHE_DIR,
+    timeoutMs: 120_000,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+  };
   const steps = [
     ["init", "-q", "."],
     ["remote", "add", "origin", SKILLS_REPO_URL],
@@ -868,22 +874,21 @@ export function createArenaServer() {
         jsonResponse(res, 400, { error: "task must not begin with a dash" });
         return;
       }
-      if (
-        typeof body.profile === "string" &&
-        body.profile.trim().startsWith("-")
-      ) {
-        jsonResponse(res, 400, { error: "invalid profile" });
-        return;
-      }
       // Profile flows into child argv/env (DATABRICKS_CONFIG_PROFILE, `-p`
-      // in resolveHost). Same conservative charset as model, for posture
-      // consistency: no leading dash, anything else outside the safe set is
-      // silently ignored rather than reaching the child.
-      const profile =
-        typeof body.profile === "string" &&
-        /^[A-Za-z0-9][\w.:-]{0,63}$/.test(body.profile.trim())
-          ? body.profile.trim()
-          : null;
+      // in resolveHost). A run executes real operations against a workspace,
+      // so a supplied profile that fails the conservative charset (which
+      // also rules out a leading dash) is an explicit 400 — never a silent
+      // fall-back to the default profile's workspace.
+      let profile = null;
+      if (body.profile !== undefined && body.profile !== null) {
+        const trimmed =
+          typeof body.profile === "string" ? body.profile.trim() : "";
+        if (!/^[A-Za-z0-9][\w.:-]{0,63}$/.test(trimmed)) {
+          jsonResponse(res, 400, { error: "invalid profile" });
+          return;
+        }
+        profile = trimmed;
+      }
       if (typeof body.model === "string" && body.model.trim().startsWith("-")) {
         jsonResponse(res, 400, { error: "invalid model" });
         return;

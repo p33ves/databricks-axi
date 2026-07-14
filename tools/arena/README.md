@@ -215,9 +215,9 @@ Request body:
   the official CLI and `databricks-axi`). The mcp condition's server is
   configured independently of any CLI profile, so this is best-effort
   there. Omitted: current/default profile behavior, unchanged. Validated
-  against the same conservative charset as `model` below: a value starting
-  with a dash is a `400`, and any other non-matching value is ignored (the
-  default profile is used).
+  against the same conservative charset as `model` below; any supplied
+  value that does not match is a `400` (never a silent fall-back to the
+  default profile).
 - `model` (string, optional): a Claude model choice from the page's Model
   dropdown, applied as `--model` to every condition equally (so the
   comparison stays fair). The dropdown offers the CLI-maintained aliases
