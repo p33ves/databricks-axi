@@ -37,8 +37,10 @@ workspace, fs, setup, api`) — dropping a noun risks activation rate, so
 - `createSkillMarkdown()`: assembles the full file — YAML frontmatter
   (`name`, `description`, `user-invocable: false`, `author`, `metadata.hermes`),
   the `DESCRIPTION` body, npx/PATH invocation guidance, a `## Status` line,
-  the extracted `## Commands` block, and a `## Tips` line pointing at
-  response `help:` next-steps.
+  the extracted `## Commands` block, and a `## Tips` block (follow response
+  `help:` next-steps; treat names as literal and backtick-quote special
+  characters; pass `--profile` explicitly and never auto-select one; use
+  the least-privilege profile/token).
 
 ## Sharp edges
 
@@ -59,5 +61,7 @@ workspace, fs, setup, api`) — dropping a noun risks activation rate, so
 `jobs list`, `jobs logs <run_id>`); every domain key in `COMMANDS` (from
 `src/cli.ts`) appears in that block (`home` matched as `(none)=home`); and
 `createSkillMarkdown()` starts with the expected frontmatter opening, contains
-the `npx -y databricks-axi` guidance, and embeds the same commands block
-`extractCommandsBlock()` returns standalone.
+the `npx -y databricks-axi` guidance, embeds the same commands block
+`extractCommandsBlock()` returns standalone, and keeps every `COMMANDS` domain
+noun on the frontmatter `description:` line (the trimmed always-resident
+trigger string must never drop a noun).
