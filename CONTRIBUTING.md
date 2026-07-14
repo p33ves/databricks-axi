@@ -46,6 +46,9 @@ Working from a fork requires no-mistakes >= 1.30.1.
 - Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`).
 - `skills/databricks-axi/SKILL.md` is generated. Edit `src/skill.ts` or
   `src/cli.ts` and run `pnpm run build:skill`. CI fails on a stale copy.
-- Never hand-bump `package.json`'s `version`; release-please sets it in its
-  own release PR from your conventional commits.
+- Do not bump `package.json`'s `version` in a feature PR. Version bumps are a
+  release step of their own, see "Cutting a release" in [AGENTS.md](AGENTS.md).
+- `CHANGELOG.md` is frozen at 1.0.2. Release notes are generated from PR
+  titles on [GitHub Releases](https://github.com/p33ves/databricks-axi/releases),
+  so write the PR title as a conventional commit.
 - Everything else: see [AGENTS.md](AGENTS.md).

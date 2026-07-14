@@ -231,16 +231,12 @@ exists` in the message; catch it by regex (same pattern as `clusters`
 
 ## Generated files (never hand-edit)
 
-- `skills/databricks-axi/SKILL.md` (regenerate: `pnpm run build:skill`)
+- `skills/databricks-axi/SKILL.md` (regenerate: `pnpm run build:skill`;
+  CI fails a stale copy via `build:skill -- --check`)
 - `pnpm-lock.yaml` (pnpm rewrites it on dependency changes; prettier
   ignores it so Dependabot's raw lockfile output passes `format:check`)
-- `CHANGELOG.md` (release-please, simple mode; the bot's release PR is the
-  only place it changes; no `.release-please-manifest.json` exists because
-  manifest mode would need it hand-committed first, which the guard forbids)
-- `package.json`'s `version` field: release-please computes it from
-  conventional commits and bumps it in its own release PR; never hand-bump
-  it in a feature commit. `guard-generated-files.yml` fails human PRs that
-  change it.
+- `CHANGELOG.md` is frozen at 1.0.2 and no longer maintained. Release notes
+  live on GitHub Releases, auto-generated from merged PR titles.
 
 ## Development lifecycle
 
@@ -251,7 +247,7 @@ exists` in the message; catch it by regex (same pattern as `clusters`
 | Build        | domain implementer      | implements one command domain, TDD against the fake stub             |
 | Review       | AXI compliance reviewer | reviews code against the 10 AXI principles + spec drift              |
 | Validate     | benchmarker             | measures vs raw `databricks` CLI and MCP; hybrid-graded task success |
-| Ship         | release manager         | release-please runbook, ship gate                                    |
+| Ship         | release manager         | version bump PR, tag, GitHub release, npm publish                    |
 
 Cross-cutting (not tied to one lifecycle stage): security auditor
 (leak/credential audit, per-domain before ship and at CP4), docs
@@ -263,7 +259,36 @@ Commit on a feature branch, then `git push no-mistakes`; never push to
 `origin` directly. See CONTRIBUTING.md. Evidence artifacts for shipped
 changes live under `.no-mistakes/evidence/`.
 
-After any merge to `main` lands, check whether the `release-please` run on
-`main` failed. If it did, invoke the `release-manager` agent: its
-post-merge self-heal runbook handles the expected "Actions not permitted to
-create or approve pull requests" failure without needing to be asked.
+## Cutting a release
+
+Releases are cut by hand. Nothing runs on a schedule, no bot opens a PR, and
+merging to `main` never triggers a release on its own.
+
+```bash
+# 1. Bump the version on a branch, then ship it like any other change.
+pnpm version 1.0.3 --no-git-tag-version
+git commit -am "chore: release 1.0.3"
+git push no-mistakes        # normal PR, normal checks, merge it
+
+# 2. Tag main and publish the release. Creates the tag and the notes.
+git checkout main && git pull
+gh release create v1.0.3 --generate-notes
+
+# 3. Publish to npm (2FA, so this stays interactive).
+pnpm publish
+```
+
+`--generate-notes` builds the notes from the PR titles merged since the last
+tag, which is why conventional-commit PR titles matter. There is no
+`.github/release.yml` grouping config: it categorizes by PR _label_, and this
+repo does not label PRs, so the default flat list is what we get.
+
+**Why it works this way.** Releases used to run on release-please, which
+opens the version-bump PR itself. That needs the repo setting "Allow GitHub
+Actions to create and approve pull requests", which is deliberately kept OFF
+here. So every release needed that setting toggled on and back off by hand,
+and in between, every push to `main` painted a failed release-please run.
+Making the version bump an ordinary PR removes the bot, and with it the
+permission toggle and the recurring red X. The tradeoff we accepted: the
+version number and the release moment are now a human decision instead of
+being computed from conventional commits.
