@@ -213,7 +213,7 @@ export function buildComparison(conditionMetrics) {
 
 const CONDITION_ORDER = ["cli-skills", "mcp", "databricks-axi"];
 
-function claudeMdFor(id, mcpName, profile) {
+export function claudeMdFor(id, mcpName, profile) {
   const header = "For all Databricks operations use ONLY";
   const footer = "\n\nWhen done, state your final answer plainly.\n";
   switch (id) {
@@ -255,7 +255,7 @@ function claudeMdFor(id, mcpName, profile) {
   }
 }
 
-function allowedToolsFor(id, mcpName) {
+export function allowedToolsFor(id, mcpName) {
   if (id === "mcp") return `Read,mcp__${mcpName}`;
   // cli-skills needs the Skill tool too: that's how Claude Code loads a
   // matched skill's body on demand, and the whole point of this condition
@@ -439,12 +439,29 @@ async function resolveHost(profile) {
 // condition's own throwaway project dir.
 // ---------------------------------------------------------------------------
 
+// Serializes concurrent cold-start callers onto one in-flight clone instead
+// of racing on SKILLS_CACHE_DIR (a second run's rmSync could otherwise blow
+// away the directory a first run is still fetching into). Reset on
+// settle (success or failure) so a failed clone gets retried by the next
+// run rather than permanently memoizing a null.
+// ponytail: single in-process lock, fine for a local demo server with no
+// worker pool; a real multi-process deployment would need a file lock.
+let skillsCheckoutPromise = null;
+async function ensureSkillsCheckout() {
+  if (!skillsCheckoutPromise) {
+    skillsCheckoutPromise = doEnsureSkillsCheckout().finally(() => {
+      skillsCheckoutPromise = null;
+    });
+  }
+  return skillsCheckoutPromise;
+}
+
 // Ensures a checkout of SKILLS_PINNED_SHA exists at SKILLS_CACHE_DIR and
 // returns its path. Reuses the cache when it's already at the pinned
 // commit; a cold or stale cache re-clones. Never throws: returns null on
 // any failure (e.g. no network), so the caller can fail just the
 // cli-skills pane instead of the whole run.
-async function ensureSkillsCheckout() {
+async function doEnsureSkillsCheckout() {
   if (existsSync(SKILLS_CACHE_DIR)) {
     const rev = await spawnCapture("git", ["rev-parse", "HEAD"], {
       cwd: SKILLS_CACHE_DIR,
@@ -486,7 +503,14 @@ async function ensureSkillsCheckout() {
 function provisionSkills(checkoutDir, cwd) {
   const dest = join(cwd, ".claude", "skills");
   mkdirSync(dest, { recursive: true });
-  cpSync(join(checkoutDir, "skills"), dest, { recursive: true });
+  // dereference: symlink containment for untrusted pinned upstream content.
+  // Copies any symlink's target file, never recreates the link itself, so a
+  // malicious symlink in the cloned repo can't point the run's skills dir
+  // at an arbitrary path on this machine.
+  cpSync(join(checkoutDir, "skills"), dest, {
+    recursive: true,
+    dereference: true,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -844,8 +868,20 @@ export function createArenaServer() {
         jsonResponse(res, 400, { error: "task must not begin with a dash" });
         return;
       }
+      if (
+        typeof body.profile === "string" &&
+        body.profile.trim().startsWith("-")
+      ) {
+        jsonResponse(res, 400, { error: "invalid profile" });
+        return;
+      }
+      // Profile flows into child argv/env (DATABRICKS_CONFIG_PROFILE, `-p`
+      // in resolveHost). Same conservative charset as model, for posture
+      // consistency: no leading dash, anything else outside the safe set is
+      // silently ignored rather than reaching the child.
       const profile =
-        typeof body.profile === "string" && body.profile.trim()
+        typeof body.profile === "string" &&
+        /^[A-Za-z0-9][\w.:-]{0,63}$/.test(body.profile.trim())
           ? body.profile.trim()
           : null;
       if (typeof body.model === "string" && body.model.trim().startsWith("-")) {

@@ -12,6 +12,8 @@ import {
   buildMetrics,
   buildResultRow,
   buildComparison,
+  claudeMdFor,
+  allowedToolsFor,
 } from "./server.mjs";
 
 // A few assistant/user events + one final `result` event, same shape as a
@@ -278,5 +280,23 @@ describe("buildComparison", () => {
     const c = buildComparison(metrics);
     expect(c.lowest_cost).toEqual([]);
     expect(c.lowest_turns).toEqual([]);
+  });
+});
+
+describe("cli-skills condition wiring", () => {
+  it("names the chosen profile explicitly in the CLAUDE.md", () => {
+    const md = claudeMdFor("cli-skills", null, "prod");
+    expect(md).toMatch(/profile named `prod`/);
+    expect(md).not.toMatch(/default Databricks profile/);
+  });
+
+  it("falls back to a default-profile line when no profile is chosen", () => {
+    const md = claudeMdFor("cli-skills", null, null);
+    expect(md).toMatch(/default Databricks profile/);
+    expect(md).not.toMatch(/profile named/);
+  });
+
+  it("grants the Skill tool, needed for native skill-body loading", () => {
+    expect(allowedToolsFor("cli-skills", null)).toBe("Bash,Read,Skill");
   });
 });
