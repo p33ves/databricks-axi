@@ -15,7 +15,7 @@
         --ink: #e8e4da;
         --muted: #8b94a3;
         --faint: #5c6573;
-        --c-raw: #5aa2ff;
+        --c-cli: #5aa2ff;
         --c-mcp: #f5b73a;
         --c-axi: #1fd6a0;
         /* The three above are condition identity: a pane, its dot, its bar.
@@ -42,7 +42,7 @@
         line-height: 1.45;
       }
       a {
-        color: var(--c-raw);
+        color: var(--c-cli);
       }
       .wrap {
         max-width: 1200px;
@@ -78,7 +78,7 @@
         font-weight: 400;
       }
       h1 .ticks b:nth-child(1) {
-        color: var(--c-raw);
+        color: var(--c-cli);
       }
       h1 .ticks b:nth-child(2) {
         color: var(--c-mcp);
@@ -219,8 +219,8 @@
       .lane > .rail {
         height: 3px;
       }
-      .lane.raw-cli > .rail {
-        background: var(--c-raw);
+      .lane.cli-skills > .rail {
+        background: var(--c-cli);
       }
       .lane.mcp > .rail {
         background: var(--c-mcp);
@@ -473,7 +473,7 @@
             arena <span class="ticks"><b>/</b><b>/</b><b>/</b></span>
           </h1>
           <p class="subline">
-            One task, three agents, your workspace: raw CLI, MCP, and
+            One task, three agents, your workspace: CLI + agent-skills, MCP, and
             databricks-axi, side by side.
           </p>
         </div>
@@ -525,27 +525,28 @@
 
       <div class="lanes">
         <section
-          class="lane raw-cli"
-          id="lane-raw-cli"
+          class="lane cli-skills"
+          id="lane-cli-skills"
           role="group"
-          aria-label="raw CLI"
+          aria-label="CLI + agent-skills"
         >
           <div class="rail"></div>
           <h2>
-            <span class="dot"></span> raw CLI
+            <span class="dot"></span> CLI + agent-skills
             <span class="state">idle</span>
           </h2>
           <div class="transcript" role="log" aria-live="polite">
             <div class="idle">
-              The official databricks CLI over bash. No reshaping.
+              The official databricks CLI, guided by the Databricks agent-skills
+              (pinned commit 5bc462d4). No reshaping.
             </div>
           </div>
           <div class="lane-foot">
             <span class="metrics" aria-live="polite"></span>
             <button
               class="expand"
-              data-pane="raw-cli"
-              aria-label="Expand raw CLI transcript"
+              data-pane="cli-skills"
+              aria-label="Expand CLI + agent-skills transcript"
             >
               expand ⤢
             </button>
@@ -649,14 +650,14 @@
     <script>
       "use strict";
       const NONCE = "%%ARENA_NONCE%%";
-      const CONDS = ["raw-cli", "mcp", "databricks-axi"];
+      const CONDS = ["cli-skills", "mcp", "databricks-axi"];
       const NAMES = {
-        "raw-cli": "raw CLI",
+        "cli-skills": "CLI + agent-skills",
         mcp: "MCP server",
         "databricks-axi": "databricks-axi",
       };
       const COLORS = {
-        "raw-cli": "var(--c-raw)",
+        "cli-skills": "var(--c-cli)",
         mcp: "var(--c-mcp)",
         "databricks-axi": "var(--c-axi)",
       };
@@ -1028,14 +1029,14 @@
           if (url === "/profiles")
             return jsonRes({
               profiles: [
-                { name: "FREE", host: "https://demo.cloud.databricks.com" },
+                { name: "prod", host: "https://demo.cloud.databricks.com" },
               ],
             });
           if (url === "/run") return jsonRes({ runId: "demo" });
           return realFetch(url, opts);
         };
 
-        const order = ["mcp", "raw-cli", "databricks-axi"];
+        const order = ["mcp", "cli-skills", "databricks-axi"];
         const scripts = {
           mcp: [
             "ASSISTANT: I'll use the Databricks MCP tools to list warehouses.",
@@ -1043,13 +1044,13 @@
             "RESULT: 3 warehouses returned (1.2 KB JSON schema-wrapped)",
             "ASSISTANT: warehouse-a RUNNING · warehouse-b STOPPED · warehouse-c RUNNING",
           ],
-          "raw-cli": [
-            "ASSISTANT: I'll shell out to the databricks CLI and parse the JSON.",
+          "cli-skills": [
+            "ASSISTANT: Loading the databricks-core and databricks-dbsql skills for this task.",
+            "TOOL Skill: databricks-core",
+            "TOOL Skill: databricks-dbsql",
             "TOOL Bash: databricks warehouses list -o json",
             'RESULT: [ {"id":"a","name":"warehouse-a","state":"RUNNING", ...}, ... ]  (4.1 KB)',
-            "ASSISTANT: Now filtering down to name + state.",
-            "TOOL Bash: databricks warehouses list -o json | jq -r '.[]|\"\\(.name) \\(.state)\"'",
-            "RESULT: warehouse-a RUNNING / warehouse-b STOPPED / warehouse-c RUNNING",
+            "ASSISTANT: warehouse-a RUNNING · warehouse-b STOPPED · warehouse-c RUNNING",
           ],
           "databricks-axi": [
             "ASSISTANT: Listing warehouses.",
@@ -1059,15 +1060,15 @@
           ],
         };
         const metrics = {
-          "raw-cli": {
+          "cli-skills": {
             exit: 0,
-            wall_s: 14,
+            wall_s: 15,
             num_turns: 6,
-            tokens_in: 5200,
-            tokens_cache_create: 800,
+            tokens_in: 7400,
+            tokens_cache_create: 1100,
             tokens_cache_read: 2400,
             tokens_out: 640,
-            cost_usd: 0.021,
+            cost_usd: 0.026,
             is_error: false,
           },
           mcp: {
@@ -1108,7 +1109,7 @@
             at(400, {
               kind: "started",
               pane: null,
-              profile: "FREE",
+              profile: "prod",
               host: "https://demo.cloud.databricks.com",
               order,
             });

@@ -176,7 +176,7 @@ describe("buildResultRow", () => {
       disabled: true,
     };
     const row = buildResultRow("list clusters", {
-      "raw-cli": metrics,
+      "cli-skills": metrics,
       mcp: metrics,
       "databricks-axi": metrics,
     });
@@ -219,7 +219,7 @@ describe("buildComparison", () => {
     const metrics = {
       // fewest total tokens but the MOST expensive (cost must win, not tokens)
       mcp: { exit: 0, is_error: false, num_turns: 3, cost_usd: 0.53 },
-      "raw-cli": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
+      "cli-skills": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
       "databricks-axi": {
         exit: 0,
         is_error: false,
@@ -234,7 +234,7 @@ describe("buildComparison", () => {
 
   it("badges every condition tied at the minimum", () => {
     const metrics = {
-      "raw-cli": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.11 },
+      "cli-skills": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.11 },
       "databricks-axi": {
         exit: 0,
         is_error: false,
@@ -244,13 +244,13 @@ describe("buildComparison", () => {
       mcp: { exit: 0, is_error: false, num_turns: 5, cost_usd: 0.2 },
     };
     const c = buildComparison(metrics);
-    expect(c.lowest_cost).toEqual(["raw-cli"]); // distinct cost winner
-    expect(c.lowest_turns.sort()).toEqual(["databricks-axi", "raw-cli"]); // 2-way tie
+    expect(c.lowest_cost).toEqual(["cli-skills"]); // distinct cost winner
+    expect(c.lowest_turns.sort()).toEqual(["cli-skills", "databricks-axi"]); // 2-way tie
   });
 
   it("badges nobody when all candidates tie (a wash)", () => {
     const metrics = {
-      "raw-cli": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.1 },
+      "cli-skills": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.1 },
       "databricks-axi": {
         exit: 0,
         is_error: false,
@@ -266,7 +266,7 @@ describe("buildComparison", () => {
 
   it("badges nobody when only one condition survives", () => {
     const metrics = {
-      "raw-cli": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
+      "cli-skills": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
       mcp: { exit: null, is_error: true, disabled: true },
       "databricks-axi": {
         exit: 0,

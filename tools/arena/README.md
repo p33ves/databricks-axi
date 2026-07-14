@@ -1,10 +1,10 @@
 # Demo Arena
 
 A local, single-page demo: run **one task of your choosing** against **your
-own** Databricks workspace **three ways** — raw `databricks` CLI, a
-Databricks MCP server, and the `databricks-axi` skill — each as a headless
-`claude -p` agent, side by side, with a live tokens/turns/duration
-comparison.
+own** Databricks workspace **three ways** — the `databricks` CLI guided by
+the Databricks agent-skills, a Databricks MCP server, and the
+`databricks-axi` skill — each as a headless `claude -p` agent, side by side,
+with a live tokens/turns/duration comparison.
 
 It is a **demo, not a benchmark**: one task, one run, three panes, one
 comparison row. No repeats, no grading, no medians, no statistical claim
@@ -48,6 +48,14 @@ tools/arena/server.mjs`. Do not override `HOME`: the `claude` children
 - `databricks-axi` on `PATH`, or built in this repo (`pnpm run build`,
   which produces `dist/bin/databricks-axi.js`). If neither is available the
   axi pane is disabled; the other panes still run.
+- `git` on `PATH` and network access, for the `cli-skills` pane. It clones a
+  shallow, pinned commit of
+  [databricks/databricks-agent-skills](https://github.com/databricks/databricks-agent-skills)
+  into a gitignored local cache (`tools/arena/.cache/`, never committed) on
+  first use, then copies it into that run's own throwaway project directory.
+  Never your home skills directory, and never visible to the mcp or
+  databricks-axi panes. If the clone fails (no network, no `git`), only the
+  `cli-skills` pane fails; the other panes still run.
 - A Databricks MCP server, **named literally `databricks`**, configured for
   Claude Code. Claude Code derives the `mcp__<name>` tool prefix from the
   server's name, so any other name won't match and the mcp pane will be
@@ -182,7 +190,7 @@ where a host IS surfaced, and why.
 ### `GET /profiles`
 
 ```json
-{ "profiles": [{ "name": "FREE", "host": "https://....cloud.databricks.com" }] }
+{ "profiles": [{ "name": "prod", "host": "https://....cloud.databricks.com" }] }
 ```
 
 Sourced from the `databricks` CLI's own profile list. Only `name` and `host`
@@ -194,7 +202,7 @@ CLI has no profiles or the call fails.
 Request body:
 
 ```json
-{ "task": "list the running clusters", "profile": "FREE" }
+{ "task": "list the running clusters", "profile": "prod" }
 ```
 
 - `task` (string, required): the viewer's task, in their own words. Free
@@ -239,7 +247,7 @@ object, tagged `{ pane, kind, ... }`:
 | `comparison` | `null`                 | `{ conditions, lowest_cost, lowest_turns }` | once, after all conditions finish; `conditions` mirrors the per-condition `metrics` above. `lowest_cost`/`lowest_turns` are each an **array** of the condition ids tied at the minimum (cost is the headline axis, not raw token count, since token classes are priced differently). Empty array when fewer than two conditions survive (a lone finisher has nothing to compare against), or when all candidates tie (a wash highlights nobody) |
 | `error`      | condition id or `null` | `{ reason, disabled? }`                     | that condition is disabled (failed preflight, `disabled: true`) or crashed mid-run (no `disabled` flag); a `null`-pane error is a whole-run failure                                                                                                                                                                                                                                                                                             |
 
-Condition ids: `"raw-cli"`, `"mcp"`, `"databricks-axi"` — the three panes.
+Condition ids: `"cli-skills"`, `"mcp"`, `"databricks-axi"` — the three panes.
 They run in the per-run random order carried by the `started` event, not a
 fixed sequence.
 
@@ -255,7 +263,7 @@ never committed) per completed run:
   "ts": "2026-07-12T00:00:00.000Z",
   "task": "list the running clusters",
   "conditions": {
-    "raw-cli": {
+    "cli-skills": {
       "exit": 0,
       "wall_s": 12,
       "num_turns": 3,
