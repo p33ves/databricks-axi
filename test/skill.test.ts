@@ -31,17 +31,7 @@ describe("skill", () => {
       .split("\n")
       .find((line) => line.startsWith("description:"));
     expect(descriptionLine).toBeDefined();
-    for (const noun of [
-      "jobs",
-      "clusters",
-      "sql",
-      "catalog",
-      "pipelines",
-      "serving",
-      "workspace",
-      "fs",
-      "whoami",
-    ]) {
+    for (const noun of Object.keys(COMMANDS)) {
       expect(descriptionLine).toContain(noun);
     }
   });
