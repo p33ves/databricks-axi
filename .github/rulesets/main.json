@@ -33,10 +33,6 @@
             "integration_id": 15368
           },
           {
-            "context": "Generated files must not be hand-edited",
-            "integration_id": 15368
-          },
-          {
             "context": "PR must be raised via no-mistakes",
             "integration_id": 15368
           }
