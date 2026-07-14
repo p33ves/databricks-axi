@@ -12,9 +12,14 @@ stale).
 ## Exports
 
 - `SKILL_DESCRIPTION` (module-private): the trigger string agent harnesses
-  match against to auto-load the skill. Scoped to only the implemented
-  command surface — no advertised domain that doesn't exist yet — extended
-  by hand as new domains land, not derived from `TOP_HELP`.
+  match against to auto-load the skill — the always-resident cost, loaded
+  every session by the skill picker (the full per-domain verb list lives in
+  the body's `## Commands` block instead, loaded only on activation). One
+  line, trimmed to a capability statement plus every implemented domain
+  noun (`home, whoami, jobs, clusters, sql, catalog, pipelines, serving,
+workspace, fs, setup, api`) — dropping a noun risks activation rate, so
+  trim prose, never nouns. Extended by hand as new domains land, not
+  derived from `TOP_HELP`.
 - `SKILL_AUTHOR` (module-private): `"Vignesh Perumal (p33ves)"`, written
   into frontmatter.
 - `HERMES_TAGS` / `HERMES_CATEGORY` (module-private): extended frontmatter

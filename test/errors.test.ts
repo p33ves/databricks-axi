@@ -112,6 +112,44 @@ describe("mapUpstreamError", () => {
     expect(err.code).toBe("AUTH_ERROR");
   });
 
+  it("gives re-login help for an expired token", () => {
+    const err = mapUpstreamError("Error: token expired");
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions.join(" ")).toContain("re-authenticate");
+    expect(err.suggestions.join(" ")).toContain("databricks auth login");
+  });
+
+  it("gives re-login help for a revoked/invalid token", () => {
+    const err = mapUpstreamError("Error: invalid access token");
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions.join(" ")).toContain("expired, revoked, or invalid");
+  });
+
+  it("gives re-login help for an OAuth invalid_grant response", () => {
+    const err = mapUpstreamError(
+      "Error: oauth2: cannot fetch token: invalid_grant",
+    );
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions.join(" ")).toContain("re-authenticate");
+  });
+
+  it("gives --profile guidance for missing default credentials", () => {
+    const err = mapUpstreamError(
+      "Error: cannot configure default credentials, please check ...",
+    );
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions.join(" ")).toContain("--profile");
+    expect(err.suggestions.join(" ")).not.toContain("re-authenticate");
+  });
+
+  it("falls back to the generic auth help for an unqualified 401", () => {
+    const err = mapUpstreamError("Error: failed request: 401 Unauthorized");
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions).toEqual([
+      "Ask the user to run: databricks auth login --host <workspace-url>",
+    ]);
+  });
+
   it("maps 403 to PERMISSION_DENIED", () => {
     expect(mapUpstreamError("Error: 403 Forbidden").code).toBe(
       "PERMISSION_DENIED",

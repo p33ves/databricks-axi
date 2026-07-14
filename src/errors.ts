@@ -4,6 +4,22 @@ const AUTH_HELP = [
   "Ask the user to run: databricks auth login --host <workspace-url>",
 ];
 
+// Re-login help for a token that's expired/revoked/invalid, not merely
+// unconfigured — the recovery is the same login command, phrased as a
+// refresh rather than an initial setup.
+const AUTH_HELP_EXPIRED_TOKEN = [
+  "The stored token is expired, revoked, or invalid. Ask the user to " +
+    "re-authenticate: databricks auth login --host <workspace-url>",
+];
+
+// A profile wasn't resolved at all (no default configured, or none named).
+// The fix is picking one, not just re-logging in with whatever was tried.
+const AUTH_HELP_MISSING_CREDENTIALS = [
+  "No default credentials could be resolved. Ask the user which " +
+    "Databricks profile to use and pass --profile <name>, or run: " +
+    "databricks auth login --host <workspace-url>",
+];
+
 /**
  * Strip token-shaped strings from upstream text before it can reach stdout.
  * Order matters: dapi tokens first (they are also long hex).
@@ -36,11 +52,29 @@ export function mapUpstreamError(stderr: string): AxiError {
     redactSecrets(withoutTrailer.trim()) ||
     "databricks CLI failed with no error output";
   const firstLine = text.split("\n", 1)[0] ?? text;
+  // Expired/revoked/invalid token: the token was once valid but no longer
+  // is - recovery is re-login, not picking a different profile.
+  const expiredTokenRe =
+    /token.{0,20}(?:expired|revoked|invalid)|(?:expired|revoked|invalid).{0,20}token|invalid_grant/i;
+  // No credentials resolved at all (no default profile, none named):
+  // recovery is choosing a profile, not just re-running the same login.
+  const missingCredentialsRe =
+    /cannot configure default credentials|no.{0,20}profile|profile.{0,20}not found/i;
   if (
-    /\b401\b|unauthorized|token.{0,20}expired|cannot configure default credentials|oauth/i.test(
-      text,
-    )
+    expiredTokenRe.test(text) ||
+    missingCredentialsRe.test(text) ||
+    /\b401\b|unauthorized|oauth/i.test(text)
   ) {
+    if (expiredTokenRe.test(text)) {
+      return new AxiError(firstLine, "AUTH_ERROR", AUTH_HELP_EXPIRED_TOKEN);
+    }
+    if (missingCredentialsRe.test(text)) {
+      return new AxiError(
+        firstLine,
+        "AUTH_ERROR",
+        AUTH_HELP_MISSING_CREDENTIALS,
+      );
+    }
     return new AxiError(firstLine, "AUTH_ERROR", AUTH_HELP);
   }
   if (/Public DBFS root is disabled/i.test(text)) {
