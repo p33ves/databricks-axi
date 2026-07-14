@@ -4,6 +4,17 @@ const AUTH_HELP = [
   "Ask the user to run: databricks auth login --host <workspace-url>",
 ];
 
+const AUTH_HELP_EXPIRED_TOKEN = [
+  "The stored token is expired, revoked, or invalid. Ask the user to " +
+    "re-authenticate: databricks auth login --host <workspace-url>",
+];
+
+const AUTH_HELP_MISSING_CREDENTIALS = [
+  "No default credentials could be resolved. Ask the user which " +
+    "Databricks profile to use and pass --profile <name>, or run: " +
+    "databricks auth login --host <workspace-url>",
+];
+
 /**
  * Strip token-shaped strings from upstream text before it can reach stdout.
  * Order matters: dapi tokens first (they are also long hex).
@@ -36,8 +47,34 @@ export function mapUpstreamError(stderr: string): AxiError {
     redactSecrets(withoutTrailer.trim()) ||
     "databricks CLI failed with no error output";
   const firstLine = text.split("\n", 1)[0] ?? text;
+  // Sub-typed AUTH_ERROR help (deliberately narrow - concrete phrasings
+  // over broad gaps, to avoid misrouting a NOT_FOUND/PERMISSION_DENIED
+  // error that merely mentions "token"/"profile"/"OAuth"):
+  //  - expired/revoked/invalid token: matches "token expired"/"token is
+  //    expired"/"token revoked", or "invalid/expired/revoked [access]
+  //    token" reversed, or invalid_grant. Requires the failure word directly
+  //    adjacent to "token" so "token is not expired" does NOT match (the
+  //    "not" breaks the adjacency) - recovery is re-login either way.
+  //  - missing credentials: only the literal upstream phrase actually seen
+  //    ("cannot configure default credentials") - not a generic "profile"
+  //    gap, which would false-positive on e.g. a NOT_FOUND error naming a
+  //    resource called "profile-xyz".
+  //  - generic 401/unauthorized/oauth: oauth only counts co-occurring with
+  //    a failure word, since an unstrippable `Auth type: OAuth (...)`
+  //    trailer (trailing content after it defeats the trailer-strip anchor
+  //    below) would otherwise misroute an unrelated NOT_FOUND error.
   if (
-    /\b401\b|unauthorized|token.{0,20}expired|cannot configure default credentials|oauth/i.test(
+    /\btoken\s+(?:is\s+|has\s+)?(?:expired|revoked)\b|\b(?:expired|revoked|invalid)\s+(?:access\s+)?token\b|invalid_grant/i.test(
+      text,
+    )
+  ) {
+    return new AxiError(firstLine, "AUTH_ERROR", AUTH_HELP_EXPIRED_TOKEN);
+  }
+  if (/cannot configure default credentials/i.test(text)) {
+    return new AxiError(firstLine, "AUTH_ERROR", AUTH_HELP_MISSING_CREDENTIALS);
+  }
+  if (
+    /\b401\b|unauthorized|oauth2?.{0,40}(?:fail|error|invalid|expired|denied|cannot fetch)/i.test(
       text,
     )
   ) {

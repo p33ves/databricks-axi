@@ -207,7 +207,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions ship through
 ## Security
 
 See [SECURITY.md](SECURITY.md). Secret values are never accepted as flags,
-and tokens are never echoed.
+and tokens are never echoed. Authenticate with the least-privilege profile
+or token the task needs; don't reach for an admin/all-workspaces profile
+for a read-only or single-object task.
 
 ## License
 

@@ -164,6 +164,15 @@ limit` heuristic. `fs ls` is the only other documented `listResult`
   `Auth type:`/`Username:` lines, in any order, before classification —
   its `Auth type: OAuth (...)` line otherwise trips the `AUTH_ERROR`
   branch on every auth mode, not just real auth failures.
+- `AUTH_ERROR`'s `help[]` is sub-typed (expired/revoked/invalid token →
+  re-login; `cannot configure default credentials` → pass `--profile
+<name>` or log in; else the generic login line), not one static message.
+  The sub-type regexes are deliberately narrow — concrete phrasings, not
+  broad word-proximity gaps — since a loose match (e.g. any "profile" or
+  bare "oauth" mention) would misroute an unrelated NOT_FOUND/
+  PERMISSION_DENIED error that merely names something containing that
+  word (a resource called `profile-xyz`, an unstrippable `Auth type:
+OAuth (...)` trailer with trailing content after it).
 - `NOT_FOUND` matching covers both "does not exist" and the contraction
   "doesn't exist" (real upstream string, seen from `fs`/`workspace`), plus
   "was not found" (real upstream string from `pipelines get` on an unknown

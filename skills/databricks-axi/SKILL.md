@@ -1,6 +1,6 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI. Implemented: home (ambient workspace dashboard: auth context, recent runs, warehouses, running clusters), whoami (caller's own identity: user, groups, entitlements), jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement view, history), catalog (catalogs, schemas, tables, table view, volumes, volume view, functions, function view), workspace (ls, view notebooks/directories), fs (ls, cat DBFS/volume files), pipelines (list, view, start, stop, events - Lakeflow/DLT), serving (list, view - model serving endpoints, read-only), setup (hooks - session-start ambient context for Claude Code, Codex, OpenCode), api (raw REST passthrough). Run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI: home, whoami, jobs, clusters, sql, catalog, pipelines, serving, workspace, fs, setup, api. Run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
@@ -75,3 +75,12 @@ Run `databricks-axi --help` for global flags, or `databricks-axi <command> --hel
 ## Tips
 
 - Responses end with contextual next-step hints under `help:` - follow them.
+- Names are literal - backtick-quote any catalog/schema/table/warehouse name
+  part with special characters (spaces, hyphens); never normalize a hyphen
+  to an underscore or vice versa.
+- `--profile <name>` is accepted by every data/ops command (everything
+  except `setup`) - pass it explicitly when the user names a profile.
+  Never auto-select a profile when more than one is configured; ask the
+  user which one to use.
+- Use the least-privilege profile or token the task needs - don't reach for
+  an admin/all-workspaces profile for a read-only or single-object task.

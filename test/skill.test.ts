@@ -24,4 +24,15 @@ describe("skill", () => {
     expect(md).toContain("npx -y databricks-axi");
     expect(md).toContain(extractCommandsBlock());
   });
+
+  it("keeps every domain noun in the trimmed always-resident description", () => {
+    const md = createSkillMarkdown();
+    const descriptionLine = md
+      .split("\n")
+      .find((line) => line.startsWith("description:"));
+    expect(descriptionLine).toBeDefined();
+    for (const noun of Object.keys(COMMANDS)) {
+      expect(descriptionLine).toContain(noun);
+    }
+  });
 });

@@ -112,6 +112,80 @@ describe("mapUpstreamError", () => {
     expect(err.code).toBe("AUTH_ERROR");
   });
 
+  it("gives re-login help for an expired token", () => {
+    const err = mapUpstreamError("Error: token expired");
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions.join(" ")).toContain("re-authenticate");
+    expect(err.suggestions.join(" ")).toContain("databricks auth login");
+  });
+
+  it("gives re-login help for a revoked/invalid token", () => {
+    const err = mapUpstreamError("Error: invalid access token");
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions.join(" ")).toContain("expired, revoked, or invalid");
+  });
+
+  it("gives re-login help for an OAuth invalid_grant response", () => {
+    const err = mapUpstreamError(
+      "Error: oauth2: cannot fetch token: invalid_grant",
+    );
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions.join(" ")).toContain("re-authenticate");
+  });
+
+  it("gives --profile guidance for missing default credentials", () => {
+    const err = mapUpstreamError(
+      "Error: cannot configure default credentials, please check ...",
+    );
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions.join(" ")).toContain("--profile");
+    expect(err.suggestions.join(" ")).not.toContain("re-authenticate");
+  });
+
+  it("falls back to the generic auth help for an unqualified 401", () => {
+    const err = mapUpstreamError("Error: failed request: 401 Unauthorized");
+    expect(err.code).toBe("AUTH_ERROR");
+    expect(err.suggestions).toEqual([
+      "Ask the user to run: databricks auth login --host <workspace-url>",
+    ]);
+  });
+
+  it("does not treat a NOT_FOUND error naming a 'profile' resource as AUTH_ERROR", () => {
+    const err = mapUpstreamError(
+      "Error: cluster policy profile-xyz was not found.",
+    );
+    expect(err.code).toBe("NOT_FOUND");
+  });
+
+  it("does not misroute a NOT_FOUND error behind an unstrippable OAuth trailer", () => {
+    // The trailer-strip anchor only fires when the labeled run reaches the
+    // end of the string; a trailing non-label line after "Auth type: OAuth"
+    // defeats it, so the raw "OAuth (...)" text survives into
+    // classification. It must not trip the AUTH_ERROR branch.
+    const stderr = [
+      "Error: The specified pipeline abc was not found.",
+      "",
+      "Profile:   DEFAULT",
+      "Host:      https://example.cloud.databricks.com",
+      "Auth type: OAuth (databricks-cli)",
+      "Something else trailing",
+    ].join("\n");
+    expect(mapUpstreamError(stderr).code).toBe("NOT_FOUND");
+  });
+
+  it("does not misroute a NOT_FOUND error whose first line merely mentions OAuth", () => {
+    expect(
+      mapUpstreamError("Error: OAuth app my-app does not exist").code,
+    ).toBe("NOT_FOUND");
+  });
+
+  it("does not give expired-token help for a negated 'not expired' phrasing", () => {
+    const err = mapUpstreamError("Error: token is not expired");
+    // No other auth signal in this text, so it falls through to the
+    // existing generic fallback rather than any AUTH_ERROR sub-type.
+    expect(err.code).toBe("UPSTREAM_ERROR");
+  });
+
   it("maps 403 to PERMISSION_DENIED", () => {
     expect(mapUpstreamError("Error: 403 Forbidden").code).toBe(
       "PERMISSION_DENIED",

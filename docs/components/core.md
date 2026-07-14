@@ -83,6 +83,18 @@ The error taxonomy and secret redaction, shared by every domain:
   branch. `NOT_FOUND` matching covers "does not exist", the contraction
   "doesn't exist" (workspace/fs), and "was not found" (pipelines) — three
   distinct real upstream phrasings, not one canonical string.
+- `AUTH_ERROR`'s `help[]` is sub-typed, not one static line: an
+  expired/revoked/invalid token (`token ... expired`, `invalid ... token`,
+  `invalid_grant`) gets a re-login line; unresolved default credentials
+  (only the literal upstream phrase `cannot configure default
+credentials`) gets a "pass `--profile <name>` or log in" line; anything
+  else auth-shaped (`401`/`unauthorized`, or `oauth` with a failure word —
+  fail/error/invalid/expired/denied/cannot fetch — within 40 chars) falls
+  back to the generic `databricks auth login --host <workspace-url>`
+  line. Bare `oauth` alone does not match, so an unstrippable `Auth type:
+OAuth (...)` trailer can't misroute a non-auth error. The code stays
+  the single `AUTH_ERROR` taxonomy value in all three cases — only
+  `help[]` differs.
 
 ## `src/truncate.ts`
 
