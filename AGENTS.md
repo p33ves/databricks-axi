@@ -54,9 +54,9 @@ verb (e.g. `whoami`) plus `core.md` for the shared/support modules.
 
 `tools/arena/` is separate from the CLI: a local demo web app (stdlib
 `node:http` + one static page, no deps) that runs one task against a
-workspace three ways (raw CLI, MCP, databricks-axi) side by side. It is
-excluded from the npm package (`files` allowlist) and its `results/` dir is
-gitignored. Setup, safety model, and API contract live in
+workspace three ways (CLI + agent-skills, MCP, databricks-axi) side by side.
+It is excluded from the npm package (`files` allowlist) and its `results/`
+dir is gitignored. Setup, safety model, and API contract live in
 [tools/arena/README.md](tools/arena/README.md); its hermetic self-check
 (`tools/arena/parse.test.mjs`) runs as part of `pnpm test`.
 

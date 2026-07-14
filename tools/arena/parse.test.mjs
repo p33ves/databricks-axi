@@ -12,6 +12,8 @@ import {
   buildMetrics,
   buildResultRow,
   buildComparison,
+  claudeMdFor,
+  allowedToolsFor,
 } from "./server.mjs";
 
 // A few assistant/user events + one final `result` event, same shape as a
@@ -176,7 +178,7 @@ describe("buildResultRow", () => {
       disabled: true,
     };
     const row = buildResultRow("list clusters", {
-      "raw-cli": metrics,
+      "cli-skills": metrics,
       mcp: metrics,
       "databricks-axi": metrics,
     });
@@ -219,7 +221,7 @@ describe("buildComparison", () => {
     const metrics = {
       // fewest total tokens but the MOST expensive (cost must win, not tokens)
       mcp: { exit: 0, is_error: false, num_turns: 3, cost_usd: 0.53 },
-      "raw-cli": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
+      "cli-skills": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
       "databricks-axi": {
         exit: 0,
         is_error: false,
@@ -234,7 +236,7 @@ describe("buildComparison", () => {
 
   it("badges every condition tied at the minimum", () => {
     const metrics = {
-      "raw-cli": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.11 },
+      "cli-skills": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.11 },
       "databricks-axi": {
         exit: 0,
         is_error: false,
@@ -244,13 +246,13 @@ describe("buildComparison", () => {
       mcp: { exit: 0, is_error: false, num_turns: 5, cost_usd: 0.2 },
     };
     const c = buildComparison(metrics);
-    expect(c.lowest_cost).toEqual(["raw-cli"]); // distinct cost winner
-    expect(c.lowest_turns.sort()).toEqual(["databricks-axi", "raw-cli"]); // 2-way tie
+    expect(c.lowest_cost).toEqual(["cli-skills"]); // distinct cost winner
+    expect(c.lowest_turns.sort()).toEqual(["cli-skills", "databricks-axi"]); // 2-way tie
   });
 
   it("badges nobody when all candidates tie (a wash)", () => {
     const metrics = {
-      "raw-cli": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.1 },
+      "cli-skills": { exit: 0, is_error: false, num_turns: 2, cost_usd: 0.1 },
       "databricks-axi": {
         exit: 0,
         is_error: false,
@@ -266,7 +268,7 @@ describe("buildComparison", () => {
 
   it("badges nobody when only one condition survives", () => {
     const metrics = {
-      "raw-cli": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
+      "cli-skills": { exit: 1, is_error: true, num_turns: 1, cost_usd: 0.01 },
       mcp: { exit: null, is_error: true, disabled: true },
       "databricks-axi": {
         exit: 0,
@@ -278,5 +280,23 @@ describe("buildComparison", () => {
     const c = buildComparison(metrics);
     expect(c.lowest_cost).toEqual([]);
     expect(c.lowest_turns).toEqual([]);
+  });
+});
+
+describe("cli-skills condition wiring", () => {
+  it("names the chosen profile explicitly in the CLAUDE.md", () => {
+    const md = claudeMdFor("cli-skills", null, "prod");
+    expect(md).toMatch(/profile named `prod`/);
+    expect(md).not.toMatch(/default Databricks profile/);
+  });
+
+  it("falls back to a default-profile line when no profile is chosen", () => {
+    const md = claudeMdFor("cli-skills", null, null);
+    expect(md).toMatch(/default Databricks profile/);
+    expect(md).not.toMatch(/profile named/);
+  });
+
+  it("grants the Skill tool, needed for native skill-body loading", () => {
+    expect(allowedToolsFor("cli-skills", null)).toBe("Bash,Read,Skill");
   });
 });

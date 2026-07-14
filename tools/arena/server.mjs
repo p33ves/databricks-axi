@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 // Demo Arena: node:http server, 127.0.0.1-only, that runs one task three ways
-// (raw databricks CLI / MCP / databricks-axi) via headless `claude -p` and
-// streams condensed transcripts + a token/turn/duration comparison over SSE.
-// See tools/arena/README.md for the full API/SSE contract.
+// (databricks CLI + agent-skills / MCP / databricks-axi) via headless
+// `claude -p` and streams condensed transcripts + a token/turn/duration
+// comparison over SSE. See tools/arena/README.md for the full API/SSE
+// contract.
 //
-// No new dependencies: node stdlib only. Never imports the gitignored bench
-// harness (docs/superpowers/bench/) — the condition wiring and metric parse
-// below are a trimmed reimplementation (spec §5.1).
+// No new dependencies: node stdlib only (the cli-skills condition shells
+// out to the system `git`, same as `databricks`/`claude`, never an npm
+// package). Never imports the gitignored bench harness
+// (docs/superpowers/bench/) — the condition wiring and metric parse below
+// are a trimmed reimplementation (spec §5.1; cli-skills semantics from the
+// 2026-07-14 agent-skills competitive design §4).
 import { spawn } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -30,6 +35,16 @@ const REPO_ROOT = join(HERE, "..", "..");
 const SKILL_MD_PATH = join(REPO_ROOT, "skills", "databricks-axi", "SKILL.md");
 const RESULTS_DIR = join(HERE, "results");
 const RESULTS_FILE = join(RESULTS_DIR, "runs.jsonl");
+
+// cli-skills condition: the upstream databricks-agent-skills repo, pinned to
+// one commit so a run's provisioned skills never silently drift (mirrors the
+// bench cli-skills arm, spec §4.2). Cloned at runtime into a gitignored
+// local cache, covered by the repo's blanket `.cache/` gitignore rule and
+// never committed, then copied per-run into that condition's own throwaway
+// project dir. Never the viewer's home skills dir, never the other panes.
+const SKILLS_REPO_URL = "https://github.com/databricks/databricks-agent-skills";
+const SKILLS_PINNED_SHA = "5bc462d403e5c2e7134d0a2a771422e20c87c024";
+const SKILLS_CACHE_DIR = join(HERE, ".cache", "databricks-agent-skills");
 
 const ARENA_MAX_TURNS = Number(process.env.ARENA_MAX_TURNS || 20);
 const ARENA_MODEL = process.env.ARENA_MODEL || null;
@@ -188,23 +203,38 @@ export function buildComparison(conditionMetrics) {
 }
 
 // ---------------------------------------------------------------------------
-// The three condition definitions (spec §5). CLAUDE.md strings are
-// structurally parallel (implementer note d) — identical boilerplate,
-// differing only in the named tool/surface.
+// The three condition definitions (spec §5, cli-skills per the 2026-07-14
+// agent-skills competitive design §4). CLAUDE.md strings are structurally
+// parallel (implementer note d) — identical boilerplate, differing only in
+// the named tool/surface. cli-skills additionally names the chosen profile
+// explicitly (see below) to defuse databricks-core's "never auto-select a
+// profile" rule, which would otherwise stall a headless run.
 // ---------------------------------------------------------------------------
 
-const CONDITION_ORDER = ["raw-cli", "mcp", "databricks-axi"];
+const CONDITION_ORDER = ["cli-skills", "mcp", "databricks-axi"];
 
-function claudeMdFor(id, mcpName) {
+export function claudeMdFor(id, mcpName, profile) {
   const header = "For all Databricks operations use ONLY";
   const footer = "\n\nWhen done, state your final answer plainly.\n";
   switch (id) {
-    case "raw-cli":
+    case "cli-skills": {
+      // The installed skills' own router rule refuses to auto-pick a
+      // profile and would otherwise stall a headless session asking a
+      // human. Name the profile explicitly so that rule never fires.
+      const profileLine = profile
+        ? `Use the Databricks profile named \`${profile}\` for every ` +
+          "command (already authenticated). Do not ask which profile to use."
+        : "Use the default Databricks profile (already authenticated). " +
+          "Do not ask which profile to use.";
       return (
         `${header} the official \`databricks\` CLI (already on PATH and ` +
-        "authenticated). Do NOT use any other Databricks tool. Prefer " +
-        `\`-o json\` output.${footer}`
+        "authenticated), guided by the installed Databricks skills: load " +
+        "the `databricks-core` skill plus whichever product skill matches " +
+        "this task, the way their own router would. Do NOT use the REST " +
+        `API directly or any other Databricks tool. Prefer \`-o json\` ` +
+        `output. ${profileLine}${footer}`
       );
+    }
     case "databricks-axi": {
       const skillMd = readFileSync(SKILL_MD_PATH, "utf8");
       return (
@@ -225,8 +255,12 @@ function claudeMdFor(id, mcpName) {
   }
 }
 
-function allowedToolsFor(id, mcpName) {
+export function allowedToolsFor(id, mcpName) {
   if (id === "mcp") return `Read,mcp__${mcpName}`;
+  // cli-skills needs the Skill tool too: that's how Claude Code loads a
+  // matched skill's body on demand, and the whole point of this condition
+  // is measuring that native load, not a hand-injected one.
+  if (id === "cli-skills") return "Bash,Read,Skill";
   return "Bash,Read";
 }
 
@@ -400,6 +434,92 @@ async function resolveHost(profile) {
 }
 
 // ---------------------------------------------------------------------------
+// cli-skills provisioning: a shallow, pinned-commit checkout of the
+// upstream skills repo, cached locally, copied per-run into that
+// condition's own throwaway project dir.
+// ---------------------------------------------------------------------------
+
+// Serializes concurrent cold-start callers onto one in-flight clone instead
+// of racing on SKILLS_CACHE_DIR (a second run's rmSync could otherwise blow
+// away the directory a first run is still fetching into). Reset on
+// settle (success or failure) so a failed clone gets retried by the next
+// run rather than permanently memoizing a null.
+// ponytail: single in-process lock, fine for a local demo server with no
+// worker pool; a real multi-process deployment would need a file lock.
+let skillsCheckoutPromise = null;
+async function ensureSkillsCheckout() {
+  if (!skillsCheckoutPromise) {
+    skillsCheckoutPromise = doEnsureSkillsCheckout().finally(() => {
+      skillsCheckoutPromise = null;
+    });
+  }
+  return skillsCheckoutPromise;
+}
+
+// Ensures a checkout of SKILLS_PINNED_SHA exists at SKILLS_CACHE_DIR and
+// returns its path. Reuses the cache when it's already at the pinned
+// commit; a cold or stale cache re-clones. Never throws: returns null on
+// any failure (e.g. no network), so the caller can fail just the
+// cli-skills pane instead of the whole run.
+async function doEnsureSkillsCheckout() {
+  if (existsSync(SKILLS_CACHE_DIR)) {
+    const rev = await spawnCapture("git", ["rev-parse", "HEAD"], {
+      cwd: SKILLS_CACHE_DIR,
+      timeoutMs: PREFLIGHT_TIMEOUT_MS,
+    });
+    if (rev.code === 0 && rev.out.trim() === SKILLS_PINNED_SHA) {
+      return SKILLS_CACHE_DIR;
+    }
+    rmSync(SKILLS_CACHE_DIR, { recursive: true, force: true });
+  }
+  mkdirSync(SKILLS_CACHE_DIR, { recursive: true });
+  // Shallow clone at an exact commit: init + fetch --depth 1 <sha>, the
+  // standard trick GitHub supports for a public repo, rather than a full
+  // `git clone` (spec: reproducible, minimal network/disk).
+  // GIT_TERMINAL_PROMPT=0: a credential prompt (rate limit, middlebox)
+  // fails the step immediately instead of stalling the pane until SIGKILL.
+  const opts = {
+    cwd: SKILLS_CACHE_DIR,
+    timeoutMs: 120_000,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+  };
+  const steps = [
+    ["init", "-q", "."],
+    ["remote", "add", "origin", SKILLS_REPO_URL],
+    ["fetch", "--depth", "1", "origin", SKILLS_PINNED_SHA],
+    ["checkout", "-q", "FETCH_HEAD"],
+  ];
+  for (const args of steps) {
+    const r = await spawnCapture("git", args, opts);
+    if (r.code !== 0) {
+      rmSync(SKILLS_CACHE_DIR, { recursive: true, force: true });
+      return null;
+    }
+  }
+  return SKILLS_CACHE_DIR;
+}
+
+// Copies the pinned checkout's skills/ tree into this run's throwaway
+// project dir at `.claude/skills/`, the path Claude Code's native
+// project-skill loader auto-discovers from cwd (the same mechanism that
+// already picks up the per-run CLAUDE.md below). Scoped to one temp dir
+// per run, removed in runCondition's `finally`. Never the viewer's home
+// skills dir, and never visible to the mcp/databricks-axi panes, which get
+// their own fresh temp dirs.
+function provisionSkills(checkoutDir, cwd) {
+  const dest = join(cwd, ".claude", "skills");
+  mkdirSync(dest, { recursive: true });
+  // dereference: symlink containment for untrusted pinned upstream content.
+  // Copies any symlink's target file, never recreates the link itself, so a
+  // malicious symlink in the cloned repo can't point the run's skills dir
+  // at an arbitrary path on this machine.
+  cpSync(join(checkoutDir, "skills"), dest, {
+    recursive: true,
+    dereference: true,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Child run per condition.
 // ---------------------------------------------------------------------------
 
@@ -452,7 +572,18 @@ async function runCondition(
   const cwd = mkdtempSync(join(tmpdir(), `arena-${id}-`));
   let pathPrefix = null;
   try {
-    const claudeMd = claudeMdFor(id, mcpName);
+    if (id === "cli-skills") {
+      const checkout = await ensureSkillsCheckout();
+      if (!checkout) {
+        throw new Error(
+          "could not fetch databricks-agent-skills (pinned " +
+            `${SKILLS_PINNED_SHA.slice(0, 8)}); check network access. The ` +
+            "cli-skills pane needs it",
+        );
+      }
+      provisionSkills(checkout, cwd);
+    }
+    const claudeMd = claudeMdFor(id, mcpName, profile);
     writeFileSync(join(cwd, "CLAUDE.md"), claudeMd);
 
     const env = { ...process.env };
@@ -587,7 +718,7 @@ async function startRun(task, profile, model) {
     const metrics = {};
     for (const id of order) {
       const status = {
-        "raw-cli": preflight.databricks,
+        "cli-skills": preflight.databricks,
         mcp: preflight.mcp,
         "databricks-axi": preflight.axi,
       }[id];
@@ -743,10 +874,21 @@ export function createArenaServer() {
         jsonResponse(res, 400, { error: "task must not begin with a dash" });
         return;
       }
-      const profile =
-        typeof body.profile === "string" && body.profile.trim()
-          ? body.profile.trim()
-          : null;
+      // Profile flows into child argv/env (DATABRICKS_CONFIG_PROFILE, `-p`
+      // in resolveHost). A run executes real operations against a workspace,
+      // so a supplied profile that fails the conservative charset (which
+      // also rules out a leading dash) is an explicit 400 — never a silent
+      // fall-back to the default profile's workspace.
+      let profile = null;
+      if (body.profile !== undefined && body.profile !== null) {
+        const trimmed =
+          typeof body.profile === "string" ? body.profile.trim() : "";
+        if (!/^[A-Za-z0-9][\w.:-]{0,63}$/.test(trimmed)) {
+          jsonResponse(res, 400, { error: "invalid profile" });
+          return;
+        }
+        profile = trimmed;
+      }
       if (typeof body.model === "string" && body.model.trim().startsWith("-")) {
         jsonResponse(res, 400, { error: "invalid model" });
         return;

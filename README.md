@@ -143,8 +143,8 @@ Full per-task numbers across all 37 tasks and all three workspaces live in
 
 To watch the comparison live against your own workspace, the repo ships a
 local demo: `node tools/arena/server.mjs` runs one task of your choosing
-three ways (raw CLI, MCP, databricks-axi) side by side. It is a demo, not
-the benchmark; see [tools/arena/README.md](tools/arena/README.md).
+three ways (CLI + agent-skills, MCP, databricks-axi) side by side. It is a
+demo, not the benchmark; see [tools/arena/README.md](tools/arena/README.md).
 
 ## Requirements
 
