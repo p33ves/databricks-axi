@@ -2,3 +2,4 @@
 CHANGELOG.md
 .release-please-manifest.json
 skills/databricks-axi/SKILL.md
+pnpm-lock.yaml
