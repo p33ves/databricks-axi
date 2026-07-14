@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/p33ves/databricks-axi/compare/v1.0.1...v1.0.2) (2026-07-14)
+
+
+### Bug Fixes
+
+* **arena:** give the MCP preflight probe its own timeout and keep the host out of page chrome ([#47](https://github.com/p33ves/databricks-axi/issues/47)) ([c919d42](https://github.com/p33ves/databricks-axi/commit/c919d4253aeadae942621994a35007464f75a12c))
+
 ## [1.0.1](https://github.com/p33ves/databricks-axi/compare/v1.0.0...v1.0.1) (2026-07-13)
 
 
