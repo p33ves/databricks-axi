@@ -1,12 +1,8 @@
 import { DESCRIPTION, TOP_HELP } from "./cli.js";
 
-// Trigger string agent harnesses match against to auto-load the skill. This
-// is the always-resident cost (loaded every session by the skill picker,
-// per the SKILL.md comment above `createSkillMarkdown` and the Claude Code
-// Agent Skills docs); the full per-domain verb list lives in the body's
-// `## Commands` block, loaded only on activation. Keep this one line and
-// keep every domain noun agent harnesses match on - trimming prose is fine,
-// dropping a noun risks activation rate.
+// Trigger string agent harnesses match against to auto-load the skill - the
+// always-resident cost, loaded every session by the picker. Keep this one
+// line; keep every domain noun (dropping one risks activation rate).
 const SKILL_DESCRIPTION =
   "Agent-ergonomic wrapper around the Databricks CLI: home, whoami, jobs, " +
   "clusters, sql, catalog, pipelines, serving, workspace, fs, setup, api. " +
