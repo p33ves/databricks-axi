@@ -1,5 +1,9 @@
 # databricks-axi
 
+[![npm](https://img.shields.io/npm/v/databricks-axi)](https://www.npmjs.com/package/databricks-axi)
+[![CI](https://github.com/p33ves/databricks-axi/actions/workflows/ci.yml/badge.svg)](https://github.com/p33ves/databricks-axi/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 Token-efficient Databricks CLI for AI agents, implementing the
 [AXI standard](https://github.com/kunchenguid/axi) (Agent eXperience
 Interface): TOON output, minimal default schemas, structured errors,
@@ -8,6 +12,12 @@ contextual next steps, ambient context.
 Wraps the official [`databricks` CLI](https://docs.databricks.com/dev-tools/cli/).
 Auth, transport, and API coverage stay upstream; this tool reshapes the
 experience for agents.
+
+[![The arena demo: one task run three ways, side by side](https://raw.githubusercontent.com/p33ves/databricks-axi/main/docs/images/arena.png)](tools/arena/)
+
+One task, three agents, one workspace, via the [arena](tools/arena/) demo you
+can run yourself. A demo, not a benchmark: one run each, no repeats, no
+grading. The measured numbers are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Why databricks-axi
 
@@ -49,14 +59,14 @@ Same workspace, same question, both CLIs. The raw CLI:
 $ databricks jobs list -o json
 [
   {
-    "created_time": 1783396339626,
+    "created_time": 1700000000000,
     "creator_user_name": "you@example.com",
-    "job_id": 517790498477266,
+    "job_id": 123456789012345,
     "settings": {
       "email_notifications": {},
       "format": "MULTI_TASK",
       "max_concurrent_runs": 1,
-      "name": "axi-bench-etl",
+      "name": "nightly-etl",
       "queue": {
         "enabled": true
       },
@@ -71,7 +81,7 @@ databricks-axi:
 ```console
 $ databricks-axi jobs list
 jobs[1]{job_id,name,creator_user_name}:
-  517790498477266,axi-bench-etl,you@example.com
+  123456789012345,nightly-etl,you@example.com
 count: 1
 help[2]: databricks-axi jobs view <job_id>,databricks-axi jobs runs <job_id>
 ```
@@ -110,12 +120,12 @@ cluster-detail task, agent variance rather than a tool error. Over the seven
 tasks all four setups can run, databricks-axi posts the lowest input tokens,
 cost, turns, and duration:
 
-| Condition                    | Avg Input Tokens | Avg Cost/Task | Avg Duration | Avg Turns | Success  |
-| ---------------------------- | ---------------- | ------------- | ------------ | --------- | -------- |
-| **databricks-axi**           | **85,664**       | **$0.130**    | **14s**      | **2.9**   | **100%** |
-| databricks CLI (raw)         | 103,963          | $0.148        | 15s          | 3.5       | 100%     |
-| Databricks managed MCP (SQL) | 186,051          | $0.221        | 22s          | 4.6       | 100%     |
-| Databricks ai-dev-kit MCP    | 277,399          | $0.342        | 28s          | 5.9       | 100%     |
+| Condition                    | Avg Input Tokens | Avg Cost/Task | Avg Duration | Avg Turns | Success (7 tasks) |
+| ---------------------------- | ---------------- | ------------- | ------------ | --------- | ----------------- |
+| **databricks-axi**           | **85,664**       | **$0.130**    | **14s**      | **2.9**   | **35/35**         |
+| databricks CLI (raw)         | 103,963          | $0.148        | 15s          | 3.5       | 35/35             |
+| Databricks managed MCP (SQL) | 186,051          | $0.221        | 22s          | 4.6       | 35/35             |
+| Databricks ai-dev-kit MCP    | 277,399          | $0.342        | 28s          | 5.9       | 35/35             |
 
 Against the raw `databricks` CLI, the very CLI this tool wraps, that's 18%
 fewer input tokens, 17% fewer turns, and 12% lower cost. Against the MCP

@@ -9,6 +9,7 @@ import {
   condense,
   condenseEvent,
   parseResultEvent,
+  buildMetrics,
   buildResultRow,
   buildComparison,
 } from "./server.mjs";
@@ -136,6 +137,26 @@ describe("parseResultEvent", () => {
       cost_usd: null,
       is_error: null,
     });
+  });
+});
+
+describe("buildMetrics", () => {
+  it("keeps the last stderr line verbatim when the condition exits non-zero", () => {
+    const line =
+      "Error: cannot authenticate. Host: https://dbc-abc123.cloud.databricks.com";
+    const metrics = buildMetrics({ code: 1, lastErrLine: line }, 12, [
+      "not json, no result event",
+    ]);
+
+    expect(metrics.exit).toBe(1);
+    expect(metrics.is_error).toBe(true);
+    expect(metrics.error_line).toBe(line);
+  });
+
+  it("leaves error_line null on a clean exit", () => {
+    const metrics = buildMetrics({ code: 0, lastErrLine: "" }, 5, STREAM_LINES);
+    expect(metrics.error_line).toBe(null);
+    expect(metrics.is_error).toBe(false);
   });
 });
 

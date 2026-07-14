@@ -311,15 +311,31 @@ async function checkMcp() {
   if (ARENA_MCP_CONFIG) {
     return { ok: true, name: "databricks", mode: "scoped" };
   }
-  const r = await spawnCapture("claude", ["mcp", "list"]);
+  // `claude mcp list` health-checks every registered server and has no flag to
+  // skip it, so it scales with how many the viewer has: ~14s with three of
+  // them. The 10s preflight budget killed it mid-probe and reported a
+  // correctly-configured server as missing.
+  // ponytail: fixed 30s ceiling, not a per-server budget. Someone with a dozen
+  // slow servers can still time out; make it adaptive only if that shows up.
+  const r = await spawnCapture("claude", ["mcp", "list"], {
+    timeoutMs: 30_000,
+  });
   const configured = r.out
     .split("\n")
     .some((line) => /^databricks:/.test(line));
   if (configured) return { ok: true, name: "databricks", mode: "inherit" };
+  if (r.timedOut) {
+    return {
+      ok: false,
+      reason:
+        "`claude mcp list` did not finish in 30s (it health-checks every " +
+        "configured server) — set ARENA_MCP_CONFIG to a scoped mcp.json to skip the probe",
+    };
+  }
   return {
     ok: false,
     reason:
-      'no "databricks" MCP server configured — run `claude mcp add databricks ...`, ' +
+      'no "databricks" MCP server configured — see tools/arena/README.md (install ai-dev-kit), ' +
       "or set ARENA_MCP_CONFIG to a scoped mcp.json",
   };
 }
@@ -332,6 +348,20 @@ async function runPreflight() {
     checkMcp(),
   ]);
   return { databricks, claude, axi, mcp };
+}
+
+export function buildMetrics(result, wallS, rawLines) {
+  const parsed = parseResultEvent(rawLines);
+  return {
+    exit: result.code,
+    wall_s: wallS,
+    ...parsed,
+    // A killed/timed-out/crashed child emits no result event: is_error
+    // stays null there unless we fall back to the exit code, and a
+    // force-killed condition must never render as a fast, cheap success.
+    is_error: parsed.is_error ?? result.code !== 0,
+    error_line: result.code === 0 ? null : result.lastErrLine || null,
+  };
 }
 
 // GET /profiles: name + host only, from the databricks CLI's own profile
@@ -355,7 +385,7 @@ async function listProfiles() {
 }
 
 // Resolves the effective host for a run (default profile, or the one the
-// viewer picked) so the UI can render an "open workspace" link. Reuses the
+// viewer picked) so the UI can link the profile name to it. Reuses the
 // same non-interactive `auth describe` preflight already runs — unlike that
 // check, the host IS surfaced here (a URL, not a secret), by explicit design.
 async function resolveHost(profile) {
@@ -472,18 +502,7 @@ async function runCondition(
       });
     });
     const wallS = Math.round((Date.now() - started) / 1000);
-    const parsed = parseResultEvent(rawLines);
-    const metrics = {
-      exit: result.code,
-      wall_s: wallS,
-      ...parsed,
-      // A killed/timed-out/crashed child emits no result event: is_error
-      // stays null there unless we fall back to the exit code, and a
-      // force-killed condition must never render as a fast, cheap success.
-      is_error: parsed.is_error ?? result.code !== 0,
-      error_line: result.code === 0 ? null : result.lastErrLine || null,
-    };
-    return metrics;
+    return buildMetrics(result, wallS, rawLines);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
     if (pathPrefix) rmSync(pathPrefix, { recursive: true, force: true });
@@ -560,7 +579,7 @@ async function startRun(task, profile, model) {
       pane: null,
       kind: "started",
       profile: profile ?? "default",
-      host, // a URL, not a secret — surfaced so the UI can link "open workspace"
+      host, // a URL, not a secret: the UI hangs the profile name's href off it
       order,
     });
     const preflight = await runPreflight();

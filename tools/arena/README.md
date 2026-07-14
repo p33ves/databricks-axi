@@ -49,9 +49,36 @@ tools/arena/server.mjs`. Do not override `HOME`: the `claude` children
   which produces `dist/bin/databricks-axi.js`). If neither is available the
   axi pane is disabled; the other panes still run.
 - A Databricks MCP server, **named literally `databricks`**, configured for
-  Claude Code (`claude mcp add databricks ...`). Claude Code derives the
-  `mcp__<name>` tool prefix from the server's name, so any other name won't
-  match and the mcp pane will be disabled with setup instructions.
+  Claude Code. Claude Code derives the `mcp__<name>` tool prefix from the
+  server's name, so any other name won't match and the mcp pane will be
+  disabled with setup instructions.
+
+  Databricks does not publish an MCP server you can `claude mcp add` by name.
+  Use Databricks Field Engineering's
+  [ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit), the same
+  server the benchmark's `mcp-aidevkit` condition runs. Clone it, then register
+  it user-scoped (the arena runs each condition in a throwaway temp directory,
+  so a project-scoped server is invisible to it):
+
+  ```
+  git clone https://github.com/databricks-solutions/ai-dev-kit
+  claude mcp add databricks -s user \
+    -e DATABRICKS_CONFIG_FILE=/path/to/.databrickscfg \
+    -e DATABRICKS_CONFIG_PROFILE=<profile> \
+    -- uv run --directory /path/to/ai-dev-kit python databricks-mcp-server/run_server.py
+  ```
+
+  Requires [`uv`](https://docs.astral.sh/uv/). Passing the config file and
+  profile keeps auth on the Databricks CLI's own credential chain, so no token
+  is written into your Claude config. Check it with `claude mcp list`; the
+  arena looks for a line starting with `databricks:`.
+
+  Preflight runs that same `claude mcp list`, which health-checks every server
+  you have registered and has no flag to skip it, so it slows down as you add
+  more (~14s with three). The probe gets 30s; past that the mcp pane is
+  disabled with a "did not finish in 30s" reason rather than a "not
+  configured" one. If you sit above that ceiling, scoped mode below skips the
+  probe entirely.
   - **Inherit mode (default):** the mcp condition runs without
     `--mcp-config`, so it loads your already-configured, **user-scoped**
     Databricks MCP server. Each run executes in a throwaway temp directory,
@@ -61,6 +88,7 @@ tools/arena/server.mjs`. Do not override `HOME`: the `claude` children
     to run with `--strict-mcp-config --mcp-config $ARENA_MCP_CONFIG`
     instead, for a clean single-server session. The arena only points
     `claude` at your file; it never reads or copies it.
+
 - Databricks CLI profiles: if you use named profiles in `~/.databrickscfg`,
   `GET /profiles` lists them for the page's profile picker (§ below).
 
@@ -76,6 +104,31 @@ but allowed.
 | `ARENA_MODEL`      | viewer's Claude default | `--model` override; omitted (not forced to a fixed model) unless set, so all three panes share whatever the default is |
 | `ARENA_TIMEOUT_MS` | `300000` (5 min)        | hard timeout per condition child; SIGKILL past this                                                                    |
 | `ARENA_MCP_CONFIG` | unset                   | path to a viewer-owned `mcp.json` for scoped MCP mode (see above)                                                      |
+
+## The workspace hostname
+
+The page chrome does not show the host: the profile picker shows the profile
+name, and the status line links that name, so the host lives only in the
+link's `href`.
+
+Error lines and expanded transcript panes are the exception. Both render
+upstream text verbatim, and Databricks output often carries the workspace URL
+(`run_page_url`, ai-dev-kit results, `Bash` echoes). A screenshot or recording
+is host-free only while the transcripts are collapsed and nothing failed, so
+check what is on screen before capturing the page.
+
+## What the duration means
+
+The duration each pane reports is end-to-end wall clock for that condition's
+`claude -p` session: process start to exit. It includes model inference, the
+agent's own thinking, and every tool call, which means it **includes the time
+Databricks takes to answer**. Nothing is subtracted.
+
+That is the honest number for "how long did I wait", but it is not a clean
+measure of the tool alone. A cold SQL warehouse or a slow cluster lands in
+whichever pane happens to hit it, and conditions that make more tool calls
+absorb more workspace latency. Read the duration row as a demo observation,
+not as a benchmark of the interfaces.
 
 ## Safety
 
@@ -180,7 +233,7 @@ object, tagged `{ pane, kind, ... }`:
 
 | kind         | pane                   | payload                                     | meaning                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ------------ | ---------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `started`    | `null`                 | `{ profile, host, order }`                  | once, at run start; `host` is the resolved workspace URL for the chosen (or default) profile — render an "open workspace" link (`target="_blank"`), never an iframe/proxy of the workspace UI                                                                                                                                                                                                                                                   |
+| `started`    | `null`                 | `{ profile, host, order }`                  | once, at run start; `host` is the resolved workspace URL for the chosen (or default) profile — the page hangs the profile name's `href` off it (`target="_blank"`), so the host is never rendered as text; never an iframe/proxy of the workspace UI                                                                                                                                                                                            |
 | `line`       | condition id           | `{ text }`                                  | one condensed transcript line (`ASSISTANT: ...` / `TOOL <name>: ...` / `RESULT: ...`), pushed as the child's stdout arrives                                                                                                                                                                                                                                                                                                                     |
 | `done`       | condition id           | `{ metrics }`                               | that condition finished; `metrics` = `{ exit, wall_s, num_turns, tokens_in, tokens_cache_create, tokens_cache_read, tokens_out, cost_usd, is_error, error_line }`                                                                                                                                                                                                                                                                               |
 | `comparison` | `null`                 | `{ conditions, lowest_cost, lowest_turns }` | once, after all conditions finish; `conditions` mirrors the per-condition `metrics` above. `lowest_cost`/`lowest_turns` are each an **array** of the condition ids tied at the minimum (cost is the headline axis, not raw token count, since token classes are priced differently). Empty array when fewer than two conditions survive (a lone finisher has nothing to compare against), or when all candidates tie (a wash highlights nobody) |
@@ -241,5 +294,6 @@ pnpm test
 
 runs `tools/arena/parse.test.mjs`, a hermetic check of the stream-json
 metric parse, the `condense`/`condenseEvent` transcript reducer, the
-results-row shape, and the comparison-highlight sets (`buildComparison`).
-It never spawns `claude` or `databricks`.
+exit-code fallbacks for a child that dies without a result event
+(`buildMetrics`), the results-row shape, and the comparison-highlight sets
+(`buildComparison`). It never spawns `claude` or `databricks`.
