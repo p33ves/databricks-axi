@@ -35,7 +35,7 @@ floor on its real overhead, not a ceiling.
 
 ## Results
 
-228 of 229 published cells passed (99.6%): databricks-axi 80/80, cli-skills
+227 of 228 published cells passed (99.6%): databricks-axi 80/80, cli-skills
 80/80, mcp-aidevkit 67/68.
 
 The one failure: `clusters-view-aws` on mcp-aidevkit, 1 of 3 repeats. Its

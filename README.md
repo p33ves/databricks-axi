@@ -113,7 +113,7 @@ server, pinned `a7e1d51`). The agent was `claude-sonnet-5`, running each
 task cold in its own session against two live workspaces (`AWS` serverless,
 `AWS2` classic clusters).
 
-228 of 229 published cells passed (99.6%): databricks-axi 80/80, cli-skills
+227 of 228 published cells passed (99.6%): databricks-axi 80/80, cli-skills
 80/80, mcp-aidevkit 67/68. The one failure, `clusters-view-aws` on
 mcp-aidevkit (1 of 3 repeats), is a real gap in that tool's cluster-read
 call: it omits node type, DBR version, and autotermination for a
