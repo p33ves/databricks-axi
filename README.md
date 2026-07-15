@@ -106,7 +106,8 @@ Agent ergonomics is measurable. A bench run compared databricks-axi against
 two competing setups on real Databricks tasks (list jobs, triage a failed
 run, read a table schema, cycle a cluster, and similar): **databricks-axi**
 (v1.0.2), **cli-skills** (the official `databricks` CLI v1.6.0 plus the
-`databricks-agent-skills` skill pack, pinned `5bc462d4`), and
+[`databricks-agent-skills`](https://github.com/databricks/databricks-agent-skills)
+skill pack, pinned `5bc462d4`), and
 **mcp-aidevkit** (Databricks Field Engineering's
 [ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit) stdio MCP
 server, pinned `a7e1d51`). The agent was `claude-sonnet-5`, running each
