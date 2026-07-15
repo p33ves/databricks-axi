@@ -6,9 +6,6 @@ see `core.md`) + `src/databricks.ts` (`probeCli`). Tests:
 `test/doctor.test.ts` (command level), `test/databricks.test.ts`
 (`probeCli` unit tests).
 
-Spec:
-`docs/superpowers/specs/2026-07-15-databricks-axi-1.1.0-doctor-design.md`.
-
 Top-level verb, not a domain: a deterministic preflight health check in
 place of agent-skills' `commands/doctor.md` slash-command prompt (several
 raw-CLI turns, hand-formatted table). ~90% reuse over `home`, `whoami`,
@@ -68,10 +65,10 @@ unparseable output is actually old). `found` + `version` + `ok` → PASS
 help). `.raw` is normalized to always show exactly one leading `v`
 (upstream `-v` output sometimes includes it, sometimes doesn't).
 
-### `profile` / `auth` — §6 account-host carve-out
+### `profile` / `auth` — account-host carve-out
 
 Both come from the same `fetchAuthContext` + `fetchMe` (current-user me)
-pair, classified after both settle (§6 Decision 3). A rejected probe's own
+pair, classified after both settle. A rejected probe's own
 `AxiError` code drives its FAIL row (`errorDetail` in `doctor.ts`) — a
 TIMEOUT/UPSTREAM_ERROR/PERMISSION_DENIED rejection is never relabeled
 `AUTH_ERROR` just because it happened on an auth probe; `AUTH_ERROR` is
@@ -100,12 +97,12 @@ the carve-out.
 
 ### `warehouse` / `compute` predictions (`--full` only)
 
-- **`warehouse`** (§5.2): from the `warehouses` panel. No `RUNNING` row
+- **`warehouse`**: from the `warehouses` panel. No `RUNNING` row
   **and at least one warehouse exists** → WARN with a `sql warehouses
 start <id>` suggestion (a concrete id, never a placeholder). Any
   `RUNNING` row, a degraded panel, or a zero-length list → no row (an
   empty list is not itself a fault, and there'd be no real id to name).
-- **`compute`** (§5.1, the serverless-only correction): from one
+- **`compute`** (the serverless-only correction): from one
   **unfiltered** `fetchClusters` call — never the filtered
   `fetchRunningClusters` `home` uses, since an empty _filtered_ list can't
   distinguish "nothing running" from "no classic clusters exist at all".
@@ -119,7 +116,7 @@ start <id>` suggestion (a concrete id, never a placeholder). Any
   - the panel rejected/timed out → no `compute` row at all (never a false
     prediction).
 
-## `code`/`help` selection — fixed fix-order (§4.1)
+## `code`/`help` selection — fixed fix-order
 
 `overall` is `fail` if any check is FAIL, else `warn` if any is WARN, else
 `healthy`. The top-level `code`/`help` name the single check to fix first,
@@ -180,13 +177,13 @@ just render as FAIL rows and the top-level `code`/`help` still surface.
   (`diagnoseFailure`) is untouched.
 - No separate `--full` "context panel" off `auth describe` — the
   `profile` check row is the sole surface for host/profile/auth_type
-  (dropped from the spec at review; see the spec's Decision 2 note).
+  (a separate context panel was dropped at review).
 
 ## Tests
 
 `test/doctor.test.ts`: exact argv per probe (including the version probe
 never receiving `-p <profile>`), base-mode exactly renders `cli`/`profile`/
-`auth` with no workspace calls beyond auth/current-user, the §4.1
+`auth` with no workspace calls beyond auth/current-user, the fix-order
 precedence worked example (old CLI WARN + failed auth FAIL →
 `AUTH_ERROR`, never `CLI_TOO_OLD`), a TIMEOUT on the auth probe rendering
 and selecting `TIMEOUT` rather than a hardcoded `AUTH_ERROR`, the
