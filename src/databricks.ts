@@ -7,8 +7,10 @@ import { mapUpstreamError } from "./errors.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MIN_MINOR_VERSION = 298; // databricks CLI floor: 0.298 (pre-0.298 pagination flags differ)
-const INSTALL_HELP =
+export const INSTALL_HELP =
   "Install it: https://docs.databricks.com/dev-tools/cli/install";
+export const UPGRADE_HELP =
+  "Upgrade: https://docs.databricks.com/dev-tools/cli/install";
 const RAW_OUTPUT_CAP_BYTES = 5 * 1024 * 1024; // fs cat / raw mode: stream + abort, never buffer unbounded
 const STDERR_CAP_BYTES = 64 * 1024; // error text is never legitimately large; stop buffering past this
 
@@ -209,23 +211,54 @@ async function diagnoseFailure(stderr: string): Promise<AxiError> {
       return new AxiError(
         `databricks CLI ${version.raw} is too old (need >= 0.298)`,
         "CLI_TOO_OLD",
-        [`Upgrade: https://docs.databricks.com/dev-tools/cli/install`],
+        [UPGRADE_HELP],
       );
     }
   }
   return mapUpstreamError(stderr);
 }
 
-async function detectVersion(): Promise<{
-  major: number;
-  minor: number;
-  raw: string;
-} | null> {
-  const result = await spawnCollect(["-v"], 5_000);
-  // Legacy CLIs print the version to stderr.
-  const match = /v?(\d+)\.(\d+)\.(\d+)/.exec(result.stdout + result.stderr);
+type Version = { major: number; minor: number; raw: string };
+
+// Shared by detectVersion and probeCli — both parse the same `-v` shape.
+function parseVersion(text: string): Version | null {
+  const match = /v?(\d+)\.(\d+)\.(\d+)/.exec(text);
   if (!match) {
     return null;
   }
   return { major: Number(match[1]), minor: Number(match[2]), raw: match[0] };
+}
+
+async function detectVersion(): Promise<Version | null> {
+  const result = await spawnCollect(["-v"], 5_000);
+  // Legacy CLIs print the version to stderr.
+  return parseVersion(result.stdout + result.stderr);
+}
+
+export type CliProbe = {
+  found: boolean;
+  version?: Version;
+  /** Only set when a version was parsed; undefined means "found, version
+   * unknown" (a WARN, not a FAIL — distinct from `found: false`). */
+  ok?: boolean;
+};
+
+/**
+ * doctor's `cli` check. Unlike `detectVersion` (used only by the failure-path
+ * guard, which doesn't need the distinction), this splits "not found on
+ * PATH" (FAIL CLI_MISSING) from "found, but version unparseable" (WARN).
+ * `timeoutMs` defaults to the same 5s `detectVersion` uses; doctor passes its
+ * own `PANEL_TIMEOUT_MS` so the whole probe batch shares one budget.
+ */
+export async function probeCli(timeoutMs = 5_000): Promise<CliProbe> {
+  const result = await spawnCollect(["-v"], timeoutMs);
+  if (result.enoent) {
+    return { found: false };
+  }
+  const version = parseVersion(result.stdout + result.stderr);
+  if (!version) {
+    return { found: true };
+  }
+  const ok = version.major >= 1 || version.minor >= MIN_MINOR_VERSION;
+  return { found: true, version, ok };
 }

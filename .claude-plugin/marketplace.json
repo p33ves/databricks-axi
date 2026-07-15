@@ -1,0 +1,12 @@
+{
+  "name": "databricks-axi",
+  "owner": { "name": "databricks-axi maintainers" },
+  "plugins": [
+    {
+      "name": "databricks-axi",
+      "source": "./",
+      "description": "Agent-ergonomic wrapper around the Databricks CLI: token-efficient TOON output, structured errors, ambient workspace context.",
+      "version": "1.0.2"
+    }
+  ]
+}

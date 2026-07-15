@@ -2,7 +2,11 @@ import { chmodSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runDatabricks, runDatabricksApi } from "../src/databricks.js";
+import {
+  probeCli,
+  runDatabricks,
+  runDatabricksApi,
+} from "../src/databricks.js";
 import {
   installFakeDatabricks,
   type FakeDatabricks,
@@ -227,5 +231,38 @@ for (let i = 0; i < 8; i++) process.stdout.write(chunk);
     fake.respond("jobs list", { jobs: bigArray });
     const result = await runDatabricks(["jobs", "list"]);
     expect(result).toEqual({ jobs: bigArray });
+  });
+});
+
+describe("probeCli", () => {
+  it("reports found: false when databricks is not on PATH (ENOENT)", async () => {
+    process.env.PATH = mkdtempSync(join(tmpdir(), "empty-path-"));
+    await expect(probeCli()).resolves.toEqual({ found: false });
+  });
+
+  it("reports found + ok when the version is new enough", async () => {
+    const fake = useFake();
+    fake.respondRaw("-v", "Databricks CLI v1.6.0\n");
+    await expect(probeCli()).resolves.toEqual({
+      found: true,
+      version: { major: 1, minor: 6, raw: "v1.6.0" },
+      ok: true,
+    });
+  });
+
+  it("reports found + not ok when the version is below the 0.298 floor", async () => {
+    const fake = useFake();
+    fake.respondRaw("-v", "Databricks CLI v0.200.0\n");
+    await expect(probeCli()).resolves.toEqual({
+      found: true,
+      version: { major: 0, minor: 200, raw: "v0.200.0" },
+      ok: false,
+    });
+  });
+
+  it("reports found with no version when -v output is unparseable", async () => {
+    const fake = useFake();
+    fake.respondRaw("-v", "not a version\n");
+    await expect(probeCli()).resolves.toEqual({ found: true });
   });
 });
