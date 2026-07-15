@@ -266,7 +266,9 @@ merging to `main` never triggers a release on its own.
 
 ```bash
 # 1. Bump the version on a branch, then ship it like any other change.
-pnpm version 1.0.3 --no-git-tag-version
+pnpm version 1.0.3 --no-git-tag-version   # only touches package.json
+# Also bump the "version" field by hand in .claude-plugin/plugin.json and
+# .claude-plugin/marketplace.json — pnpm version does not touch them.
 git commit -am "chore: release 1.0.3"
 git push no-mistakes        # normal PR, normal checks, merge it
 
