@@ -6,13 +6,15 @@ modules every domain command depends on. Tests:
 `test/cli.test.ts`, `test/databricks.test.ts`, `test/errors.test.ts`,
 `test/truncate.test.ts` (`src/context.ts` and `src/commands/shared.ts`
 have no dedicated test files; they're exercised indirectly through every
-domain's own test suite, plus `test/home.test.ts` for `context.ts`).
+domain's own test suite, plus `test/home.test.ts` and `test/doctor.test.ts`
+for `context.ts`).
 
 ## `src/cli.ts`
 
 Wires every domain command into `runAxiCli` (from `axi-sdk-js`): the
-`COMMANDS` map (`home`, `jobs`, `clusters`, `sql`, `catalog`, `workspace`,
-`fs`, `pipelines`, `serving`, `setup`, `api`, `whoami`), the top-level help text
+`COMMANDS` map (`home`, `doctor`, `jobs`, `clusters`, `sql`, `catalog`,
+`workspace`, `fs`, `pipelines`, `serving`, `setup`, `api`, `whoami`), the
+top-level help text
 (`TOP_HELP`), and per-command help lookup (`COMMAND_HELP`). Also resolves
 the package version by reading `package.json` from either one or two
 directories up from the compiled/source location (`readPackageVersion`),
@@ -28,7 +30,7 @@ import fails — this is the one stdout write that sits outside `runAxiCli`.
 ## `src/databricks.ts`
 
 The spawn wrapper — every domain command reaches the upstream `databricks`
-CLI only through this file's two exports:
+CLI only through this file's exports:
 
 - `runDatabricks(args, opts)`: spawns `databricks` with array argv only
   (never a shell), `stdin: 'ignore'`, a hard timeout (default 30s,
@@ -49,6 +51,17 @@ CLI only through this file's two exports:
   `mkdtemp(tmpdir())` and passed as `--json @<path>`, with the temp dir
   removed in a `finally`. A body already given as `@path` (user-supplied
   file reference) passes through untouched.
+- `probeCli(timeoutMs = 5_000)`: `doctor`'s `cli` check (`doctor` calls it
+  with its own `PANEL_TIMEOUT_MS` so the whole probe batch shares one
+  budget). Reuses the module-private `spawnCollect` plus a shared
+  `parseVersion` helper (also used by `detectVersion` — both parse the
+  same `-v` regex/shape) and the same `MIN_MINOR_VERSION` floor, but
+  returns `{found, version?, ok?}` so the caller can tell "not found on
+  PATH" (`found: false`) apart from "found, version unparseable"
+  (`found: true`, no `version`) — a distinction `detectVersion` collapses
+  to `null` since its only caller (the failure-path guard) doesn't need
+  it. Does not replace `detectVersion`; the existing failure-path guard is
+  untouched. See `doctor.md`.
 - `spawnCollect` (internal): the actual `child_process.spawn`, with raw
   mode's `maxBytes` cap streaming stdout as Buffer chunks and SIGKILLing
   the child the instant the running total exceeds the cap, rather than
@@ -113,11 +126,11 @@ callers can report the right truncation reason.
 ## `src/context.ts`
 
 Panel-fetch layer for `home` (rendering/assembly stays in
-`src/commands/home.ts`; see `home.md`). Exports `PANEL_TIMEOUT_MS` (4s, the
-override every panel spawn uses instead of the default 30s) and four fetch
-functions, each spawned in parallel by the caller via
-`Promise.allSettled` — none of them retry or extend that budget
-themselves:
+`src/commands/home.ts`; see `home.md`) and shared by `doctor` (see
+`doctor.md`). Exports `PANEL_TIMEOUT_MS` (4s, the override every panel
+spawn uses instead of the default 30s) and five fetch functions, each
+spawned in parallel by the caller via `Promise.allSettled` — none of them
+retry or extend that budget themselves:
 
 - `fetchAuthContext`: `auth describe`, unpacking the nested response shape
   (`username` top-level; `host`/`auth_type` under `details`; `profile`
@@ -126,7 +139,13 @@ themselves:
 - `fetchRecentRuns`: `jobs list-runs --limit 5`, sorted FAILED-first, each
   row carrying a `next: "jobs logs <run_id>"` follow-up when failed.
 - `fetchWarehouses`: `warehouses list`, flattened to `{ id, name, state }`.
-- `fetchRunningClusters`: `clusters list`, filtered to non-`TERMINATED`.
+- `fetchClusters`: `clusters list`, unfiltered — every row regardless of
+  state. `doctor` needs this to tell "nothing running" apart from "no
+  classic clusters exist" (a fact `fetchRunningClusters`'s filtered result
+  can't distinguish on its own: an empty filtered list means either).
+- `fetchRunningClusters`: delegates to `fetchClusters`, filtered to
+  non-`TERMINATED` — `home`'s panel source, one upstream `clusters list`
+  call defined in one place.
 
 ## `src/commands/shared.ts`
 

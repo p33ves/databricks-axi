@@ -25,7 +25,7 @@ import {
 const { parseArgs, usage } = domainHelpers("home");
 
 const AVAILABLE_COMMANDS =
-  "jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement, history), catalog (catalogs, schemas, tables, table view, volumes, volume view, functions, function view), workspace (ls, view), fs (ls, cat), pipelines (list, view, start, stop, events), serving (list, view), setup (hooks), api, whoami";
+  "jobs (list, view, run, runs, logs, cancel), clusters (list, view, start, stop), sql (warehouses, exec, statement, history), catalog (catalogs, schemas, tables, table view, volumes, volume view, functions, function view), workspace (ls, view), fs (ls, cat), pipelines (list, view, start, stop, events), serving (list, view), setup (hooks), api, whoami, doctor [--full]";
 
 const TOP_SUGGESTIONS = [
   "databricks-axi jobs list",

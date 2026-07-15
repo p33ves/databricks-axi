@@ -199,6 +199,7 @@ v1 command surface (see the AXI standard for the principles each follows):
 | `api`       | raw REST passthrough ✅                                                                  |
 | `setup`     | hooks install (Claude Code, Codex, OpenCode) ✅                                          |
 | `whoami`    | caller's own identity (SCIM Me): user, groups, entitlements ✅                           |
+| `doctor`    | preflight health check: CLI/profile/auth, plus `--full` compute/warehouse predictions ✅ |
 
 ## Development
 

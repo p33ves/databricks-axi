@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI: home, whoami, jobs, clusters, sql, catalog, pipelines, serving, workspace, fs, setup, api. Run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI: home, doctor, whoami, jobs, clusters, sql, catalog, pipelines, serving, workspace, fs, setup, api. Run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, whoami, identity, current-user, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model, hooks]
+    tags: [databricks, spark, doctor, health, preflight, whoami, identity, current-user, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model, hooks]
     category: data
 ---
 
@@ -23,14 +23,15 @@ databricks-axi requires the official [`databricks` CLI](https://docs.databricks.
 
 ## Status
 
-The full v1 command surface is implemented (home, whoami, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
+The full v1 command surface is implemented (home, doctor, whoami, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
 
 ## Commands
 
 ```
-commands[39]:
+commands[40]:
   (none)=home
   whoami [--profile <name>]
+  doctor [--profile <name>] [--full]
   jobs list [--limit N] [--fields a,b]
   jobs view <job_id>
   jobs run <job_id> [--wait]

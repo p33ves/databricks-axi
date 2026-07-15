@@ -112,9 +112,10 @@ export type ClusterRow = {
   state: unknown;
 };
 
-/** Filtered to non-TERMINATED; the caller omits the panel entirely on zero
- * rows (serverless workspaces shouldn't pay a "no clusters" line). */
-export async function fetchRunningClusters(
+/** Unfiltered — every cluster regardless of state. `doctor` needs this to
+ * tell "nothing running" apart from "no classic clusters exist" (a filtered
+ * empty result means either); `home` still only wants the filtered view. */
+export async function fetchClusters(
   opts: RunDatabricksOptions,
 ): Promise<ClusterRow[]> {
   const parsed = await runDatabricks(["clusters", "list"], opts);
@@ -123,11 +124,17 @@ export async function fetchRunningClusters(
     cluster_name?: unknown;
     state?: unknown;
   }[];
-  return items
-    .filter((c) => c.state !== "TERMINATED")
-    .map((c) => ({
-      cluster_id: c.cluster_id,
-      cluster_name: c.cluster_name,
-      state: c.state,
-    }));
+  return items.map((c) => ({
+    cluster_id: c.cluster_id,
+    cluster_name: c.cluster_name,
+    state: c.state,
+  }));
+}
+
+/** Filtered to non-TERMINATED; the caller omits the panel entirely on zero
+ * rows (serverless workspaces shouldn't pay a "no clusters" line). */
+export async function fetchRunningClusters(
+  opts: RunDatabricksOptions,
+): Promise<ClusterRow[]> {
+  return (await fetchClusters(opts)).filter((c) => c.state !== "TERMINATED");
 }
