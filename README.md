@@ -49,7 +49,7 @@ silence, and enough ambient context that the agent doesn't need a
 follow-up question to know where it is. Because the jobs and SQL surfaces
 live behind the same CLI, triaging a failed run stays a jobs-API call, no
 `system`-table workaround needed. See Benchmarks below for how that plays
-out in tokens, cost, and turns.
+out in cost and turns.
 
 ## What the agent sees
 
@@ -102,44 +102,53 @@ parse out of prose, nothing to guess.
 
 ## Benchmarks
 
-Agent ergonomics is measurable. The benchmark follows the
-[axi benchmark](https://axi.md) methodology: real-world Databricks tasks run
-through up to 4 interface setups, 5 repeats each, with `claude-sonnet-5` as
-the agent. The four setups are the raw `databricks` CLI, databricks-axi, and
-two Databricks MCP servers: the workspace-managed SQL server and Databricks
-Field Engineering's
-[ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit) full-surface
-server (~40 tools). Task success is scored against seeded fixtures:
-deterministically where the answer is machine-checkable, by an LLM judge
-otherwise.
+Agent ergonomics is measurable. A bench run compared databricks-axi against
+two competing setups on real Databricks tasks (list jobs, triage a failed
+run, read a table schema, cycle a cluster, and similar): **databricks-axi**
+(v1.0.2), **cli-skills** (the official `databricks` CLI v1.6.0 plus the
+[`databricks-agent-skills`](https://github.com/databricks/databricks-agent-skills)
+skill pack, pinned `5bc462d4`), and
+**mcp-aidevkit** (Databricks Field Engineering's
+[ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit) stdio MCP
+server, pinned `a7e1d51`). The agent was `claude-sonnet-5`, running each
+task cold in its own session against two live workspaces (`AWS` serverless,
+`AWS2` classic clusters).
 
-The latest full pass (**565 runs, v0.9.0, 2026-07-11**, three workspaces, 37
-tasks) put databricks-axi at 185/185 (100%). Across all conditions the pass
-rate was 564/565: the one miss was a single ai-dev-kit repeat on a
-cluster-detail task, agent variance rather than a tool error. Over the seven
-tasks all four setups can run, databricks-axi posts the lowest input tokens,
-cost, turns, and duration:
+227 of 228 published cells passed (99.6%): databricks-axi 80/80, cli-skills
+80/80, mcp-aidevkit 67/68. The one failure, `clusters-view-aws` on
+mcp-aidevkit (1 of 3 repeats), is a real gap in that tool's cluster-read
+call: it omits node type, DBR version, and autotermination for a
+TERMINATED cluster, not a databricks-axi issue. Since databricks-axi and
+cli-skills both pass 100%, the cost and turns comparison below is
+apples-to-apples on task success.
 
-| Condition                    | Avg Input Tokens | Avg Cost/Task | Avg Duration | Avg Turns | Success (7 tasks) |
-| ---------------------------- | ---------------- | ------------- | ------------ | --------- | ----------------- |
-| **databricks-axi**           | **85,664**       | **$0.130**    | **14s**      | **2.9**   | **35/35**         |
-| databricks CLI (raw)         | 103,963          | $0.148        | 15s          | 3.5       | 35/35             |
-| Databricks managed MCP (SQL) | 186,051          | $0.221        | 22s          | 4.6       | 35/35             |
-| Databricks ai-dev-kit MCP    | 277,399          | $0.342        | 28s          | 5.9       | 35/35             |
+Cost and turns are the headline metrics, not tokens: `cost_usd` is Claude
+Code's own billing-correct total, weighted by the real cache-read discount
+(~0.1x). Over the 24 tasks and 68 cells every condition ran:
 
-Against the raw `databricks` CLI, the very CLI this tool wraps, that's 18%
-fewer input tokens, 17% fewer turns, and 12% lower cost. Against the MCP
-servers the gap is wider: **54-69% fewer input tokens** and 41-62% lower cost.
+| Condition          | Avg Cost   | Avg Turns | vs axi (cost / turns) |
+| ------------------ | ---------- | --------- | --------------------- |
+| **databricks-axi** | **$0.143** | **3.1**   | baseline              |
+| cli-skills         | $0.249     | 6.8       | +75% / +118%          |
+| mcp-aidevkit       | $0.201     | 4.3       | +41% / +39%           |
 
-The reason is structural. An MCP server loads its tool schemas into the
-agent's context on every session (3 tools for the managed SQL server, ~40 for
-ai-dev-kit). databricks-axi exposes the same jobs, warehouse, catalog, and SQL
-surface as a single CLI the agent already knows how to read. The managed SQL
-server also cannot run job- or warehouse-mutating tasks at all, since no SQL
-surface can trigger a job run.
+databricks-axi wins or ties on cost in 51 of 52 task/condition comparisons
+and on turns in 49 of 52.
 
-Full per-task numbers across all 37 tasks and all three workspaces live in
-[docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+Input-side tokens (input + cache-write + cache-read) tell a similar story
+but run 85-87% cache read on these cells, which bills at roughly 0.1x, so a
+raw token count overstates the real cost gap by about 1.3x. Reported here
+for reference, not as the lead number: databricks-axi averages 113,613,
+cli-skills 230,449, mcp-aidevkit 172,830.
+
+The reason is structural. `cli-skills` layers agent-skill documents on top
+of the raw CLI's output, and loading a skill body adds real turns and
+tokens on top of parsing the CLI's plain text. `mcp-aidevkit` loads close
+to 40 tool schemas into context every session. databricks-axi exposes the
+same surface as a single CLI the agent already knows how to read, with a
+minimal default schema and no skill body or tool list to load.
+
+Full per-task numbers live in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 To watch the comparison live against your own workspace, the repo ships a
 local demo: `node tools/arena/server.mjs` runs one task of your choosing

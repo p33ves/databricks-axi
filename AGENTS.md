@@ -246,7 +246,7 @@ exists` in the message; catch it by regex (same pattern as `clusters`
 | Design gate  | spec reviewer           | independently re-verifies feasibility, GO/NO-GO before build starts  |
 | Build        | domain implementer      | implements one command domain, TDD against the fake stub             |
 | Review       | AXI compliance reviewer | reviews code against the 10 AXI principles + spec drift              |
-| Validate     | benchmarker             | measures vs raw `databricks` CLI and MCP; hybrid-graded task success |
+| Validate     | benchmarker             | measures vs competing CLI and MCP setups; hybrid-graded task success |
 | Ship         | release manager         | version bump PR, tag, GitHub release, npm publish                    |
 
 Cross-cutting (not tied to one lifecycle stage): security auditor
