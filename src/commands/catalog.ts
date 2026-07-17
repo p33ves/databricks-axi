@@ -16,7 +16,7 @@ const { usage, parseArgs, parseIntFlag, requireId, renderRows } =
   domainHelpers("catalog");
 
 export const CATALOG_HELP = `usage: databricks-axi catalog <subcommand> [args] [flags]
-subcommands[8]:
+subcommands[9]:
   catalogs [--limit N] [--fields a,b]
   schemas <catalog> [--limit N] [--fields a,b]
   tables <catalog>.<schema> [--limit N] [--fields a,b]
@@ -25,6 +25,7 @@ subcommands[8]:
   volume view <catalog>.<schema>.<volume>
   functions <catalog>.<schema> [--limit N] [--fields a,b]
   function view <catalog>.<schema>.<function>
+  grants <securable-type> <name> [--principal P] [--full] [--fields a,b]
 flags:
   --profile <name>  databricks auth profile passthrough
 examples:
@@ -34,11 +35,16 @@ examples:
   databricks-axi catalog table view workspace.default.axi_bench_trips
   databricks-axi catalog volumes workspace.default
   databricks-axi catalog function view workspace.axi_bench.axi_fare_with_tip
+  databricks-axi catalog grants table workspace.default.axi_bench_trips
 notes:
   read-only Unity Catalog browsing; tables omits column payloads —
   use table view for the column schema
   volumes/functions are metadata browse only — volume contents read via
   fs ls/cat, not this domain
+  grants securable-type is one of catalog, schema, table, volume, function —
+  lowercase only, rejected (not re-cased) even though upstream accepts any
+  case; --principal answers "can this principal read this?" including
+  privileges derived via group membership
 `;
 
 type RawTable = {
@@ -102,6 +108,8 @@ export async function catalogCommand(args: string[]): Promise<AxiRenderable> {
         );
       }
       return functionView(rest.slice(1));
+    case "grants":
+      return grantsGet(rest);
     default:
       throw usage(
         sub
@@ -371,5 +379,197 @@ async function functionView(args: string[]): Promise<AxiRenderable> {
     out.external_language = fn.external_language;
   }
   out.help = [`databricks-axi catalog functions ${parent}${p}`];
+  return out;
+}
+
+// --- grants ---
+
+// Case matters (F4): upstream normalizes any case, but axi rejects
+// non-lowercase rather than re-casing — one canonical spelling in, one
+// spelling out, so axi's own output/help/docs/bench fixtures never have to
+// track whatever casing an agent typed. Also doubles as the leading-dash
+// guard on <securable-type>.
+const SECURABLE_TYPES = [
+  "catalog",
+  "schema",
+  "table",
+  "volume",
+  "function",
+] as const;
+type SecurableType = (typeof SECURABLE_TYPES)[number];
+
+function isSecurableType(value: string): value is SecurableType {
+  return (SECURABLE_TYPES as readonly string[]).includes(value);
+}
+
+type RawPrivilege = {
+  privilege?: string;
+  inherited_from_type?: string;
+  inherited_from_name?: string;
+};
+type RawAssignment = {
+  principal?: string;
+  privileges?: RawPrivilege[];
+};
+type RawGrantsResponse = {
+  privilege_assignments?: RawAssignment[];
+  next_page_token?: string;
+};
+
+/** Empty-grants-state suggestion (securable exists, nothing visible here):
+ * walk up to the parent's *grants*, since inherited privileges come from a
+ * broader scope — table/volume/function -> parent schema's grants, schema
+ * -> parent catalog's grants, catalog -> browse its schemas. */
+function emptyGrantsHelp(
+  type: SecurableType,
+  name: string,
+  p: string,
+): string[] {
+  const dot = name.lastIndexOf(".");
+  if (type === "catalog" || dot < 0) {
+    return [`databricks-axi catalog schemas ${name}${p}`];
+  }
+  const parentName = name.slice(0, dot);
+  const parentType: SecurableType = type === "schema" ? "catalog" : "schema";
+  return [`databricks-axi catalog grants ${parentType} ${parentName}${p}`];
+}
+
+const LIST_SUBCOMMAND: Record<SecurableType, string> = {
+  catalog: "catalogs",
+  schema: "schemas",
+  table: "tables",
+  volume: "volumes",
+  function: "functions",
+};
+
+/** NOT_FOUND-state suggestion (the securable itself failed to resolve):
+ * point at the list command for the level that failed, same idiom as
+ * schemasList/scopedList's own NOT_FOUND help — never re-derive a
+ * suggestion from the missing name itself, which fails identically (a
+ * missing catalog's "browse its schemas" line names that same catalog). */
+function notFoundGrantsHelp(
+  type: SecurableType,
+  name: string,
+  p: string,
+): string[] {
+  if (type === "catalog") {
+    return [`databricks-axi catalog catalogs${p}`];
+  }
+  const dot = name.lastIndexOf(".");
+  const parent = dot < 0 ? name : name.slice(0, dot);
+  return [`databricks-axi catalog ${LIST_SUBCOMMAND[type]} ${parent}${p}`];
+}
+
+async function grantsGet(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, {
+    profile: "value",
+    principal: "value",
+    full: "boolean",
+    fields: "value",
+  });
+  const type = positional[0];
+  if (!type || !isSecurableType(type)) {
+    throw usage(
+      type
+        ? `Unknown securable type: ${type}`
+        : "catalog grants requires <securable-type> <name>",
+      [`Valid securable types: ${SECURABLE_TYPES.join(", ")}`],
+    );
+  }
+  const name = requireId(
+    positional.slice(1),
+    `catalog grants ${type} <name>`,
+    /^[^-]/,
+  );
+  const principal = flags.get("principal");
+  const p = profileSuffix(flags.get("profile"));
+  const notFoundBase = notFoundGrantsHelp(type, name, p);
+  // F2 — help selection at the call site, by the flag we passed, not by
+  // re-parsing the error: a bad --principal and a missing securable are
+  // both "Could not find X" upstream, but only the --principal path can
+  // usefully say "drop --principal to list every principal with grants".
+  // Either way this is the NOT_FOUND-state help (the securable/principal
+  // failed to resolve) — distinct from emptyGrantsHelp below (the
+  // securable resolved fine, it just has nothing visible here).
+  const notFoundHelp =
+    typeof principal === "string"
+      ? [
+          `databricks-axi catalog grants ${type} ${name}${p}  (drop --principal to list every principal with grants)`,
+          `databricks-axi whoami${p}`,
+          ...notFoundBase,
+        ]
+      : notFoundBase;
+
+  const assignments: RawAssignment[] = [];
+  let pageToken: string | undefined;
+  const seenTokens = new Set<string>();
+  for (;;) {
+    const argv = ["grants", "get-effective", type, name, "--max-results", "0"];
+    if (typeof principal === "string") {
+      argv.push("--principal", principal);
+    }
+    if (pageToken) {
+      argv.push("--page-token", pageToken);
+    }
+    const page = assertObject<RawGrantsResponse>(
+      await runWithNotFoundHelp(argv, spawnOpts(flags), notFoundHelp),
+      "grants get-effective",
+    );
+    assignments.push(...(page.privilege_assignments ?? []));
+    // Deprecation notice: "a page may contain zero results while still
+    // providing a next_page_token; clients must continue reading pages
+    // until next_page_token is absent" — so a zero-result page with a
+    // token must not stop the loop. But a server bug that re-serves any
+    // earlier token (constant or cycling) must not spin forever either
+    // (AGENTS.md: never auto-paginate unboundedly), so the loop breaks
+    // on any token it has already seen — each spawn has its own timeout,
+    // so nothing else would trip on a runaway loop.
+    if (!page.next_page_token || seenTokens.has(page.next_page_token)) {
+      break;
+    }
+    seenTokens.add(page.next_page_token);
+    pageToken = page.next_page_token;
+  }
+
+  const full = flags.get("full") === true;
+  const flattened = full
+    ? assignments.flatMap((a) =>
+        (a.privileges ?? []).map((pr) => ({
+          principal: a.principal,
+          privilege: pr.privilege,
+          inherited_from_type: pr.inherited_from_type,
+          inherited_from_name: pr.inherited_from_name,
+        })),
+      )
+    : assignments.map((a) => ({
+        principal: a.principal,
+        privileges: (a.privileges ?? [])
+          .map((pr) => pr.privilege)
+          .filter(Boolean)
+          .join(", "),
+      }));
+  const rows = renderRows(
+    flattened,
+    flags,
+    full
+      ? ["principal", "privilege", "inherited_from_type", "inherited_from_name"]
+      : ["principal", "privileges"],
+  );
+
+  // Hand-built envelope (documented listResult exemption #5): no agent-
+  // facing --limit, the page loop drains every page.
+  const out: AxiStructuredOutput = { grants: rows, count: rows.length };
+  if (rows.length === 0) {
+    out.status = `no effective grants on ${type} ${name} for the caller's visibility`;
+    out.help = emptyGrantsHelp(type, name, p);
+    return out;
+  }
+  // --full is dead advice to a caller who already passed it.
+  out.help = full
+    ? emptyGrantsHelp(type, name, p)
+    : [
+        `databricks-axi catalog grants ${type} ${name} --full${p}`,
+        ...emptyGrantsHelp(type, name, p),
+      ];
   return out;
 }

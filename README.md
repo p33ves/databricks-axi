@@ -185,21 +185,23 @@ npx skills add p33ves/databricks-axi --skill databricks-axi -g
 
 v1 command surface (see the AXI standard for the principles each follows):
 
-| Domain      | Verbs                                                                                    |
-| ----------- | ---------------------------------------------------------------------------------------- |
-| `home`      | ambient context dashboard ✅                                                             |
-| `jobs`      | list, view, run, runs, logs, cancel ✅                                                   |
-| `clusters`  | list, view, start, stop ✅                                                               |
-| `sql`       | warehouses, exec, statement view, history ✅                                             |
-| `catalog`   | catalogs, schemas, tables, table view, volumes, volume view, functions, function view ✅ |
-| `workspace` | ls, view ✅                                                                              |
-| `fs`        | ls, cat ✅                                                                               |
-| `pipelines` | list, view, start, stop, events ✅                                                       |
-| `serving`   | list, view ✅                                                                            |
-| `api`       | raw REST passthrough ✅                                                                  |
-| `setup`     | hooks install (Claude Code, Codex, OpenCode) ✅                                          |
-| `whoami`    | caller's own identity (SCIM Me): user, groups, entitlements ✅                           |
-| `doctor`    | preflight health check: CLI/profile/auth, plus `--full` compute/warehouse predictions ✅ |
+| Domain        | Verbs                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| `home`        | ambient context dashboard ✅                                                                     |
+| `jobs`        | list, view, run, runs, logs, cancel ✅                                                           |
+| `clusters`    | list, view, start, stop ✅                                                                       |
+| `sql`         | warehouses, exec, statement view, history ✅                                                     |
+| `catalog`     | catalogs, schemas, tables, table view, volumes, volume view, functions, function view, grants ✅ |
+| `dashboards`  | list, view (Lakeview, read-only) ✅                                                              |
+| `permissions` | read-only ACL view for jobs, clusters, pipelines, warehouses, dashboards ✅                      |
+| `workspace`   | ls, view ✅                                                                                      |
+| `fs`          | ls, cat ✅                                                                                       |
+| `pipelines`   | list, view, start, stop, events ✅                                                               |
+| `serving`     | list, view ✅                                                                                    |
+| `api`         | raw REST passthrough ✅                                                                          |
+| `setup`       | hooks install (Claude Code, Codex, OpenCode) ✅                                                  |
+| `whoami`      | caller's own identity (SCIM Me): user, groups, entitlements ✅                                   |
+| `doctor`      | preflight health check: CLI/profile/auth, plus `--full` compute/warehouse predictions ✅         |
 
 ## Development
 

@@ -210,6 +210,43 @@ describe("mapUpstreamError", () => {
     ).toBe("NOT_FOUND");
   });
 
+  it("maps the lakeview CLI's 'Unable to find dashboard' to NOT_FOUND", () => {
+    expect(
+      mapUpstreamError(
+        "Error: Unable to find dashboard [01f18184706f11da846a179c97fcc019]",
+      ).code,
+    ).toBe("NOT_FOUND");
+  });
+
+  it("maps 'Unable to find published dashboard' to NOT_FOUND", () => {
+    expect(
+      mapUpstreamError(
+        "Error: Unable to find published dashboard [01f18184706f11da846a179c97fcc018]",
+      ).code,
+    ).toBe("NOT_FOUND");
+  });
+
+  it("maps the grants CLI's 'Could not find principal' to NOT_FOUND", () => {
+    expect(
+      mapUpstreamError(
+        "Error: Could not find principal with name nosuchuser@x.com.",
+      ).code,
+    ).toBe("NOT_FOUND");
+  });
+
+  it("does not over-match a format error merely naming 'dashboard'/'principal'", () => {
+    expect(
+      mapUpstreamError(
+        "Error: dashboards/11111111-1111-1111-1111-111111111111 is not a valid object",
+      ).code,
+    ).toBe("UPSTREAM_ERROR");
+    expect(
+      mapUpstreamError(
+        "Error: invalid resource name [dashboards/11111111-1111-1111-1111-111111111111]",
+      ).code,
+    ).toBe("UPSTREAM_ERROR");
+  });
+
   it("maps the pipelines CLI's 'was not found' to NOT_FOUND", () => {
     // Live-pinned pipeline-404 shape (2026-07-11): unlike the other
     // domains' "does not exist", pipelines get uses "was not found" — the

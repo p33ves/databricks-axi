@@ -5,8 +5,9 @@ import { DESCRIPTION, TOP_HELP } from "./cli.js";
 // line; keep every domain noun (dropping one risks activation rate).
 const SKILL_DESCRIPTION =
   "Agent-ergonomic wrapper around the Databricks CLI: home, doctor, whoami, " +
-  "jobs, clusters, sql, catalog, pipelines, serving, workspace, fs, setup, " +
-  "api. Run `databricks-axi --help` for the current surface.";
+  "jobs, clusters, sql, catalog, dashboards, permissions, pipelines, " +
+  "serving, workspace, fs, setup, api. Run `databricks-axi --help` for the " +
+  "current surface.";
 
 const SKILL_AUTHOR = "Vignesh Perumal (p33ves)";
 
@@ -49,6 +50,11 @@ const HERMES_TAGS = [
   "endpoint",
   "model",
   "hooks",
+  "dashboard",
+  "lakeview",
+  "permissions",
+  "grants",
+  "acl",
 ];
 const HERMES_CATEGORY = "data";
 
@@ -95,7 +101,7 @@ databricks-axi requires the official [\`databricks\` CLI](https://docs.databrick
 
 ## Status
 
-The full v1 command surface is implemented (home, doctor, whoami, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run \`databricks-axi --help\` (per the invocation note above) for the current command list.
+The full v1 command surface is implemented (home, doctor, whoami, jobs, clusters, sql, catalog, dashboards, permissions, workspace, fs, pipelines, serving, setup, api). Run \`databricks-axi --help\` (per the invocation note above) for the current command list.
 
 ## Commands
 

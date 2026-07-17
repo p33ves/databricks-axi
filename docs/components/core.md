@@ -94,8 +94,12 @@ The error taxonomy and secret redaction, shared by every domain:
   platform restriction, not a missing object) mapped to
   `PERMISSION_DENIED` with a path hint, checked before the generic 403
   branch. `NOT_FOUND` matching covers "does not exist", the contraction
-  "doesn't exist" (workspace/fs), and "was not found" (pipelines) — three
-  distinct real upstream phrasings, not one canonical string.
+  "doesn't exist" (workspace/fs), "was not found" (pipelines), and — since
+  1.2.0 — the noun-anchored "Unable to find (published) dashboard"
+  (`lakeview get`/`get-published`) and "Could not find principal" (`grants
+get-effective --principal`): five distinct real upstream phrasings, not
+  one canonical string (rationale for the narrow anchoring is in
+  AGENTS.md's sharp edges).
 - `AUTH_ERROR`'s `help[]` is sub-typed, not one static line: an
   expired/revoked/invalid token (`token ... expired`, `invalid ... token`,
   `invalid_grant`) gets a re-login line; unresolved default credentials
@@ -170,13 +174,17 @@ requireId, renderRows }` bound to that domain's name (so usage errors
 - `listResult(key, rows, limit, opts)`: the shared list-result tail —
   empty state, `count` envelope, and the full-page `has_more` +
   rerun-with-double-limit suggestion. This is the standard shape for every
-  list subcommand except the three documented exemptions: `fs ls` (upstream
+  list subcommand except the five documented exemptions: `fs ls` (upstream
   has no `--limit` at all, so it reports exact truncation instead of
   `has_more`), `sql history` (real server-side `has_next_page` pagination
   plus two distinct empty states that don't fit this helper's
-  `rows.length >= limit` heuristic), and `sql warehouses` (no `--limit` flag
+  `rows.length >= limit` heuristic), `sql warehouses` (no `--limit` flag
   at all, by deliberate spec decision, so it hand-builds its own `count`-only
-  envelope with no client-side cap safeguard).
+  envelope with no client-side cap safeguard), `permissions` (upstream has
+  no pagination at all; hand-built envelope, see
+  [permissions.md](permissions.md)), and `catalog grants` (drains real
+  server-side pagination into a hand-built envelope with no `--limit`, see
+  [catalog.md](catalog.md)).
 - `foldNotFoundHelp(promise, notFoundHelp)`: folds a bare `NOT_FOUND` (no
   suggestions already attached) into a domain-flavored one. Shared by
   `runWithNotFoundHelp` and callers that go through `runDatabricksApi`

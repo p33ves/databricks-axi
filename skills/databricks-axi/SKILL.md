@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI: home, doctor, whoami, jobs, clusters, sql, catalog, pipelines, serving, workspace, fs, setup, api. Run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI: home, doctor, whoami, jobs, clusters, sql, catalog, dashboards, permissions, pipelines, serving, workspace, fs, setup, api. Run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, doctor, health, preflight, whoami, identity, current-user, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model, hooks]
+    tags: [databricks, spark, doctor, health, preflight, whoami, identity, current-user, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model, hooks, dashboard, lakeview, permissions, grants, acl]
     category: data
 ---
 
@@ -23,12 +23,12 @@ databricks-axi requires the official [`databricks` CLI](https://docs.databricks.
 
 ## Status
 
-The full v1 command surface is implemented (home, doctor, whoami, jobs, clusters, sql, catalog, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
+The full v1 command surface is implemented (home, doctor, whoami, jobs, clusters, sql, catalog, dashboards, permissions, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
 
 ## Commands
 
 ```
-commands[40]:
+commands[44]:
   (none)=home
   whoami [--profile <name>]
   doctor [--profile <name>] [--full]
@@ -56,6 +56,10 @@ commands[40]:
   catalog volume view <catalog>.<schema>.<volume>
   catalog functions <catalog>.<schema> [--limit N] [--fields a,b]
   catalog function view <catalog>.<schema>.<function>
+  catalog grants <securable-type> <name> [--principal P] [--full] [--fields a,b]
+  dashboards list [--limit N] [--trashed] [--fields a,b]
+  dashboards view <dashboard_id> [--full]
+  permissions <object-type> <id> [--full]
   workspace ls [path] [--limit N] [--fields a,b]
   workspace view <path> [--full]
   fs ls <path> [--limit N] [--fields a,b]
