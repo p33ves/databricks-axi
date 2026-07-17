@@ -16,8 +16,9 @@ stale).
   every session by the skill picker (the full per-domain verb list lives in
   the body's `## Commands` block instead, loaded only on activation). One
   line, trimmed to a capability statement plus every implemented domain
-  noun (`home, doctor, whoami, jobs, clusters, sql, catalog, pipelines,
-serving, workspace, fs, setup, api`) — dropping a noun risks activation
+  noun (`home, doctor, whoami, jobs, clusters, sql, catalog, dashboards,
+permissions, pipelines, serving, workspace, fs, setup, api`) — dropping a
+  noun risks activation
   rate, so trim prose, never nouns. Extended by hand as new domains land,
   not derived from `TOP_HELP`.
 - `SKILL_AUTHOR` (module-private): `"Vignesh Perumal (p33ves)"`, written

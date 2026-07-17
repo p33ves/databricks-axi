@@ -43,9 +43,9 @@ clusters); rendering/assembly stays in `src/commands/home.ts`. Internal
 logic stays on JSON; TOON conversion happens only
 at the output boundary. Don't re-inline the list envelope or a private
 NOT_FOUND wrapper in a new domain; call `listResult`/`runWithNotFoundHelp`.
-(`fs ls` is the deliberate exception to `listResult`: upstream `fs` has no
-`--limit`, so it knows the true total and reports exact truncation instead
-of `has_more`.)
+(A handful of commands are deliberate exemptions from `listResult`; the
+full list with reasons lives in
+[docs/components/core.md](docs/components/core.md).)
 
 Per-component detail (exports, sharp edges, test coverage) for every
 command and the shared core layer lives under
