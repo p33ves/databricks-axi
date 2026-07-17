@@ -112,10 +112,11 @@ skill pack, pinned `5bc462d4`), and
 [ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit) stdio MCP
 server, pinned `a7e1d51`). The agent was `claude-sonnet-5`, running each
 task cold in its own session against two live workspaces (`AWS` serverless,
-`AWS2` classic clusters).
+`AWS2` classic clusters). One later task, `doctor-aws`, ran against v1.1.0
+and is footnoted in the full results.
 
-227 of 228 published cells passed (99.6%): databricks-axi 80/80, cli-skills
-80/80, mcp-aidevkit 67/68. The one failure, `clusters-view-aws` on
+236 of 237 published cells passed (99.6%): databricks-axi 83/83, cli-skills
+83/83, mcp-aidevkit 70/71. The one failure, `clusters-view-aws` on
 mcp-aidevkit (1 of 3 repeats), is a real gap in that tool's cluster-read
 call: it omits node type, DBR version, and autotermination for a
 TERMINATED cluster, not a databricks-axi issue. Since databricks-axi and
@@ -132,8 +133,8 @@ Code's own billing-correct total, weighted by the real cache-read discount
 | cli-skills         | $0.249     | 6.8       | +75% / +118%          |
 | mcp-aidevkit       | $0.201     | 4.3       | +41% / +39%           |
 
-databricks-axi wins or ties on cost in 51 of 52 task/condition comparisons
-and on turns in 49 of 52.
+databricks-axi wins or ties on cost in 53 of 54 task/condition comparisons
+and on turns in 51 of 54.
 
 Input-side tokens (input + cache-write + cache-read) tell a similar story
 but run 85-87% cache read on these cells, which bills at roughly 0.1x, so a
