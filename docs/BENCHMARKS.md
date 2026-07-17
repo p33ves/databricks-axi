@@ -23,7 +23,8 @@ Three conditions:
   `a7e1d51`. It gets its normal MCP connection warm-up time before the task
   starts, matching how a person would use it interactively.
 
-26 tasks x 3 repeats, plus 2 once-only mutating tasks, per condition.
+26 tasks x 3 repeats, plus 2 once-only mutating tasks, per condition, plus
+the later `doctor-aws` task (3 repeats, all three conditions, marked † below).
 `mcp-aidevkit` doesn't run 4 workspace/fs tasks (`notebook-read`,
 `notebook-discovery`, `api-current-user`, `fs-error-recovery`); those rows
 read `—` for it. Success is graded deterministically where the answer is
@@ -84,6 +85,13 @@ about 1.3x:
 
 Mean over repeats. `—` = not run for this condition.
 
+† `doctor-aws` was measured later, on 2026-07-16 against v1.1.0, when the
+`doctor` command shipped. All three conditions ran together that day, so
+comparisons **across** that row are valid. Its absolute numbers are not
+comparable to the rows measured on 2026-07-15, because cost and token counts
+shift with the agent's own base context between builds, so it stays out of
+the headline averages above.
+
 ### Cost per task (USD)
 
 | task                   | databricks-axi | cli-skills | mcp-aidevkit |
@@ -116,6 +124,7 @@ Mean over repeats. `—` = not run for this condition.
 | catalog-browse-aws     | **0.139**      | 0.190      | 0.231        |
 | cluster-stop-noop-aws  | **0.126**      | 0.240      | 0.216        |
 | warehouse-cycle-aws    | **0.157**      | 0.235      | 0.216        |
+| doctor-aws †           | **0.158**      | 0.286      | 0.170        |
 
 <details>
 <summary><b>Turns</b></summary>
@@ -152,6 +161,7 @@ Mean over repeats. `—` = not run for this condition.
 | catalog-browse-aws     | **3.0**        | 5.0        | 4.0          |
 | cluster-stop-noop-aws  | **2.0**        | 7.0        | 3.0          |
 | warehouse-cycle-aws    | **4.0**        | 7.0        | 8.0          |
+| doctor-aws †           | **4.3**        | 11.0       | 5.7          |
 
 </details>
 
@@ -190,6 +200,7 @@ Mean over repeats. `—` = not run for this condition.
 | catalog-browse-aws     | **9.3**        | 14.7       | 12.0         |
 | cluster-stop-noop-aws  | **9.0**        | 15.0       | 10.0         |
 | warehouse-cycle-aws    | 18.0           | **15.0**   | 34.0         |
+| doctor-aws †           | **20.0**       | 32.7       | 23.3         |
 
 </details>
 
@@ -228,6 +239,7 @@ Mean over repeats. `—` = not run for this condition.
 | catalog-browse-aws     | **114,164**    | 157,883    | 138,478      |
 | cluster-stop-noop-aws  | **75,952**     | 228,649    | 136,199      |
 | warehouse-cycle-aws    | **153,339**    | 228,068    | 306,504      |
+| doctor-aws †           | 115,787        | 277,302    | **115,783**  |
 
 </details>
 
@@ -246,6 +258,14 @@ on turns in most (it edges ahead on a few, like `dag-shape-aws`,
 saves a step). The structural reason it runs higher overall: an MCP server
 loads its tool schemas into context every session, close to 40 tools for
 ai-dev-kit, against a CLI the agent already knows how to read.
+
+**Where the doctor check lands.** `doctor-aws` asks each arm to preflight a
+workspace: is the CLI set up, is auth valid, is anything actually ready to run
+SQL. databricks-axi answers it in one `doctor` call at 4.3 turns. cli-skills
+loads two skill bodies and then hand-drives the same checks one CLI call at a
+time, 11 turns and +81% cost. mcp-aidevkit lands closest to databricks-axi
+here, tying it on tokens, because a 3-4 call check plays to an already-loaded
+tool set. All three reached the right diagnosis on all repeats.
 
 **The one real outlier.** `clusters-view-aws` on mcp-aidevkit takes 8.3
 turns and 81s, hunting for the right cluster-read call, against
