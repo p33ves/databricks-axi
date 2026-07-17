@@ -2,11 +2,10 @@
 
 Source: `src/commands/dashboards.ts`. Tests: `test/dashboards.test.ts`.
 
-Read-only AI/BI (Lakeview) dashboard browsing: `list` and `view`. No
-mutation (`create`/`update`/`publish`/`unpublish`/`trash`/`revert`/
-`migrate` and schedule/subscription verbs are out of scope — see
-`docs/superpowers/specs/2026-07-16-databricks-axi-1.2.0-dashboards-grants-design.md`
-§6 for the full excluded list, reachable via `api get`).
+Read-only AI/BI (Lakeview) dashboard browsing: `list` and `view`. All
+mutation verbs (`create`/`update`/`publish`/`unpublish`/`trash`/`revert`/
+`migrate`) and the schedule/subscription verbs are out of scope by
+design; that data stays reachable via the raw `api` passthrough.
 
 ## Subcommands
 
