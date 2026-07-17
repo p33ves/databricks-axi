@@ -502,6 +502,7 @@ async function grantsGet(args: string[]): Promise<AxiRenderable> {
 
   const assignments: RawAssignment[] = [];
   let pageToken: string | undefined;
+  const seenTokens = new Set<string>();
   for (;;) {
     const argv = ["grants", "get-effective", type, name, "--max-results", "0"];
     if (typeof principal === "string") {
@@ -518,13 +519,15 @@ async function grantsGet(args: string[]): Promise<AxiRenderable> {
     // Deprecation notice: "a page may contain zero results while still
     // providing a next_page_token; clients must continue reading pages
     // until next_page_token is absent" — so a zero-result page with a
-    // token must not stop the loop. But a constant/cycling token from a
-    // server bug must not spin forever either (AGENTS.md: never
-    // auto-paginate unboundedly) — each spawn has its own timeout, so
-    // nothing else would trip on a runaway loop.
-    if (!page.next_page_token || page.next_page_token === pageToken) {
+    // token must not stop the loop. But a server bug that re-serves any
+    // earlier token (constant or cycling) must not spin forever either
+    // (AGENTS.md: never auto-paginate unboundedly), so the loop breaks
+    // on any token it has already seen — each spawn has its own timeout,
+    // so nothing else would trip on a runaway loop.
+    if (!page.next_page_token || seenTokens.has(page.next_page_token)) {
       break;
     }
+    seenTokens.add(page.next_page_token);
     pageToken = page.next_page_token;
   }
 

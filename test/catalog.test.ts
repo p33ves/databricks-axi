@@ -776,6 +776,28 @@ describe("catalog grants", () => {
     expect(t.fake.calls().length).toBe(2);
   });
 
+  it("stops draining a two-token cycle (a -> b -> a) instead of looping forever", async () => {
+    // Third response re-serves token "a", which the loop already followed —
+    // a guard that only compares against the immediately previous token
+    // would keep alternating between a and b forever.
+    t.fake.respondSeq(
+      "grants get-effective catalog workspace --max-results 0",
+      [
+        { privilege_assignments: [], next_page_token: "a" },
+        { privilege_assignments: [], next_page_token: "b" },
+        { privilege_assignments: [ASSIGNMENT], next_page_token: "a" },
+      ],
+    );
+    const { exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls().length).toBe(3);
+  });
+
   it("--full renders one row per privilege with inheritance columns", async () => {
     t.fake.respond(
       "grants get-effective table workspace.default.t --max-results 0",

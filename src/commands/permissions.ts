@@ -186,6 +186,8 @@ export async function permissionsCommand(
   if (type === "dashboards") {
     help.push(`databricks-axi dashboards view ${id}${p}`);
   }
-  out.help = help;
+  if (help.length > 0) {
+    out.help = help;
+  }
   return out;
 }
