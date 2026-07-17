@@ -37,8 +37,8 @@ floor on its real overhead, not a ceiling.
 
 ## Results
 
-227 of 228 published cells passed (99.6%): databricks-axi 80/80, cli-skills
-80/80, mcp-aidevkit 67/68.
+236 of 237 published cells passed (99.6%): databricks-axi 83/83, cli-skills
+83/83, mcp-aidevkit 70/71.
 
 The one failure: `clusters-view-aws` on mcp-aidevkit, 1 of 3 repeats. Its
 cluster-read tool omits node type, DBR version, and autotermination for a
@@ -60,8 +60,8 @@ over the 24 tasks (68 cells per arm) every condition ran:
 | cli-skills         | $0.249     | 6.8       | +75% / +118%          |
 | mcp-aidevkit       | $0.201     | 4.3       | +41% / +39%           |
 
-databricks-axi wins or ties on cost in 51 of 52 task/condition comparisons
-and on turns in 49 of 52.
+databricks-axi wins or ties on cost in 53 of 54 task/condition comparisons
+and on turns in 51 of 54.
 
 The 4 tasks mcp-aidevkit doesn't run (axi/cli-skills only):
 
