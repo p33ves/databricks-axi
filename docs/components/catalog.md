@@ -67,8 +67,11 @@ a leading dash smuggled past `--` and enforces the expected arity.
   Default row `{ principal, privileges }` (comma-joined privilege names);
   `--full` row `{ principal, privilege, inherited_from_type,
 inherited_from_name }`. Unlike `permissions`, `--fields` **is** kept
-  here — the rows are spread from real raw keys and `--full` gives it four
-  columns to pick from. Empty (both a bare `{}` and `{
+  here — not because these rows are a raw spread (they're a hand-built
+  projection, same as `permissions`'), but because `--full` gives it four
+  real columns worth picking between; the plain two-column default is the
+  same shape `--fields` was dropped from on `permissions`, and stays there
+  for the same reason. Empty (both a bare `{}` and `{
 privilege_assignments: [] }`) renders a definitive
   `"no effective grants on <type> <name> for the caller's visibility"`
   status plus a walk-up-the-hierarchy suggestion (table/volume/function →

@@ -654,7 +654,7 @@ describe("catalog function view", () => {
 
 describe("catalog grants", () => {
   const ASSIGNMENT = {
-    principal: "_workspace_users_workspace_7474654644538813",
+    principal: "_workspace_users_workspace_1234567890123456",
     privileges: [{ privilege: "USE_CATALOG" }],
   };
 
@@ -695,7 +695,7 @@ describe("catalog grants", () => {
       "catalog",
       "workspace",
       "--principal",
-      "itsvigneshperumal@gmail.com",
+      "user@example.com",
     ]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
@@ -707,7 +707,7 @@ describe("catalog grants", () => {
         "--max-results",
         "0",
         "--principal",
-        "itsvigneshperumal@gmail.com",
+        "user@example.com",
         "-o",
         "json",
       ],
@@ -755,6 +755,25 @@ describe("catalog grants", () => {
     ]);
     expect(out).toContain("count: 1");
     expect(out).toContain("USE_CATALOG");
+  });
+
+  it("stops draining a cycling/constant next_page_token instead of looping forever", async () => {
+    // respondSeq's "last one sticks" replays this same page (same token)
+    // for every call past the first — simulating a server bug that never
+    // advances. A naive `for (;;)` keyed only on token-presence would spin
+    // forever; the loop must break once the token repeats.
+    t.fake.respondSeq(
+      "grants get-effective catalog workspace --max-results 0",
+      [{ privilege_assignments: [], next_page_token: "stuck" }],
+    );
+    const { exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls().length).toBe(2);
   });
 
   it("--full renders one row per privilege with inheritance columns", async () => {
@@ -805,6 +824,21 @@ describe("catalog grants", () => {
     expect(out).toContain("grants[1]{principal}:");
   });
 
+  it("does not suggest --full to a caller who already passed it", async () => {
+    t.fake.respond("grants get-effective catalog workspace --max-results 0", {
+      privilege_assignments: [ASSIGNMENT],
+    });
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+      "--full",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).not.toContain("--full");
+  });
+
   it("renders a definitive empty state for a bare {} response", async () => {
     t.fake.respond(
       "grants get-effective table workspace.default.axi_bench_trips --max-results 0",
@@ -840,19 +874,19 @@ describe("catalog grants", () => {
     t.fake.respond("grants get-effective catalog workspace --max-results 0", {
       privilege_assignments: [
         {
-          principal: "itsvigneshperumal@gmail.com",
+          principal: "user@example.com",
           privileges: [{ privilege: "USE_CATALOG" }],
         },
         ASSIGNMENT,
       ],
     });
     const { out } = await t.run(["catalog", "grants", "catalog", "workspace"]);
-    expect(out).toContain("itsvigneshperumal@gmail.com");
-    expect(out).toContain("_workspace_users_workspace_7474654644538813");
+    expect(out).toContain("user@example.com");
+    expect(out).toContain("_workspace_users_workspace_1234567890123456");
     expect(out).not.toContain("redacted");
   });
 
-  it("maps the live missing-table NOT_FOUND string verbatim", async () => {
+  it("maps the live missing-table NOT_FOUND string to the sibling tables-list help", async () => {
     t.fake.respondError(
       "grants get-effective",
       "Error: Table 'workspace.default.does_not_exist_tbl' does not exist.",
@@ -865,10 +899,12 @@ describe("catalog grants", () => {
     ]);
     expect(exitCode).toBe(1);
     expect(out).toContain("code: NOT_FOUND");
-    expect(out).toContain("catalog grants schema workspace.default");
+    // Sibling-list idiom (same as schemasList/scopedList), not the
+    // empty-grants walk-up-to-parent's-grants wording.
+    expect(out).toContain("catalog tables workspace.default");
   });
 
-  it("maps the live missing-catalog NOT_FOUND string verbatim", async () => {
+  it("maps the live missing-catalog NOT_FOUND string to `catalog catalogs`, never the missing name (regression)", async () => {
     t.fake.respondError(
       "grants get-effective",
       "Error: Catalog 'does_not_exist_cat' does not exist.",
@@ -881,9 +917,15 @@ describe("catalog grants", () => {
     ]);
     expect(exitCode).toBe(1);
     expect(out).toContain("code: NOT_FOUND");
+    // `catalog catalogs` always succeeds — unlike the old
+    // `catalog schemas does_not_exist_cat` suggestion, which named the
+    // missing catalog and would fail identically (the circularity bug).
+    // The error line legitimately echoes the missing name; only the help
+    // line must not.
+    expect(out).toContain("help[1]: databricks-axi catalog catalogs");
   });
 
-  it("a bad --principal (F2) leads help with the drop-flag suggestion", async () => {
+  it("a bad --principal (F2) leads help with the drop-flag suggestion, redacted (same collision as F3)", async () => {
     t.fake.respondError(
       "grants get-effective",
       "Error: Could not find principal with name nosuchuser@x.com.",
@@ -899,6 +941,12 @@ describe("catalog grants", () => {
     expect(exitCode).toBe(1);
     expect(out).toContain("code: NOT_FOUND");
     expect(out).toContain("drop --principal");
+    // The principal email is 40+ chars into redactSecrets' email rule, and
+    // redaction runs before classification — same collision as the
+    // dashboard-id one (F3), pinned here so it isn't rediscovered.
+    expect(out).toContain(
+      "Could not find principal with name [redacted-email]",
+    );
   });
 
   it("a securable-miss without --principal only gets the parent-list help", async () => {
@@ -914,6 +962,7 @@ describe("catalog grants", () => {
     ]);
     expect(exitCode).toBe(1);
     expect(out).not.toContain("drop --principal");
+    expect(out).toContain("catalog catalogs");
   });
 
   it("rejects a non-lowercase securable type without normalizing it (F4)", async () => {

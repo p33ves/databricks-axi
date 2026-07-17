@@ -151,7 +151,7 @@ async function dashboardsView(args: string[]): Promise<AxiRenderable> {
         pages?: unknown[];
         datasets?: unknown[];
       };
-      if (spec !== null && typeof spec === "object") {
+      if (spec !== null && typeof spec === "object" && !Array.isArray(spec)) {
         out.pages = Array.isArray(spec.pages) ? spec.pages.length : 0;
         out.datasets = Array.isArray(spec.datasets) ? spec.datasets.length : 0;
       } else {

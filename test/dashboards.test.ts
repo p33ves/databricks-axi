@@ -178,6 +178,25 @@ describe("dashboards view", () => {
     expect(out).toContain("note:");
   });
 
+  it("omits counts and adds a note when the spec parses to an array (never a guessed 0)", async () => {
+    // typeof [] === "object" and [] !== null, so the object guard alone
+    // would let an array spec through and render a confident, wrong
+    // `pages: 0` / `datasets: 0` — the contract is "never a guessed count".
+    t.fake.respond("lakeview get", {
+      ...FULL_DASHBOARD,
+      serialized_dashboard: "[1,2,3]",
+    });
+    const { out, exitCode } = await t.run([
+      "dashboards",
+      "view",
+      "01f18184706f11da846a179c97fcc018",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).not.toContain("pages:");
+    expect(out).not.toContain("datasets:");
+    expect(out).toContain("note:");
+  });
+
   it("--full includes the raw serialized_dashboard string verbatim", async () => {
     t.fake.respond("lakeview get", FULL_DASHBOARD);
     const { out, exitCode } = await t.run([

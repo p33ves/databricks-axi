@@ -235,7 +235,14 @@ get-effective --principal`). Both are anchored on a literal noun, same
   find"/"could not find" gap would risk misrouting an unrelated error.
   Format errors on a malformed (not missing) id/name — `invalid resource
 name […]`, `is not a valid object`, `For input string: "…"` — stay
-  `UPSTREAM_ERROR` on purpose; they aren't a missing-object miss.
+  `UPSTREAM_ERROR` on purpose; they aren't a missing-object miss. A bad
+  `--principal` has the same redaction collision as the dashboard-id one:
+  the principal is an email, `redactSecrets`' email rule fires before
+  classification, so the rendered message is `Could not find principal
+with name [redacted-email].` — cosmetic, classification still lands
+  `NOT_FOUND`. This applies only to _error text_; a principal in a
+  successful `catalog grants`/`permissions` row is never redacted (see the
+  grants entry below).
 - Two more `listResult` exemptions beyond `fs ls`/`sql history`/`sql
 warehouses`: `permissions` (upstream `permissions get` has no `--limit`
   or pagination at all — a hand-built `{ object_type, object_id,

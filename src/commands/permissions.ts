@@ -164,15 +164,25 @@ export async function permissionsCommand(
     permissions: rows,
     count: rows.length,
   };
-  if (rows.length === 0) {
+  // Empty state is keyed on the ACL itself, not on rows.length: fullRows
+  // emits nothing for an entry whose all_permissions is absent/empty while
+  // compactRows still emits a row for it, so keying on rows.length made
+  // --full report "empty" on an ACL that plainly has entries.
+  if (acl.length === 0) {
     out.status = `no access control entries visible on ${type} ${id}`;
-    out.help = [
-      `databricks-axi permissions ${type} ${id} --full${p}`,
-      `databricks-axi doctor${p}`,
-    ];
+    // --full is dead advice to a caller who already passed it.
+    out.help = full
+      ? [`databricks-axi doctor${p}`]
+      : [
+          `databricks-axi permissions ${type} ${id} --full${p}`,
+          `databricks-axi doctor${p}`,
+        ];
     return out;
   }
-  const help = [`databricks-axi permissions ${type} ${id} --full${p}`];
+  const help: string[] = [];
+  if (!full) {
+    help.push(`databricks-axi permissions ${type} ${id} --full${p}`);
+  }
   if (type === "dashboards") {
     help.push(`databricks-axi dashboards view ${id}${p}`);
   }

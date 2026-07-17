@@ -416,9 +416,11 @@ type RawGrantsResponse = {
   next_page_token?: string;
 };
 
-/** Walk-up-the-hierarchy suggestion: table/volume/function -> parent schema,
- * schema -> parent catalog, catalog -> browse its schemas. */
-function parentGrantsHelp(
+/** Empty-grants-state suggestion (securable exists, nothing visible here):
+ * walk up to the parent's *grants*, since inherited privileges come from a
+ * broader scope — table/volume/function -> parent schema's grants, schema
+ * -> parent catalog's grants, catalog -> browse its schemas. */
+function emptyGrantsHelp(
   type: SecurableType,
   name: string,
   p: string,
@@ -430,6 +432,32 @@ function parentGrantsHelp(
   const parentName = name.slice(0, dot);
   const parentType: SecurableType = type === "schema" ? "catalog" : "schema";
   return [`databricks-axi catalog grants ${parentType} ${parentName}${p}`];
+}
+
+const LIST_SUBCOMMAND: Record<SecurableType, string> = {
+  catalog: "catalogs",
+  schema: "schemas",
+  table: "tables",
+  volume: "volumes",
+  function: "functions",
+};
+
+/** NOT_FOUND-state suggestion (the securable itself failed to resolve):
+ * point at the list command for the level that failed, same idiom as
+ * schemasList/scopedList's own NOT_FOUND help — never re-derive a
+ * suggestion from the missing name itself, which fails identically (a
+ * missing catalog's "browse its schemas" line names that same catalog). */
+function notFoundGrantsHelp(
+  type: SecurableType,
+  name: string,
+  p: string,
+): string[] {
+  if (type === "catalog") {
+    return [`databricks-axi catalog catalogs${p}`];
+  }
+  const dot = name.lastIndexOf(".");
+  const parent = dot < 0 ? name : name.slice(0, dot);
+  return [`databricks-axi catalog ${LIST_SUBCOMMAND[type]} ${parent}${p}`];
 }
 
 async function grantsGet(args: string[]): Promise<AxiRenderable> {
@@ -455,19 +483,22 @@ async function grantsGet(args: string[]): Promise<AxiRenderable> {
   );
   const principal = flags.get("principal");
   const p = profileSuffix(flags.get("profile"));
-  const parentHelp = parentGrantsHelp(type, name, p);
+  const notFoundBase = notFoundGrantsHelp(type, name, p);
   // F2 — help selection at the call site, by the flag we passed, not by
   // re-parsing the error: a bad --principal and a missing securable are
   // both "Could not find X" upstream, but only the --principal path can
   // usefully say "drop --principal to list every principal with grants".
+  // Either way this is the NOT_FOUND-state help (the securable/principal
+  // failed to resolve) — distinct from emptyGrantsHelp below (the
+  // securable resolved fine, it just has nothing visible here).
   const notFoundHelp =
     typeof principal === "string"
       ? [
           `databricks-axi catalog grants ${type} ${name}${p}  (drop --principal to list every principal with grants)`,
           `databricks-axi whoami${p}`,
-          ...parentHelp,
+          ...notFoundBase,
         ]
-      : parentHelp;
+      : notFoundBase;
 
   const assignments: RawAssignment[] = [];
   let pageToken: string | undefined;
@@ -487,8 +518,11 @@ async function grantsGet(args: string[]): Promise<AxiRenderable> {
     // Deprecation notice: "a page may contain zero results while still
     // providing a next_page_token; clients must continue reading pages
     // until next_page_token is absent" — so a zero-result page with a
-    // token must not stop the loop.
-    if (!page.next_page_token) {
+    // token must not stop the loop. But a constant/cycling token from a
+    // server bug must not spin forever either (AGENTS.md: never
+    // auto-paginate unboundedly) — each spawn has its own timeout, so
+    // nothing else would trip on a runaway loop.
+    if (!page.next_page_token || page.next_page_token === pageToken) {
       break;
     }
     pageToken = page.next_page_token;
@@ -524,12 +558,15 @@ async function grantsGet(args: string[]): Promise<AxiRenderable> {
   const out: AxiStructuredOutput = { grants: rows, count: rows.length };
   if (rows.length === 0) {
     out.status = `no effective grants on ${type} ${name} for the caller's visibility`;
-    out.help = parentHelp;
+    out.help = emptyGrantsHelp(type, name, p);
     return out;
   }
-  out.help = [
-    `databricks-axi catalog grants ${type} ${name} --full${p}`,
-    ...parentHelp,
-  ];
+  // --full is dead advice to a caller who already passed it.
+  out.help = full
+    ? emptyGrantsHelp(type, name, p)
+    : [
+        `databricks-axi catalog grants ${type} ${name} --full${p}`,
+        ...emptyGrantsHelp(type, name, p),
+      ];
   return out;
 }

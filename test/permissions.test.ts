@@ -6,7 +6,7 @@ const t = setupCli();
 const JOB_ACL = {
   access_control_list: [
     {
-      user_name: "itsvigneshperumal@gmail.com",
+      user_name: "user@example.com",
       all_permissions: [{ inherited: false, permission_level: "IS_OWNER" }],
     },
     {
@@ -45,7 +45,7 @@ describe("permissions", () => {
     expect(out).toContain("object_type: job");
     expect(out).toContain("object_id: /jobs/88440223843221");
     expect(out).toContain("permissions[2]{principal,permissions}:");
-    expect(out).toContain("itsvigneshperumal@gmail.com,IS_OWNER");
+    expect(out).toContain("user@example.com,IS_OWNER");
     expect(out).toContain("admins,CAN_MANAGE");
     expect(out).toContain("count: 2");
   });
@@ -63,14 +63,14 @@ describe("permissions", () => {
       "permissions[2]{principal,type,level,inherited,inherited_from}:",
     );
     expect(out).toContain("admins,group,CAN_MANAGE,true,/jobs/");
-    expect(out).toContain("itsvigneshperumal@gmail.com,user,IS_OWNER,false,");
+    expect(out).toContain("user@example.com,user,IS_OWNER,false,");
   });
 
   it("the live dashboard fixture echoes object_type dashboard and the numeric object_id (F5)", async () => {
     t.fake.respond("permissions get", {
       access_control_list: [
         {
-          user_name: "itsvigneshperumal@gmail.com",
+          user_name: "user@example.com",
           all_permissions: [
             {
               inherited: true,
@@ -247,15 +247,76 @@ describe("permissions", () => {
     expect(out).toContain("doctor");
   });
 
+  it("does not suggest --full on the empty state to a caller who already passed it", async () => {
+    t.fake.respond("permissions get", {
+      access_control_list: [],
+      object_id: "/jobs/1",
+      object_type: "job",
+    });
+    const { out, exitCode } = await t.run([
+      "permissions",
+      "jobs",
+      "1",
+      "--full",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).not.toContain("--full");
+    expect(out).toContain("doctor");
+  });
+
+  it("does not suggest --full on a non-empty result to a caller who already passed it", async () => {
+    t.fake.respond("permissions get", JOB_ACL);
+    const { out, exitCode } = await t.run([
+      "permissions",
+      "jobs",
+      "88440223843221",
+      "--full",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).not.toContain("--full");
+  });
+
+  it("compact and --full agree on non-empty when an ACL entry has no all_permissions (parity)", async () => {
+    const acl = {
+      access_control_list: [
+        { user_name: "user@example.com" }, // no all_permissions at all
+      ],
+      object_id: "/jobs/1",
+      object_type: "job",
+    };
+    t.fake.respond("permissions get", acl);
+    const { out: compactOut, exitCode: compactExit } = await t.run([
+      "permissions",
+      "jobs",
+      "1",
+    ]);
+    expect(compactExit).toBe(0);
+    expect(compactOut).not.toContain("no access control entries");
+
+    t.fake.respond("permissions get", acl);
+    const { out: fullOut, exitCode: fullExit } = await t.run([
+      "permissions",
+      "jobs",
+      "1",
+      "--full",
+    ]);
+    expect(fullExit).toBe(0);
+    // fullRows legitimately emits zero rows here (no permission levels to
+    // enumerate), but that must not be reported as the empty-ACL state —
+    // the ACL itself is non-empty (an entry is visible, just with no
+    // levels), same object compactOut just showed as non-empty.
+    expect(fullOut).not.toContain("no access control entries");
+  });
+
   it("never redacts an email or long group-id principal in success rows (leak test)", async () => {
     t.fake.respond("permissions get", {
       access_control_list: [
         {
-          user_name: "itsvigneshperumal@gmail.com",
+          user_name: "user@example.com",
           all_permissions: [{ inherited: false, permission_level: "CAN_RUN" }],
         },
         {
-          group_name: "_workspace_users_workspace_7474654644538813",
+          group_name: "_workspace_users_workspace_1234567890123456",
           all_permissions: [
             { inherited: true, permission_level: "CAN_MANAGE" },
           ],
@@ -265,8 +326,8 @@ describe("permissions", () => {
       object_type: "job",
     });
     const { out } = await t.run(["permissions", "jobs", "1"]);
-    expect(out).toContain("itsvigneshperumal@gmail.com");
-    expect(out).toContain("_workspace_users_workspace_7474654644538813");
+    expect(out).toContain("user@example.com");
+    expect(out).toContain("_workspace_users_workspace_1234567890123456");
     expect(out).not.toContain("redacted");
   });
 
