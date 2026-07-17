@@ -213,6 +213,59 @@ exists` in the message; catch it by regex (same pattern as `clusters`
   (exit 0) — the one exception is an `AUTH_ERROR` on the auth panel, which
   swaps the whole dashboard body for the structured error (still exit 0)
   since every other workspace panel would fail the same way.
+- Lakeview `dashboard_id` is **32 hex chars, no dashes** — upstream's own
+  `--help` calls it a "UUID", but that's wrong (live-verified twice,
+  2026-07-16). A dashed-UUID guard (the `pipelines` pattern) would reject
+  every real dashboard id; `dashboards.ts` instead uses
+  `/^[0-9a-fA-F][0-9a-fA-F-]{31,35}$/`, anchored on a hex first char so the
+  leading-dash rejection is real. Because that id is exactly 32 lowercase
+  hex chars, `redactSecrets` (`errors.ts:26`) rewrites it to `[redacted]`
+  in error text — and that redaction runs _before_ classification — so a
+  live missing-dashboard error renders as `Unable to find dashboard
+[[redacted]]`, not the id the agent typed. Classification still lands on
+  `NOT_FOUND` (the anchor phrase survives), and success rows
+  (`dashboard_id` on `list`/`view`) are untouched — `redactSecrets` never
+  runs on result data. Do not loosen the 32-hex redaction rule to spare
+  dashboard ids; that would unredact real hex secrets everywhere else.
+- Two more `NOT_FOUND` phrasings live in `mapUpstreamError`'s alternation
+  since 1.2.0: `Unable to find (?:published )?dashboard` (`lakeview
+get`/`get-published`) and `Could not find principal` (`grants
+get-effective --principal`). Both are anchored on a literal noun, same
+  shape as the pre-existing alternatives — a broader "unable to
+  find"/"could not find" gap would risk misrouting an unrelated error.
+  Format errors on a malformed (not missing) id/name — `invalid resource
+name […]`, `is not a valid object`, `For input string: "…"` — stay
+  `UPSTREAM_ERROR` on purpose; they aren't a missing-object miss.
+- Two more `listResult` exemptions beyond `fs ls`/`sql history`/`sql
+warehouses`: `permissions` (upstream `permissions get` has no `--limit`
+  or pagination at all — a hand-built `{ object_type, object_id,
+permissions, count, help }` envelope) and `catalog grants` (upstream
+  `grants get-effective` has real server-side pagination via
+  `--max-results`/`--page-token`, same family as `query-history list` —
+  the page loop drains every page into a hand-built `{ grants, count,
+help }` envelope with no agent-facing `--limit`).
+- `permissions`'s five-type allow-list (`jobs`, `clusters`, `pipelines`,
+  `warehouses`, `dashboards`) deliberately excludes `serving-endpoints`:
+  `permissions get serving-endpoints` rejects the endpoint name and wants
+  an internal id that `serving-endpoints get` never returns (no top-level
+  `id` on a foundation-model endpoint) — there is no id an agent can
+  obtain through the CLI for this type at all. It also excludes
+  `dbsql-dashboards` (legacy DBSQL dashboards, a different id space that
+  rejects Lakeview ids) — only `dashboards` (AI/BI Lakeview) is
+  allow-listed. `permissions get dashboards <32-hex Lakeview id>` succeeds
+  but echoes `object_type: "dashboard"` and an `object_id` that is a
+  **numeric legacy workspace-object id** (e.g. `/dashboards/570857400383840`),
+  not the 32-hex id passed in — the two id spaces are different and
+  upstream silently resolves between them. axi echoes the response's own
+  values verbatim (the honest report of what upstream actually resolved);
+  that numeric id is not a valid input to `dashboards view`.
+- Standing watch (unverified as of 1.2.0): the `\b403\b|PERMISSION_DENIED`
+  branch has never been observed live on `permissions get` or `grants
+get-effective` — the bench principal has admin on every reachable
+  workspace. Both commands' tests pin fixtures for both plausible shapes
+  (bare `403` and a `PERMISSION_DENIED` token) rather than a live-observed
+  string. Re-check the first time a non-admin principal is available; no
+  doc or help text may describe that path as verified until then.
 - `setup hooks` delegates entirely to `installSessionStartHooks()` from
   `axi-sdk-js` (`src/commands/setup.ts`) — never hand-roll per-agent
   JSON/TOML editing. It writes all three agents (Claude Code, Codex,

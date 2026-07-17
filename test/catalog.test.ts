@@ -652,6 +652,325 @@ describe("catalog function view", () => {
   });
 });
 
+describe("catalog grants", () => {
+  const ASSIGNMENT = {
+    principal: "_workspace_users_workspace_7474654644538813",
+    privileges: [{ privilege: "USE_CATALOG" }],
+  };
+
+  it("passes exact argv with --max-results 0", async () => {
+    t.fake.respond("grants get-effective catalog workspace --max-results 0", {
+      privilege_assignments: [ASSIGNMENT],
+    });
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      [
+        "grants",
+        "get-effective",
+        "catalog",
+        "workspace",
+        "--max-results",
+        "0",
+        "-o",
+        "json",
+      ],
+    ]);
+    expect(out).toContain("grants[1]{principal,privileges}:");
+    expect(out).toContain("USE_CATALOG");
+  });
+
+  it("adds --principal when passed", async () => {
+    t.fake.respond("grants get-effective catalog workspace --max-results 0", {
+      privilege_assignments: [ASSIGNMENT],
+    });
+    const { exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+      "--principal",
+      "itsvigneshperumal@gmail.com",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      [
+        "grants",
+        "get-effective",
+        "catalog",
+        "workspace",
+        "--max-results",
+        "0",
+        "--principal",
+        "itsvigneshperumal@gmail.com",
+        "-o",
+        "json",
+      ],
+    ]);
+  });
+
+  it("drains a zero-result page that still carries a next_page_token", async () => {
+    t.fake.respondSeq(
+      "grants get-effective catalog workspace --max-results 0",
+      [
+        { privilege_assignments: [], next_page_token: "page2" },
+        { privilege_assignments: [ASSIGNMENT] },
+      ],
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      [
+        "grants",
+        "get-effective",
+        "catalog",
+        "workspace",
+        "--max-results",
+        "0",
+        "-o",
+        "json",
+      ],
+      [
+        "grants",
+        "get-effective",
+        "catalog",
+        "workspace",
+        "--max-results",
+        "0",
+        "--page-token",
+        "page2",
+        "-o",
+        "json",
+      ],
+    ]);
+    expect(out).toContain("count: 1");
+    expect(out).toContain("USE_CATALOG");
+  });
+
+  it("--full renders one row per privilege with inheritance columns", async () => {
+    t.fake.respond(
+      "grants get-effective table workspace.default.t --max-results 0",
+      {
+        privilege_assignments: [
+          {
+            principal: "a@b.c",
+            privileges: [
+              {
+                privilege: "SELECT",
+                inherited_from_type: "SCHEMA",
+                inherited_from_name: "workspace.default",
+              },
+            ],
+          },
+        ],
+      },
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "table",
+      "workspace.default.t",
+      "--full",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain(
+      "grants[1]{principal,privilege,inherited_from_type,inherited_from_name}:",
+    );
+    expect(out).toContain("a@b.c,SELECT,SCHEMA,workspace.default");
+  });
+
+  it("--fields selects among the four real keys", async () => {
+    t.fake.respond("grants get-effective catalog workspace --max-results 0", {
+      privilege_assignments: [ASSIGNMENT],
+    });
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+      "--fields",
+      "principal",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("grants[1]{principal}:");
+  });
+
+  it("renders a definitive empty state for a bare {} response", async () => {
+    t.fake.respond(
+      "grants get-effective table workspace.default.axi_bench_trips --max-results 0",
+      {},
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "table",
+      "workspace.default.axi_bench_trips",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain(
+      "no effective grants on table workspace.default.axi_bench_trips",
+    );
+  });
+
+  it("renders a definitive empty state for {privilege_assignments: []}", async () => {
+    t.fake.respond("grants get-effective catalog workspace --max-results 0", {
+      privilege_assignments: [],
+    });
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("no effective grants on catalog workspace");
+  });
+
+  it("never redacts an email or long group-id principal (leak test)", async () => {
+    t.fake.respond("grants get-effective catalog workspace --max-results 0", {
+      privilege_assignments: [
+        {
+          principal: "itsvigneshperumal@gmail.com",
+          privileges: [{ privilege: "USE_CATALOG" }],
+        },
+        ASSIGNMENT,
+      ],
+    });
+    const { out } = await t.run(["catalog", "grants", "catalog", "workspace"]);
+    expect(out).toContain("itsvigneshperumal@gmail.com");
+    expect(out).toContain("_workspace_users_workspace_7474654644538813");
+    expect(out).not.toContain("redacted");
+  });
+
+  it("maps the live missing-table NOT_FOUND string verbatim", async () => {
+    t.fake.respondError(
+      "grants get-effective",
+      "Error: Table 'workspace.default.does_not_exist_tbl' does not exist.",
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "table",
+      "workspace.default.does_not_exist_tbl",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("catalog grants schema workspace.default");
+  });
+
+  it("maps the live missing-catalog NOT_FOUND string verbatim", async () => {
+    t.fake.respondError(
+      "grants get-effective",
+      "Error: Catalog 'does_not_exist_cat' does not exist.",
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "does_not_exist_cat",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+  });
+
+  it("a bad --principal (F2) leads help with the drop-flag suggestion", async () => {
+    t.fake.respondError(
+      "grants get-effective",
+      "Error: Could not find principal with name nosuchuser@x.com.",
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "workspace",
+      "--principal",
+      "nosuchuser@x.com",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).toContain("code: NOT_FOUND");
+    expect(out).toContain("drop --principal");
+  });
+
+  it("a securable-miss without --principal only gets the parent-list help", async () => {
+    t.fake.respondError(
+      "grants get-effective",
+      "Error: Catalog 'does_not_exist_cat' does not exist.",
+    );
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "catalog",
+      "does_not_exist_cat",
+    ]);
+    expect(exitCode).toBe(1);
+    expect(out).not.toContain("drop --principal");
+  });
+
+  it("rejects a non-lowercase securable type without normalizing it (F4)", async () => {
+    const { out, exitCode } = await t.run([
+      "catalog",
+      "grants",
+      "TABLE",
+      "workspace.default.x",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("catalog, schema, table, volume, function");
+    expect(t.fake.calls()).toEqual([]);
+  });
+
+  describe("403 (F6, both shapes, not live-observed)", () => {
+    it("maps a bare 403 to PERMISSION_DENIED", async () => {
+      t.fake.respondError("grants get-effective", "Error: 403 Forbidden");
+      const { out, exitCode } = await t.run([
+        "catalog",
+        "grants",
+        "catalog",
+        "workspace",
+      ]);
+      expect(exitCode).toBe(1);
+      expect(out).toContain("code: PERMISSION_DENIED");
+    });
+
+    it("maps a PERMISSION_DENIED-token stderr to PERMISSION_DENIED", async () => {
+      t.fake.respondError(
+        "grants get-effective",
+        "Error: PERMISSION_DENIED: caller lacks ownership",
+      );
+      const { out, exitCode } = await t.run([
+        "catalog",
+        "grants",
+        "catalog",
+        "workspace",
+      ]);
+      expect(exitCode).toBe(1);
+      expect(out).toContain("code: PERMISSION_DENIED");
+    });
+  });
+
+  it("rejects an unknown securable type listing the five", async () => {
+    const { out, exitCode } = await t.run(["catalog", "grants", "bogus", "x"]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("catalog, schema, table, volume, function");
+    expect(t.fake.calls()).toEqual([]);
+  });
+
+  it("rejects a bare grants invocation", async () => {
+    const { exitCode } = await t.run(["catalog", "grants"]);
+    expect(exitCode).toBe(2);
+    expect(t.fake.calls()).toEqual([]);
+  });
+});
+
 describe("catalog dispatch", () => {
   it("rejects unknown subcommands", async () => {
     const { out, exitCode } = await t.run(["catalog", "frobnicate"]);

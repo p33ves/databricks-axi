@@ -5,10 +5,15 @@ import { runAxiCli } from "axi-sdk-js";
 import { apiCommand, API_HELP } from "./commands/api.js";
 import { catalogCommand, CATALOG_HELP } from "./commands/catalog.js";
 import { clustersCommand, CLUSTERS_HELP } from "./commands/clusters.js";
+import { dashboardsCommand, DASHBOARDS_HELP } from "./commands/dashboards.js";
 import { doctorCommand, DOCTOR_HELP } from "./commands/doctor.js";
 import { fsCommand, FS_HELP } from "./commands/fs.js";
 import { homeCommand } from "./commands/home.js";
 import { jobsCommand, JOBS_HELP } from "./commands/jobs.js";
+import {
+  permissionsCommand,
+  PERMISSIONS_HELP,
+} from "./commands/permissions.js";
 import { pipelinesCommand, PIPELINES_HELP } from "./commands/pipelines.js";
 import { servingCommand, SERVING_HELP } from "./commands/serving.js";
 import { setupCommand, SETUP_HELP } from "./commands/setup.js";
@@ -21,7 +26,7 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[40]:
+commands[44]:
   (none)=home
   whoami [--profile <name>]
   doctor [--profile <name>] [--full]
@@ -49,6 +54,10 @@ commands[40]:
   catalog volume view <catalog>.<schema>.<volume>
   catalog functions <catalog>.<schema> [--limit N] [--fields a,b]
   catalog function view <catalog>.<schema>.<function>
+  catalog grants <securable-type> <name> [--principal P] [--full] [--fields a,b]
+  dashboards list [--limit N] [--trashed] [--fields a,b]
+  dashboards view <dashboard_id> [--full]
+  permissions <object-type> <id> [--full]
   workspace ls [path] [--limit N] [--fields a,b]
   workspace view <path> [--full]
   fs ls <path> [--limit N] [--fields a,b]
@@ -88,6 +97,8 @@ export const COMMANDS = {
   clusters: clustersCommand,
   sql: sqlCommand,
   catalog: catalogCommand,
+  dashboards: dashboardsCommand,
+  permissions: permissionsCommand,
   workspace: workspaceCommand,
   fs: fsCommand,
   pipelines: pipelinesCommand,
@@ -104,6 +115,8 @@ const COMMAND_HELP: Record<string, string> = {
   clusters: CLUSTERS_HELP,
   sql: SQL_HELP,
   catalog: CATALOG_HELP,
+  dashboards: DASHBOARDS_HELP,
+  permissions: PERMISSIONS_HELP,
   workspace: WORKSPACE_HELP,
   fs: FS_HELP,
   pipelines: PIPELINES_HELP,

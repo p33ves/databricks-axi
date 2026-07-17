@@ -91,7 +91,7 @@ export function mapUpstreamError(stderr: string): AxiError {
     return new AxiError(firstLine, "PERMISSION_DENIED");
   }
   if (
-    /RESOURCE_DOES_NOT_EXIST|\b404\b|does(?: not|n't) exist|\bwas not found\b/i.test(
+    /RESOURCE_DOES_NOT_EXIST|\b404\b|does(?: not|n't) exist|\bwas not found\b|\bUnable to find (?:published )?dashboard\b|\bCould not find principal\b/i.test(
       text,
     )
   ) {
