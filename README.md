@@ -112,7 +112,8 @@ skill pack, pinned `5bc462d4`), and
 [ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit) stdio MCP
 server, pinned `a7e1d51`). The agent was `claude-sonnet-5`, running each
 task cold in its own session against two live workspaces (`AWS` serverless,
-`AWS2` classic clusters).
+`AWS2` classic clusters). One later task, `doctor-aws`, ran against v1.1.0
+and is footnoted in the full results.
 
 236 of 237 published cells passed (99.6%): databricks-axi 83/83, cli-skills
 83/83, mcp-aidevkit 70/71. The one failure, `clusters-view-aws` on

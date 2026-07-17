@@ -13,7 +13,8 @@ operational read/diagnose/status work, not authoring workflows.
 
 Three conditions:
 
-- **databricks-axi** @ v1.0.2, this tool
+- **databricks-axi** @ v1.0.2, this tool (v1.1.0 for the † `doctor-aws`
+  row; see the note under Per-task tables)
 - **cli-skills**: the official `databricks` CLI v1.6.0 plus the
   [`databricks-agent-skills`](https://github.com/databricks/databricks-agent-skills)
   skill pack, pinned `5bc462d4`
