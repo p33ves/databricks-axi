@@ -291,7 +291,7 @@ get-effective` — the bench principal has admin on every reachable
 - A package-runner exec path (`npx`/`pnpm dlx`/`yarn dlx`/`bunx`, matched on
   a `_npx`, `dlx*` or `bunx-*` path segment) is refused earlier, with
   `"not installed: ephemeral package-runner entrypoint"`. The check runs
-  *before* the eligibility check on purpose: those paths end in
+  _before_ the eligibility check on purpose: those paths end in
   `dist/bin/databricks-axi.js` and would otherwise install cleanly, baking a
   version-pinned, prunable cache path into all four hook configs. Hooks need
   a durable install (`npm i -g databricks-axi`).

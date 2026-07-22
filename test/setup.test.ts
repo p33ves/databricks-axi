@@ -117,7 +117,9 @@ describe("setup hooks", () => {
       );
       const { out, exitCode } = await run(["setup", "hooks"]);
       expect(exitCode).toBe(0);
-      expect(out).toContain("not installed: ephemeral package-runner entrypoint");
+      expect(out).toContain(
+        "not installed: ephemeral package-runner entrypoint",
+      );
       expect(out).toContain("npm i -g databricks-axi");
       expect(existsSync(join(home, ".claude", "settings.json"))).toBe(false);
     },
