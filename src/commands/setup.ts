@@ -59,6 +59,15 @@ function setupHooks(): AxiRenderable {
     binaryNames: BINARY_NAMES,
     distEntrypoints: DIST_ENTRYPOINTS,
   };
+  if (execPath.split(/[\\/]/).includes("_npx")) {
+    return {
+      status: "not installed: npx cache entrypoint",
+      help: [
+        "hooks record this exec path, and npm's _npx cache is version-pinned and prunable",
+        "npm i -g databricks-axi && databricks-axi setup hooks",
+      ],
+    };
+  }
   if (!shouldInstallHooksForNodeAxiExecPath(execPath, policy)) {
     return {
       status: "not installed: unrecognized entrypoint",

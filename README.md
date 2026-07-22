@@ -181,10 +181,14 @@ That writes to `.agents/skills/`, the cross-agent convention, and symlinks
 Claude Code. Drop `-g` to install into the current project instead, so the
 skill is committed and shared with your team.
 
-On Claude Code, Codex, and OpenCode, add ambient session context:
+On Claude Code, Codex, and OpenCode, add ambient session context. This
+needs a durable install first: the hooks record the path of the binary they
+were installed from, and an `npx` cache path is version-pinned and can be
+pruned, so `setup hooks` refuses to run from one.
 
 ```bash
-npx -y databricks-axi setup hooks
+npm i -g databricks-axi
+databricks-axi setup hooks
 ```
 
 Or skip both and run it directly, no install needed:
@@ -194,9 +198,9 @@ npx -y databricks-axi            # ambient home view
 npx -y databricks-axi --help
 ```
 
-Cold `npx` resolution is a one-time cost on that first bare run; once
-`setup hooks` installs the session-start hook, every hooked
-agent session invokes the installed binary directly and pays none of it.
+Cold `npx` resolution is a one-time cost on that bare run. With the global
+install and hooks in place, every hooked agent session invokes the
+installed binary directly and pays none of it.
 
 ## Roadmap
 
