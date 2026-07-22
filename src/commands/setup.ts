@@ -51,6 +51,15 @@ export async function setupCommand(args: string[]): Promise<AxiRenderable> {
   return setupHooks();
 }
 
+// npm (`_npx`), pnpm/yarn (`dlx`, `dlx-<pid>`) and bun (`bunx-<uid>-<pkg>`)
+// each stage a package-runner invocation under a throwaway cache directory
+// whose path still ends in `dist/bin/databricks-axi.js`.
+const EPHEMERAL_RUNNER_SEGMENT = /^(_npx|dlx(-.*)?|bunx-.*)$/;
+
+function isEphemeralRunnerPath(execPath: string): boolean {
+  return execPath.split(/[\\/]/).some((s) => EPHEMERAL_RUNNER_SEGMENT.test(s));
+}
+
 function setupHooks(): AxiRenderable {
   const home = homedir();
   const execPath = process.argv[1] ?? "";
@@ -59,6 +68,15 @@ function setupHooks(): AxiRenderable {
     binaryNames: BINARY_NAMES,
     distEntrypoints: DIST_ENTRYPOINTS,
   };
+  if (isEphemeralRunnerPath(execPath)) {
+    return {
+      status: "not installed: ephemeral package-runner entrypoint",
+      help: [
+        "hooks record this exec path, and a package-runner cache is version-pinned and prunable",
+        "npm i -g databricks-axi && databricks-axi setup hooks",
+      ],
+    };
+  }
   if (!shouldInstallHooksForNodeAxiExecPath(execPath, policy)) {
     return {
       status: "not installed: unrecognized entrypoint",

@@ -288,6 +288,13 @@ get-effective` — the bench principal has admin on every reachable
   (`tsx bin/databricks-axi.ts`) always fails the check, since the `.ts`
   entrypoint can't be matched. Build and run `dist/bin/databricks-axi.js`
   (or a real install) to test hook installation for real.
+- A package-runner exec path (`npx`/`pnpm dlx`/`yarn dlx`/`bunx`, matched on
+  a `_npx`, `dlx*` or `bunx-*` path segment) is refused earlier, with
+  `"not installed: ephemeral package-runner entrypoint"`. The check runs
+  _before_ the eligibility check on purpose: those paths end in
+  `dist/bin/databricks-axi.js` and would otherwise install cleanly, baking a
+  version-pinned, prunable cache path into all four hook configs. Hooks need
+  a durable install (`npm i -g databricks-axi`).
 
 ## Generated files (never hand-edit)
 

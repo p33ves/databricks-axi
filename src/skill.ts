@@ -97,6 +97,11 @@ install may be newer than what's published to npm. Only fall back to
 in a response's output are written as bare \`databricks-axi ...\` - invoke
 those the same way you invoked the command that produced them.
 
+One exception: \`setup hooks\` refuses to run from a package-runner cache
+(\`npx\`/\`dlx\`/\`bunx\`), because the hook it writes records that throwaway exec
+path. It needs a durable install - ask the user to run
+\`npm i -g databricks-axi\` first.
+
 databricks-axi requires the official [\`databricks\` CLI](https://docs.databricks.com/dev-tools/cli/) (version 0.298 or newer) installed and authenticated. If a command fails with an authentication error, ask the user to run \`databricks auth login --host <workspace-url>\` themselves.
 
 ## Status

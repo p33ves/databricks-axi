@@ -31,8 +31,8 @@ context every session, and it is confined to SQL: it cannot trigger a job
 run or touch anything outside that surface, so it ends up querying `system`
 tables to triage a failed job instead of just asking the jobs API.
 Databricks Field Engineering's ai-dev-kit MCP server covers the full
-surface, close to 40 tools, but pays for that coverage with the largest
-schema load of any option here.
+surface, 44 tools (~154 dispatchable operations), but pays for that coverage
+with the largest schema load of any option here.
 
 AXI is a set of interface design principles for CLIs meant to be driven by
 agents rather than humans: structured output, minimal schemas that expand
@@ -102,54 +102,58 @@ parse out of prose, nothing to guess.
 
 ## Benchmarks
 
-Agent ergonomics is measurable. A bench run compared databricks-axi against
-two competing setups on real Databricks tasks (list jobs, triage a failed
-run, read a table schema, cycle a cluster, and similar): **databricks-axi**
-(v1.0.2), **cli-skills** (the official `databricks` CLI v1.6.0 plus the
+Agent ergonomics is measurable. A bench run on 2026-07-17 compared five
+setups on real Databricks tasks (list jobs, triage a failed run, read a
+table schema, cycle a cluster, and similar): **databricks-axi** (v1.2.0),
+**raw-cli** (the official `databricks` CLI v1.6.0 on its own),
+**cli-skills** (that same CLI plus the
 [`databricks-agent-skills`](https://github.com/databricks/databricks-agent-skills)
-skill pack, pinned `5bc462d4`), and
+skill pack, pinned `5bc462d4`), and two arms of
 **mcp-aidevkit** (Databricks Field Engineering's
 [ai-dev-kit](https://github.com/databricks-solutions/ai-dev-kit) stdio MCP
-server, pinned `a7e1d51`). The agent was `claude-sonnet-5`, running each
-task cold in its own session against two live workspaces (`AWS` serverless,
-`AWS2` classic clusters). One later task, `doctor-aws`, ran against v1.1.0
-and is footnoted in the full results.
+server, pinned `a7e1d51`) with tool schemas loaded eagerly or on demand.
+The agent was `claude-sonnet-5`, running each task cold in its own session
+against two live workspaces (`AWS` serverless, `AWS2` classic clusters).
 
-236 of 237 published cells passed (99.6%): databricks-axi 83/83, cli-skills
-83/83, mcp-aidevkit 70/71. The one failure, `clusters-view-aws` on
-mcp-aidevkit (1 of 3 repeats), is a real gap in that tool's cluster-read
-call: it omits node type, DBR version, and autotermination for a
-TERMINATED cluster, not a databricks-axi issue. Since databricks-axi and
-cli-skills both pass 100%, the cost and turns comparison below is
-apples-to-apples on task success.
+632 of 645 cells passed (98.0%). Success rates sit close together across
+arms, so this is a cost and turns comparison on tasks every arm largely
+completes, not a success-rate story.
 
 Cost and turns are the headline metrics, not tokens: `cost_usd` is Claude
 Code's own billing-correct total, weighted by the real cache-read discount
-(~0.1x). Over the 24 tasks and 68 cells every condition ran:
+(~0.1x). Over the 25 tasks and 117 cells every condition ran:
 
-| Condition          | Avg Cost   | Avg Turns | vs axi (cost / turns) |
-| ------------------ | ---------- | --------- | --------------------- |
-| **databricks-axi** | **$0.143** | **3.1**   | baseline              |
-| cli-skills         | $0.249     | 6.8       | +75% / +118%          |
-| mcp-aidevkit       | $0.201     | 4.3       | +41% / +39%           |
+| Condition             | Avg Cost   | Avg Turns | vs axi (cost / turns) |
+| --------------------- | ---------- | --------- | --------------------- |
+| **databricks-axi**    | **$0.131** | **3.7**   | baseline              |
+| raw-cli               | $0.132     | 3.8       | +1% / +3%             |
+| mcp-aidevkit-eager    | $0.189     | 3.7       | +45% / +0%            |
+| mcp-aidevkit-deferred | $0.217     | 4.9       | +66% / +34%           |
+| cli-skills            | $0.229     | 7.2       | +75% / +97%           |
 
-databricks-axi wins or ties on cost in 53 of 54 task/condition comparisons
-and on turns in 51 of 54.
+**databricks-axi and the bare CLI are statistically indistinguishable.**
+Paired across tasks (median over repeats, 10k-resample bootstrap), raw-cli
+is +3.0% on cost [-9.2%, +15.7%] and +11.8% on turns [-4.2%, +29.4%]; both
+intervals include zero. That is the expected result for a thin wrapper: axi
+gives you typed commands and guardrails at bare-CLI cost, not a token
+saving over the CLI itself.
 
-Input-side tokens (input + cache-write + cache-read) tell a similar story
-but run 85-87% cache read on these cells, which bills at roughly 0.1x, so a
-raw token count overstates the real cost gap by about 1.3x. Reported here
-for reference, not as the lead number: databricks-axi averages 113,613,
-cli-skills 230,449, mcp-aidevkit 172,830.
+The real separation is the skill pack and the MCP server, and it is
+structural. `cli-skills` layers agent-skill documents on top of the raw
+CLI's output, and loading a skill body adds real turns and tokens on top of
+parsing the CLI's plain text. `mcp-aidevkit` loads 44 tool schemas
+(~154 dispatchable operations) into context every session, or pays turns
+looking them up when deferred. databricks-axi exposes the same surface as a
+single CLI the agent already knows how to read, with a minimal default
+schema and no skill body or tool list to load.
 
-The reason is structural. `cli-skills` layers agent-skill documents on top
-of the raw CLI's output, and loading a skill body adds real turns and
-tokens on top of parsing the CLI's plain text. `mcp-aidevkit` loads close
-to 40 tool schemas into context every session. databricks-axi exposes the
-same surface as a single CLI the agent already knows how to read, with a
-minimal default schema and no skill body or tool list to load.
+Scope matters: every task is operational (read, diagnose, status) work the
+model already knows how to do, so documentation and schemas can only be a
+cost here. Authoring workflows and the MCP server's wider operation
+coverage are untested.
 
-Full per-task numbers live in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+Full per-task numbers, the eager-vs-deferred cold-cache caveat, and the
+complete limitations live in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 To watch the comparison live against your own workspace, the repo ships a
 local demo: `node tools/arena/server.mjs` runs one task of your choosing
@@ -165,22 +169,39 @@ demo, not the benchmark; see [tools/arena/README.md](tools/arena/README.md).
 
 ## Usage
 
-No install needed:
+Install the Agent Skill. It works in 70+ coding agents, including Claude
+Code, Cursor, Codex, GitHub Copilot, Gemini CLI, Windsurf, Zed, Amp, Cline,
+OpenCode, Warp, Junie, goose, and Roo Code:
+
+```bash
+npx skills add p33ves/databricks-axi --skill databricks-axi -g
+```
+
+That writes to `.agents/skills/`, the cross-agent convention, and symlinks
+Claude Code. Drop `-g` to install into the current project instead, so the
+skill is committed and shared with your team.
+
+On Claude Code, Codex, and OpenCode, add ambient session context. This
+needs a durable install first: the hooks record the path of the binary they
+were installed from, and a package-runner cache path (`npx`, `pnpm dlx`,
+`bunx`) is version-pinned and can be pruned, so `setup hooks` refuses to
+run from one.
+
+```bash
+npm i -g databricks-axi
+databricks-axi setup hooks
+```
+
+Or skip both and run it directly, no install needed:
 
 ```bash
 npx -y databricks-axi            # ambient home view
 npx -y databricks-axi --help
 ```
 
-Cold `npx` resolution is a one-time cost on that first bare run; once
-`databricks-axi setup hooks` installs the session-start hook, every hooked
-agent session invokes the installed binary directly and pays none of it.
-
-Install the Agent Skill (Claude Code and compatible harnesses):
-
-```bash
-npx skills add p33ves/databricks-axi --skill databricks-axi -g
-```
+Cold `npx` resolution is a one-time cost on that bare run. With the global
+install and hooks in place, every hooked agent session invokes the
+installed binary directly and pays none of it.
 
 ## Roadmap
 
