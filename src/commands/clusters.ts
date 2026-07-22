@@ -6,9 +6,11 @@ import {
   domainHelpers,
   LIST_FLAGS,
   listResult,
+  nextLimit,
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
+  TOTAL_FETCH_CEILING,
   WAIT_TIMEOUT_MS,
   type AxiRenderable,
   type AxiStructuredOutput,
@@ -43,6 +45,8 @@ notes:
   stop maps to upstream \`clusters delete\` (keeps config, restartable) —
   never permanent-delete, which destroys the cluster
   start/stop are async by default; --wait blocks up to ~20 min upstream (agents: avoid)
+  list: --limit caps rows shown, not fetched; reports a precise total from
+  an internal ceiling-bounded fetch
 `;
 
 type RawCluster = {
@@ -87,7 +91,7 @@ async function clustersList(args: string[]): Promise<AxiRenderable> {
   }
   const limit = parseIntFlag(flags, "limit", 30);
   const parsed = await runClusters(
-    ["clusters", "list", "--limit", String(limit)],
+    ["clusters", "list", "--limit", String(TOTAL_FETCH_CEILING)],
     spawnOpts(flags),
   );
   const items = asList(parsed, "clusters") as RawCluster[];
@@ -98,18 +102,24 @@ async function clustersList(args: string[]): Promise<AxiRenderable> {
   ]);
   const p = profileSuffix(flags.get("profile"));
   const help = [`databricks-axi clusters view <cluster_id>${p}`];
-  const terminated = items.find((c) => c.state === "TERMINATED");
+  // Search only the rows actually displayed (the --limit-sliced page), not
+  // the full ceiling fetch — a match beyond the display page is a cluster
+  // the agent never saw, so suggesting it as a follow-up would dangle.
+  const terminated = items
+    .slice(0, limit)
+    .find((c) => c.state === "TERMINATED");
   if (terminated) {
     help.push(`databricks-axi clusters start ${terminated.cluster_id}${p}`);
   }
   return listResult("clusters", rows, limit, {
-    rerun: `databricks-axi clusters list --limit ${limit * 2}${p}`,
+    rerun: `databricks-axi clusters list --limit ${nextLimit(limit, rows.length)}${p}`,
     empty: {
       status:
         "no clusters in this workspace — serverless/Free Edition workspaces never show clusters here",
       help: ["Create one in the workspace UI: Compute > Create compute"],
     },
     help,
+    total: true,
   });
 }
 

@@ -33,7 +33,7 @@ The full v1 command surface is implemented (home, doctor, whoami, jobs, clusters
 ## Commands
 
 ```
-commands[44]:
+commands[45]:
   (none)=home
   whoami [--profile <name>]
   doctor [--profile <name>] [--full]
@@ -42,6 +42,7 @@ commands[44]:
   jobs run <job_id> [--wait]
   jobs runs [job_id] [--limit N] [--fields a,b]
   jobs runs view <run_id>
+  jobs runs summary [job_id] [--limit N]
   jobs logs <run_id> [--full]
   jobs cancel <run_id>
   clusters list [--limit N] [--fields a,b]

@@ -26,7 +26,7 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[44]:
+commands[45]:
   (none)=home
   whoami [--profile <name>]
   doctor [--profile <name>] [--full]
@@ -35,6 +35,7 @@ commands[44]:
   jobs run <job_id> [--wait]
   jobs runs [job_id] [--limit N] [--fields a,b]
   jobs runs view <run_id>
+  jobs runs summary [job_id] [--limit N]
   jobs logs <run_id> [--full]
   jobs cancel <run_id>
   clusters list [--limit N] [--fields a,b]

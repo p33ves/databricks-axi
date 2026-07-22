@@ -171,13 +171,41 @@ requireId, renderRows }` bound to that domain's name (so usage errors
   set) or a domain-supplied default field list.
 - `LIST_FLAGS`: the `{ profile, limit, fields }` flag spec every
   list-shaped subcommand shares.
+- `TOTAL_FETCH_CEILING` (1000): the internal fetch cap for the precise
+  `total` on the surfaces confirmed or believed to auto-drain the full set
+  into a single client-capped call: `jobs list`, `jobs runs`/`list-runs`,
+  `catalog catalogs`/`schemas`/`tables`/`volumes`/`functions`,
+  `clusters list`, `serving list`. Those nine call `listResult` with
+  `opts.total: true` and always fetch `--limit TOTAL_FETCH_CEILING`
+  upstream regardless of the agent's own `--limit`, which caps DISPLAY
+  only. Bounded, not unbounded auto-pagination (the AGENTS.md sharp edge);
+  tunable, raise only if a real workspace clips it.
 - `listResult(key, rows, limit, opts)`: the shared list-result tail —
-  empty state, `count` envelope, and the full-page `has_more` +
-  rerun-with-double-limit suggestion. This is the standard shape for every
-  list subcommand except the five documented exemptions: `fs ls` (upstream
-  has no `--limit` at all, so it reports exact truncation instead of
-  `has_more`), `sql history` (real server-side `has_next_page` pagination
-  plus two distinct empty states that don't fit this helper's
+  empty state and either the legacy `count`/full-page `has_more` +
+  rerun-with-double-limit envelope, or (`opts.total: true`) a precise
+  `total`: `rows` is treated as the FULL `TOTAL_FETCH_CEILING`-bounded
+  fetch, sliced to `limit` for display, with `total` set to the exact
+  fetched count (or `"1000+"` plus a `truncated` note if the ceiling
+  itself was hit) and `has_more: count < total`. In total mode `opts.rerun`
+  is not a blind doubled-limit guess — the caller already has the full
+  fetched `rows` in hand, so it names `nextLimit(limit, rows.length)`
+  (`min(rows.length, limit * 4)`): a bigger page bounded by the true count,
+  never the whole ceiling fetch, so following the suggestion can't dump
+  1000 rows into an agent's context in one shot. `listResult`
+  only surfaces it when a bigger `--limit` would actually show more than
+  the current page; once the display `--limit` already covers everything
+  the ceiling fetch got, there's no rerun suggestion to make (a bigger
+  `--limit` can't get past that pinned fetch — the `truncated` note is the
+  only signal that more may exist beyond it). `dashboards list`,
+  `pipelines list`/`events`, and `workspace ls` call `listResult` without
+  `opts.total` and keep the legacy rows-shown/has_more contract unchanged
+  — their upstream calls aren't yet confirmed to auto-drain past one
+  server page, so they're deliberately out of the `total` surface list
+  above (not the same as the five exemptions below, which never call
+  `listResult` at all). The five documented `listResult` exemptions: `fs
+ls` (upstream has no `--limit` at all, so it reports exact truncation
+  instead of `has_more`), `sql history` (real server-side `has_next_page`
+  pagination plus two distinct empty states that don't fit this helper's
   `rows.length >= limit` heuristic), `sql warehouses` (no `--limit` flag
   at all, by deliberate spec decision, so it hand-builds its own `count`-only
   envelope with no client-side cap safeguard), `permissions` (upstream has

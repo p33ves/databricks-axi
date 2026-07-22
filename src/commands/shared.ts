@@ -114,23 +114,79 @@ export const LIST_FLAGS = {
   fields: "value",
 } as const;
 
-/** Shared list-result tail: empty state, count envelope, and the
- * full-page has_more + rerun-with-double-limit suggestion. */
+/** Internal fetch ceiling for the precise `total` on the cheaply-countable
+ * list surfaces (jobs list/runs, catalog catalogs/schemas/tables/volumes/
+ * functions, clusters list, serving list — the surfaces confirmed or
+ * believed to auto-drain the full set into a single capped call). Those
+ * domains fetch this many rows upstream regardless of the agent's own
+ * `--limit` (which caps DISPLAY only) so `listResult` can report a true
+ * `total` instead of the rows-shown heuristic. Bounded, not unbounded
+ * auto-pagination (AGENTS.md sharp edge). ponytail: 1000 ceiling, raise if
+ * a real workspace clips it. */
+export const TOTAL_FETCH_CEILING = 1000;
+
+/** `--limit` to suggest for a rerun in total mode. The full fetch is
+ * already in hand, but naming its exact size would tell an agent to render
+ * up to TOTAL_FETCH_CEILING rows into its context in one shot, so grow the
+ * page geometrically instead and stop at the true count. */
+export function nextLimit(limit: number, total: number): number {
+  return Math.min(total, limit * 4);
+}
+
+/** Shared list-result tail: empty state, count envelope, and either the
+ * legacy full-page has_more heuristic or (opts.total) a precise `total`
+ * sliced from a ceiling-bounded fetch. */
 export function listResult(
   key: string,
   rows: AxiStructuredOutput[],
   limit: number,
   opts: {
-    /** Rerun-with-double-limit suggestion, prepended on a full page. */
+    /** Rerun-with-a-bigger---limit suggestion, prepended when there's more
+     * to see. Legacy mode: caller bakes in a doubled limit (the true count
+     * isn't known). Total mode: caller already has the full ceiling-bounded
+     * `rows` in hand, so this should name `nextLimit(limit, rows.length)` —
+     * a bigger page bounded by the true count, never the whole ceiling
+     * fetch. listResult only uses it when the page is short of that count. */
     rerun: string;
     empty: { status: string; help: string[] };
     help: string[];
+    /** True for the surfaces §3.1 promotes to a precise total: `rows` is
+     * the FULL ceiling-bounded fetch (up to TOTAL_FETCH_CEILING), not a
+     * display page — listResult slices to `limit` itself and reports the
+     * true row count as `total` instead of `count`-equals-rows-shown. */
+    total?: boolean;
   },
 ): AxiRenderable {
   if (rows.length === 0) {
     return { [key]: [], status: opts.empty.status, help: opts.empty.help };
   }
   const allHelp = [...opts.help];
+  if (opts.total) {
+    const hitCeiling = rows.length >= TOTAL_FETCH_CEILING;
+    const sliced = rows.slice(0, limit);
+    const out: AxiStructuredOutput = {
+      [key]: sliced,
+      count: sliced.length,
+      total: hitCeiling ? `${TOTAL_FETCH_CEILING}+` : rows.length,
+    };
+    if (sliced.length < rows.length) {
+      // A bigger --limit (up to rows.length, already fetched) shows more —
+      // opts.rerun names a nextLimit-bounded step toward that count.
+      out.has_more = true;
+      allHelp.unshift(opts.rerun);
+    } else if (hitCeiling) {
+      // Already displaying everything the ceiling fetch got; a bigger
+      // --limit can't get past the pinned TOTAL_FETCH_CEILING fetch, so
+      // there's no rerun suggestion to make — the `truncated` note below
+      // is the only signal that more may exist.
+      out.has_more = true;
+    }
+    if (hitCeiling) {
+      out.truncated = `stopped counting at the ${TOTAL_FETCH_CEILING}-row fetch ceiling; true total may be higher`;
+    }
+    out.help = allHelp;
+    return out;
+  }
   const out: AxiStructuredOutput = { [key]: rows, count: rows.length };
   // CLI >= 0.298 caps results client-side at --limit; a full page means
   // there may be more.

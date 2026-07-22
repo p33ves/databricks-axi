@@ -10,7 +10,7 @@ const JOB = {
 };
 
 describe("jobs list", () => {
-  it("passes exact argv and renders default fields", async () => {
+  it("fetches the ceiling upstream and renders default fields with a precise total", async () => {
     t.fake.respond("jobs list", {
       jobs: [
         JOB,
@@ -24,11 +24,13 @@ describe("jobs list", () => {
     const { out, exitCode } = await t.run(["jobs", "list"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["jobs", "list", "--limit", "30", "-o", "json"],
+      ["jobs", "list", "--limit", "1000", "-o", "json"],
     ]);
     expect(out).toContain("jobs[2]{job_id,name,creator_user_name}:");
     expect(out).toContain("101,axi-bench-etl,a@b.c");
     expect(out).toContain("count: 2");
+    expect(out).toContain("total: 2");
+    expect(out).not.toContain("has_more");
   });
 
   it("tolerates a bare-array response", async () => {
@@ -39,18 +41,81 @@ describe("jobs list", () => {
     expect(out).toContain("axi-bench-etl");
   });
 
-  it("flags a full page as has_more with a bigger-limit suggestion", async () => {
-    t.fake.respond("jobs list", { jobs: [JOB] });
+  it("slices to the display --limit and flags has_more with the true total", async () => {
+    t.fake.respond("jobs list", {
+      jobs: [JOB, { job_id: 102, settings: { name: "other" } }],
+    });
     const { out } = await t.run(["jobs", "list", "--limit", "1"]);
+    expect(out).toContain("jobs[1]");
+    expect(out).toContain("count: 1");
+    expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
     expect(out).toContain("jobs list --limit 2");
   });
 
-  it("passes --limit through", async () => {
+  it("reports 1000+ and a truncated note when the fetch hits the ceiling", async () => {
+    t.fake.respond("jobs list", {
+      jobs: Array.from({ length: 1000 }, (_, i) => ({
+        job_id: i,
+        settings: { name: `job-${i}` },
+      })),
+    });
+    const { out } = await t.run(["jobs", "list"]);
+    expect(out).toContain("total: 1000+");
+    expect(out).toContain("has_more: true");
+    expect(out).toContain("truncated:");
+  });
+
+  it("suggests the exact true total, not a doubled --limit guess", async () => {
+    t.fake.respond("jobs list", {
+      jobs: Array.from({ length: 5 }, (_, i) => ({
+        job_id: i,
+        settings: { name: `job-${i}` },
+      })),
+    });
+    const { out } = await t.run(["jobs", "list", "--limit", "3"]);
+    expect(out).toContain("total: 5");
+    // Doubling --limit 3 would suggest 6 (still short of the true 5); the
+    // exact total (5) is what actually shows everything already fetched.
+    expect(out).toContain("jobs list --limit 5");
+    expect(out).not.toContain("--limit 6");
+  });
+
+  it("caps the suggested rerun --limit instead of naming the whole ceiling fetch", async () => {
+    t.fake.respond("jobs list", {
+      jobs: Array.from({ length: 1000 }, (_, i) => ({
+        job_id: i,
+        settings: { name: `job-${i}` },
+      })),
+    });
+    const { out } = await t.run(["jobs", "list", "--limit", "10"]);
+    expect(out).toContain("total: 1000+");
+    // A bigger page (4x), not the full 1000 rows in one context dump.
+    expect(out).toContain("jobs list --limit 40");
+    expect(out).not.toContain("jobs list --limit 1000");
+  });
+
+  it("omits the rerun suggestion once the ceiling is hit and the display --limit already covers it", async () => {
+    t.fake.respond("jobs list", {
+      jobs: Array.from({ length: 1000 }, (_, i) => ({
+        job_id: i,
+        settings: { name: `job-${i}` },
+      })),
+    });
+    const { out } = await t.run(["jobs", "list", "--limit", "1000"]);
+    expect(out).toContain("total: 1000+");
+    expect(out).toContain("has_more: true");
+    expect(out).toContain("truncated:");
+    // Already showing everything the pinned ceiling fetch got — a bigger
+    // --limit can't get past TOTAL_FETCH_CEILING, so no rerun is suggested.
+    expect(out).not.toContain("jobs list --limit");
+  });
+
+  it("no longer passes the display --limit upstream (fetch is always the ceiling)", async () => {
     t.fake.respond("jobs list", { jobs: [] });
     await t.run(["jobs", "list", "--limit", "5"]);
     expect(t.fake.calls()).toEqual([
-      ["jobs", "list", "--limit", "5", "-o", "json"],
+      ["jobs", "list", "--limit", "1000", "-o", "json"],
     ]);
   });
 
@@ -135,7 +200,7 @@ describe("jobs list", () => {
     t.fake.respond("-p dev jobs list", { jobs: [] });
     await t.run(["jobs", "list", "--profile", "dev"]);
     expect(t.fake.calls()).toEqual([
-      ["-p", "dev", "jobs", "list", "--limit", "30", "-o", "json"],
+      ["-p", "dev", "jobs", "list", "--limit", "1000", "-o", "json"],
     ]);
   });
 
@@ -178,9 +243,62 @@ describe("jobs view", () => {
     // Same key as jobs list and the spec — not a bare `creator`.
     expect(out).toContain("creator_user_name: a@b.c");
     expect(out).toContain("0 0 3 * * ?");
-    expect(out).toContain("tasks[1]{task_key,type}:");
-    expect(out).toContain("extract");
+    expect(out).toContain("tasks[1]:");
+    expect(out).toContain("task_key: extract");
+    expect(out).toContain("depends_on: []");
     expect(out).toContain("jobs run 101");
+  });
+
+  it("surfaces the DAG shape via each task's depends_on", async () => {
+    t.fake.respond("jobs get", {
+      job_id: 881,
+      settings: {
+        name: "axi-bench-dag",
+        tasks: [
+          {
+            task_key: "ingest",
+            notebook_task: { notebook_path: "/Shared/axi-bench/ingest" },
+          },
+          {
+            task_key: "transform",
+            notebook_task: { notebook_path: "/Shared/axi-bench/transform" },
+            depends_on: [{ task_key: "ingest" }],
+          },
+          {
+            task_key: "report",
+            notebook_task: { notebook_path: "/Shared/axi-bench/report" },
+            depends_on: [{ task_key: "transform" }],
+          },
+        ],
+      },
+    });
+    const { out } = await t.run(["jobs", "view", "881"]);
+    // Root task: depends_on is [], not omitted.
+    expect(out).toContain("task_key: ingest");
+    expect(out).toContain("depends_on: []");
+    expect(out).toContain("task_key: transform");
+    expect(out).toContain("depends_on[1]: ingest");
+    expect(out).toContain("task_key: report");
+    expect(out).toContain("depends_on[1]: transform");
+  });
+
+  it("drops depends_on entries with no task_key instead of an undefined slot", async () => {
+    t.fake.respond("jobs get", {
+      job_id: 882,
+      settings: {
+        name: "axi-bench-malformed-dag",
+        tasks: [
+          {
+            task_key: "report",
+            notebook_task: { notebook_path: "/Shared/axi-bench/report" },
+            depends_on: [{ task_key: "transform" }, {}],
+          },
+        ],
+      },
+    });
+    const { out } = await t.run(["jobs", "view", "882"]);
+    expect(out).toContain("depends_on[1]: transform");
+    expect(out).not.toContain("undefined");
   });
 
   it("maps missing jobs to NOT_FOUND with list suggestions", async () => {
@@ -329,7 +447,7 @@ describe("jobs runs", () => {
     const { out, exitCode } = await t.run(["jobs", "runs"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["jobs", "list-runs", "--limit", "20", "-o", "json"],
+      ["jobs", "list-runs", "--limit", "1000", "-o", "json"],
     ]);
     // Bulk mode (no job_id positional): job_id is in the default columns so
     // an agent can answer cross-job questions ("jobs never run") in one call.
@@ -342,13 +460,14 @@ describe("jobs runs", () => {
     expect(out).toContain("2025-07-06T00:00:00.000Z");
     expect(out).toContain("101,902,FAILED");
     expect(out).toContain("2025-07-06T01:00:00.000Z");
+    expect(out).toContain("total: 2");
   });
 
   it("omits job_id when filtered to one job (redundant) and suggests logs", async () => {
     t.fake.respond("jobs list-runs", RUNS);
     const { out } = await t.run(["jobs", "runs", "101"]);
     expect(t.fake.calls()).toEqual([
-      ["jobs", "list-runs", "--limit", "20", "--job-id", "101", "-o", "json"],
+      ["jobs", "list-runs", "--limit", "1000", "--job-id", "101", "-o", "json"],
     ]);
     expect(out).toContain("runs[2]{run_id,state,start_time,duration_s}:");
     expect(out).toContain("jobs logs 902");
@@ -387,17 +506,23 @@ describe("jobs runs", () => {
     expect(out).toContain("jobs logs 903");
   });
 
-  it("flags a full page as has_more, keeping the job_id filter", async () => {
+  it("slices to the display --limit and flags has_more with the true total, keeping the job_id filter", async () => {
     t.fake.respond("jobs list-runs", RUNS);
-    const { out } = await t.run([
-      "jobs",
-      "runs",
-      "101",
-      "--limit",
-      String(RUNS.runs.length),
-    ]);
+    const { out } = await t.run(["jobs", "runs", "101", "--limit", "1"]);
+    expect(out).toContain("count: 1");
+    expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain(`jobs runs 101 --limit ${RUNS.runs.length * 2}`);
+    expect(out).toContain("jobs runs 101 --limit 2");
+  });
+
+  it("does not suggest logs for a failed run beyond the displayed --limit page", async () => {
+    // RUNS is [901 SUCCESS, 902 FAILED] — --limit 1 only displays 901, so
+    // the 902 failure was never shown to the agent and must not be
+    // suggested as a follow-up (the search must not run over the full
+    // ceiling-bounded fetch, only the displayed page).
+    t.fake.respond("jobs list-runs", RUNS);
+    const { out } = await t.run(["jobs", "runs", "101", "--limit", "1"]);
+    expect(out).not.toContain("jobs logs");
   });
 
   it("renders a definitive empty state", async () => {
@@ -470,6 +595,216 @@ describe("jobs runs view", () => {
     expect(out).toContain("tasks[2]{task_key,state,duration_s}:");
     expect(out).toContain("transform,FAILED");
     expect(out).toContain("jobs logs 902");
+  });
+});
+
+describe("jobs runs summary", () => {
+  const runRow = (id: number, resultState?: string) => ({
+    run_id: id,
+    job_id: 101,
+    ...(resultState ? { state: { result_state: resultState } } : {}),
+  });
+
+  it("computes tallies over the default 50-run window", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [
+        runRow(1, "SUCCESS"),
+        runRow(2, "FAILED"),
+        runRow(3), // no result_state yet — still running
+      ],
+    });
+    t.fake.respond("jobs get-run", { run_id: 2, tasks: [] });
+    const { out, exitCode } = await t.run(["jobs", "runs", "summary"]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()[0]).toEqual([
+      "jobs",
+      "list-runs",
+      "--limit",
+      "50",
+      "-o",
+      "json",
+    ]);
+    expect(out).not.toContain("job_id:");
+    expect(out).toContain("window: 3");
+    expect(out).not.toContain("total_available");
+    expect(out).toContain("success: 1");
+    expect(out).toContain("failed: 1");
+    expect(out).toContain("running: 1");
+  });
+
+  it("filters to one job, passing --job-id and reporting job_id", async () => {
+    t.fake.respond("jobs list-runs", { runs: [runRow(1, "SUCCESS")] });
+    const { out } = await t.run(["jobs", "runs", "summary", "101"]);
+    expect(t.fake.calls()[0]).toEqual([
+      "jobs",
+      "list-runs",
+      "--limit",
+      "50",
+      "--job-id",
+      "101",
+      "-o",
+      "json",
+    ]);
+    expect(out).toContain('job_id: "101"');
+  });
+
+  it("caps a requested window at the internal 200 ceiling and notes the truncation", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: Array.from({ length: 200 }, (_, i) => runRow(i, "SUCCESS")),
+    });
+    const { out } = await t.run(["jobs", "runs", "summary", "--limit", "300"]);
+    expect(t.fake.calls()[0]).toEqual([
+      "jobs",
+      "list-runs",
+      "--limit",
+      "200",
+      "-o",
+      "json",
+    ]);
+    expect(out).toContain("window: 200");
+    expect(out).not.toContain("total_available");
+    expect(out).toContain("truncated:");
+    expect(out).toContain("200-run window ceiling");
+  });
+
+  it("notes truncation on a full window below the ceiling, so failed: 0 never reads as authoritative", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: Array.from({ length: 50 }, (_, i) => runRow(i, "SUCCESS")),
+    });
+    const { out } = await t.run(["jobs", "runs", "summary"]);
+    expect(out).toContain("window: 50");
+    expect(out).toContain("failed: 0");
+    expect(out).toContain("newest 50 runs");
+    expect(out).toContain("--limit");
+  });
+
+  it("resolves first_failed via one get-run + one get-run-output call, never a walk over every failing run", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [runRow(2, "FAILED"), runRow(1, "FAILED")],
+    });
+    t.fake.respond("jobs get-run", {
+      run_id: 2,
+      tasks: [
+        {
+          task_key: "trivial",
+          run_id: 202,
+          state: { result_state: "FAILED" },
+        },
+      ],
+    });
+    t.fake.respond("jobs get-run-output", {
+      error: "RuntimeError: deliberate trivial-job failure (mode=fail)",
+    });
+    const { out, exitCode } = await t.run(["jobs", "runs", "summary"]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      ["jobs", "list-runs", "--limit", "50", "-o", "json"],
+      ["jobs", "get-run", "2", "-o", "json"],
+      ["jobs", "get-run-output", "202", "-o", "json"],
+    ]);
+    expect(out).toContain("run_id: 2");
+    expect(out).toContain("task_key: trivial");
+    expect(out).toContain(
+      'error: "RuntimeError: deliberate trivial-job failure (mode=fail)"',
+    );
+    expect(out).not.toContain("common_error");
+    expect(out).toContain("jobs logs 2");
+  });
+
+  it("redacts the first_failed error text", async () => {
+    t.fake.respond("jobs list-runs", { runs: [runRow(1, "FAILED")] });
+    t.fake.respond("jobs get-run", {
+      run_id: 1,
+      tasks: [{ task_key: "t", run_id: 11, state: { result_state: "FAILED" } }],
+    });
+    t.fake.respond("jobs get-run-output", {
+      error: "dapifedcba9876543210 leaked",
+    });
+    const { out } = await t.run(["jobs", "runs", "summary"]);
+    expect(out).not.toContain("dapifedcba9876543210");
+    expect(out).toContain("[redacted]");
+  });
+
+  it("omits first_failed when there are no failures", async () => {
+    t.fake.respond("jobs list-runs", { runs: [runRow(1, "SUCCESS")] });
+    const { out, exitCode } = await t.run(["jobs", "runs", "summary"]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      ["jobs", "list-runs", "--limit", "50", "-o", "json"],
+    ]);
+    expect(out).not.toContain("first_failed");
+    expect(out).not.toContain("common_error");
+  });
+
+  it("stays best-effort when the failing task's get-run-output call fails", async () => {
+    t.fake.respond("jobs list-runs", { runs: [runRow(1, "FAILED")] });
+    t.fake.respond("jobs get-run", {
+      run_id: 1,
+      tasks: [{ task_key: "t", run_id: 11, state: { result_state: "FAILED" } }],
+    });
+    t.fake.respondError("jobs get-run-output", "Error: transient failure");
+    const { out, exitCode } = await t.run(["jobs", "runs", "summary"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("run_id: 1");
+    expect(out).toContain("task_key: t");
+    expect(out).toContain('error: ""');
+  });
+
+  it("stays best-effort when the get-run call itself fails, keeping tallies without first_failed", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [runRow(1, "FAILED"), runRow(2, "SUCCESS")],
+    });
+    t.fake.respondError("jobs get-run", "Error: transient failure");
+    const { out, exitCode } = await t.run(["jobs", "runs", "summary"]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      ["jobs", "list-runs", "--limit", "50", "-o", "json"],
+      ["jobs", "get-run", "1", "-o", "json"],
+    ]);
+    expect(out).toContain("window: 2");
+    expect(out).toContain("success: 1");
+    expect(out).toContain("failed: 1");
+    expect(out).not.toContain("first_failed");
+    // Still points at the generic runs follow-up even though the
+    // logs-specific suggestion couldn't be resolved.
+    expect(out).toContain("jobs runs");
+    expect(out).not.toContain("jobs logs");
+  });
+
+  it("renders a zeroed envelope when no runs are found", async () => {
+    t.fake.respond("jobs list-runs", { runs: [] });
+    const { out, exitCode } = await t.run(["jobs", "runs", "summary", "101"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain('job_id: "101"');
+    expect(out).toContain("window: 0");
+    expect(out).not.toContain("total_available");
+    expect(out).toContain("success: 0");
+    expect(out).toContain("failed: 0");
+    expect(out).toContain("running: 0");
+    expect(out).toContain("no runs found");
+  });
+
+  it("requires a numeric job id", async () => {
+    const { out, exitCode } = await t.run([
+      "jobs",
+      "runs",
+      "summary",
+      "banana",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("jobs runs summary [job_id]");
+  });
+
+  it("rejects --fields (no rows to select fields among)", async () => {
+    const { out, exitCode } = await t.run([
+      "jobs",
+      "runs",
+      "summary",
+      "--fields",
+      "run_id",
+    ]);
+    expect(exitCode).toBe(2);
+    expect(out).toContain("Unknown option");
   });
 });
 

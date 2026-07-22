@@ -5,9 +5,11 @@ import {
   domainHelpers,
   LIST_FLAGS,
   listResult,
+  nextLimit,
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
+  TOTAL_FETCH_CEILING,
   type AxiRenderable,
   type AxiStructuredOutput,
 } from "./shared.js";
@@ -45,6 +47,9 @@ notes:
   lowercase only, rejected (not re-cased) even though upstream accepts any
   case; --principal answers "can this principal read this?" including
   privileges derived via group membership
+  catalogs/schemas/tables/volumes/functions: --limit caps rows shown, not
+  fetched; each reports a precise total from an internal ceiling-bounded
+  fetch
 `;
 
 type RawTable = {
@@ -128,7 +133,7 @@ async function catalogsList(args: string[]): Promise<AxiRenderable> {
   }
   const limit = parseIntFlag(flags, "limit", 30);
   const parsed = await runDatabricks(
-    ["catalogs", "list", "--limit", String(limit)],
+    ["catalogs", "list", "--limit", String(TOTAL_FETCH_CEILING)],
     spawnOpts(flags),
   );
   const rows = renderRows(asList(parsed, "catalogs"), flags, [
@@ -138,7 +143,7 @@ async function catalogsList(args: string[]): Promise<AxiRenderable> {
   ]);
   const p = profileSuffix(flags.get("profile"));
   return listResult("catalogs", rows, limit, {
-    rerun: `databricks-axi catalog catalogs --limit ${limit * 2}${p}`,
+    rerun: `databricks-axi catalog catalogs --limit ${nextLimit(limit, rows.length)}${p}`,
     empty: {
       status: "no catalogs visible to this principal",
       help: [
@@ -146,6 +151,7 @@ async function catalogsList(args: string[]): Promise<AxiRenderable> {
       ],
     },
     help: [`databricks-axi catalog schemas <name>${p}`],
+    total: true,
   });
 }
 
@@ -157,7 +163,7 @@ async function schemasList(args: string[]): Promise<AxiRenderable> {
   const limit = parseIntFlag(flags, "limit", 30);
   const p = profileSuffix(flags.get("profile"));
   const parsed = await runWithNotFoundHelp(
-    ["schemas", "list", catalog, "--limit", String(limit)],
+    ["schemas", "list", catalog, "--limit", String(TOTAL_FETCH_CEILING)],
     spawnOpts(flags),
     [`databricks-axi catalog catalogs${p}`],
   );
@@ -165,12 +171,13 @@ async function schemasList(args: string[]): Promise<AxiRenderable> {
   // redundant catalog.schema).
   const rows = renderRows(asList(parsed, "schemas"), flags, ["name", "owner"]);
   return listResult("schemas", rows, limit, {
-    rerun: `databricks-axi catalog schemas ${catalog} --limit ${limit * 2}${p}`,
+    rerun: `databricks-axi catalog schemas ${catalog} --limit ${nextLimit(limit, rows.length)}${p}`,
     empty: {
       status: `no schemas in catalog ${catalog}`,
       help: [`databricks-axi catalog catalogs${p}`],
     },
     help: [`databricks-axi catalog tables ${catalog}.<name>${p}`],
+    total: true,
   });
 }
 
@@ -198,18 +205,19 @@ async function scopedList(
   const limit = parseIntFlag(flags, "limit", 30);
   const p = profileSuffix(flags.get("profile"));
   const parsed = await runWithNotFoundHelp(
-    cfg.argv(catalog, schema, limit),
+    cfg.argv(catalog, schema, TOTAL_FETCH_CEILING),
     spawnOpts(flags),
     [`databricks-axi catalog schemas ${catalog}${p}`],
   );
   const rows = renderRows(asList(parsed, cfg.noun), flags, cfg.fields);
   return listResult(cfg.noun, rows, limit, {
-    rerun: `databricks-axi catalog ${cfg.noun} ${ref} --limit ${limit * 2}${p}`,
+    rerun: `databricks-axi catalog ${cfg.noun} ${ref} --limit ${nextLimit(limit, rows.length)}${p}`,
     empty: {
       status: `no ${cfg.noun} in ${ref}`,
       help: [`databricks-axi catalog schemas ${catalog}${p}`],
     },
     help: cfg.help(ref, catalog, schema, p),
+    total: true,
   });
 }
 

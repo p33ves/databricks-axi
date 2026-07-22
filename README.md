@@ -83,12 +83,14 @@ $ databricks-axi jobs list
 jobs[1]{job_id,name,creator_user_name}:
   123456789012345,nightly-etl,you@example.com
 count: 1
+total: 1
 help[2]: databricks-axi jobs view <job_id>,databricks-axi jobs runs <job_id>
 ```
 
 TOON rows instead of nested JSON, a minimal default schema (`--fields`
-expands it), and the next two commands an agent would reach for. Errors
-follow the same contract:
+expands it), an exact `total` next to the rows shown (so a page that hides
+rows says so instead of looking complete), and the next two commands an
+agent would reach for. Errors follow the same contract:
 
 ```console
 $ databricks-axi catalog table view workspace.default.does_not_exist

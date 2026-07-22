@@ -28,26 +28,34 @@ a leading dash smuggled past `--` and enforces the expected arity.
 
 ## Upstream calls
 
-- `catalogs` → `databricks catalogs list --limit N`
-- `schemas` → `databricks schemas list <catalog> --limit N`
-- `tables` → `databricks tables list <catalog> <schema> --limit N
+`catalogs`/`schemas`/`tables`/`volumes`/`functions` always fetch
+`TOTAL_FETCH_CEILING` (1000, `shared.ts`) rows upstream, not the agent's
+own `--limit`, which now caps DISPLAY only — see Output shape below.
+
+- `catalogs` → `databricks catalogs list --limit 1000`
+- `schemas` → `databricks schemas list <catalog> --limit 1000`
+- `tables` → `databricks tables list <catalog> <schema> --limit 1000
 --omit-columns --omit-properties` (the default payload carries full
   column/property blobs; those belong to `table view`, not the list)
 - `table view` → `databricks tables get <full_name>`
-- `volumes` → `databricks volumes list <catalog> <schema> --limit N`
+- `volumes` → `databricks volumes list <catalog> <schema> --limit 1000`
 - `volume view` → `databricks volumes read <full_name>`
-- `functions` → `databricks functions list <catalog> <schema> --limit N`
+- `functions` → `databricks functions list <catalog> <schema> --limit 1000`
 - `function view` → `databricks functions get <full_name>`
 - `grants` → `databricks grants get-effective <TYPE> <FULL_NAME> --max-results
 0` (+ `--principal P`, + `--page-token <t>` on subsequent pages)
 
 ## Output shape
 
-- All list subcommands go through `listResult`, each with its own default
-  field set: `catalogs` → `name, owner, catalog_type`; `schemas` →
-  `name, owner` (upstream's `name` here is already the bare schema name,
-  not `full_name`); `tables` → `name, table_type, data_source_format`;
-  `volumes` → `name, volume_type`; `functions` →
+- `catalogs`/`schemas`/`tables`/`volumes`/`functions` go through
+  `listResult` with `opts.total: true`: the ceiling-bounded fetch is
+  sliced to the display `--limit` (default 30), `count` is rows shown,
+  `total` is the exact fetched count (or `"1000+"` plus a `truncated` note
+  if the fetch hit the ceiling), `has_more` is `count < total`. Each has
+  its own default field set: `catalogs` → `name, owner, catalog_type`;
+  `schemas` → `name, owner` (upstream's `name` here is already the bare
+  schema name, not `full_name`); `tables` → `name, table_type,
+data_source_format`; `volumes` → `name, volume_type`; `functions` →
   `name, data_type, comment`.
 - `table view`: `full_name`, `table_type`, `owner`, optional `comment`,
   and `columns` flattened to `{ name, type_text, nullable }`. `help`

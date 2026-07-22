@@ -18,12 +18,17 @@ opaque strings.
 
 ## Upstream calls
 
-- `list` → `databricks serving-endpoints list --limit N`
+- `list` → `databricks serving-endpoints list --limit 1000`
+  (`TOTAL_FETCH_CEILING`, `shared.ts`) — the agent's own `--limit` caps
+  DISPLAY only; see Output shape below
 - `view` → `databricks serving-endpoints get <name>`
 
 ## Output shape
 
-- `list`: `listResult` envelope, default fields `name`, `state`, `task`.
+- `list`: `listResult` envelope with `opts.total: true` — sliced to
+  the display `--limit` (default 30) out of the full ceiling-bounded fetch,
+  `count` rows shown, `total` the exact fetched count (or `"1000+"` if the
+  fetch hit the ceiling). Default fields `name`, `state`, `task`.
   `state` in the raw response is a `{ ready, config_update }` object, not a
   string — it's flattened to a compact string (`compactState`) before
   rendering: `READY`/`NOT_READY` etc., with `" (updating)"` appended when

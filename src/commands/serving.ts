@@ -5,9 +5,11 @@ import {
   domainHelpers,
   LIST_FLAGS,
   listResult,
+  nextLimit,
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
+  TOTAL_FETCH_CEILING,
   type AxiRenderable,
   type AxiStructuredOutput,
 } from "./shared.js";
@@ -36,6 +38,8 @@ examples:
   databricks-axi serving view <name>
 notes:
   read-only in this release — axi does not invoke serving endpoints
+  list: --limit caps rows shown, not fetched; reports a precise total from
+  an internal ceiling-bounded fetch
 `;
 
 type RawState = { ready?: string; config_update?: string };
@@ -90,7 +94,7 @@ async function servingList(args: string[]): Promise<AxiRenderable> {
   }
   const limit = parseIntFlag(flags, "limit", 30);
   const parsed = await runServing(
-    ["serving-endpoints", "list", "--limit", String(limit)],
+    ["serving-endpoints", "list", "--limit", String(TOTAL_FETCH_CEILING)],
     spawnOpts(flags),
   );
   const items = asList(parsed, "endpoints") as RawEndpoint[];
@@ -102,7 +106,7 @@ async function servingList(args: string[]): Promise<AxiRenderable> {
   const rows = renderRows(flattened, flags, ["name", "state", "task"]);
   const p = profileSuffix(flags.get("profile"));
   return listResult("endpoints", rows, limit, {
-    rerun: `databricks-axi serving list --limit ${limit * 2}${p}`,
+    rerun: `databricks-axi serving list --limit ${nextLimit(limit, rows.length)}${p}`,
     empty: {
       status: "no serving endpoints in this workspace",
       help: [
@@ -110,6 +114,7 @@ async function servingList(args: string[]): Promise<AxiRenderable> {
       ],
     },
     help: [`databricks-axi serving view <name>${p}`],
+    total: true,
   });
 }
 

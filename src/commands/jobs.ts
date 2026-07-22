@@ -10,9 +10,11 @@ import {
   isFailed,
   LIST_FLAGS,
   listResult,
+  nextLimit,
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
+  TOTAL_FETCH_CEILING,
   WAIT_TIMEOUT_MS,
   type AxiRenderable,
   type AxiStructuredOutput,
@@ -32,12 +34,13 @@ const requireId = (positional: string[], usageText: string) =>
   requireIdArg(positional, usageText, /^\d+$/);
 
 export const JOBS_HELP = `usage: databricks-axi jobs <subcommand> [args] [flags]
-subcommands[7]:
+subcommands[8]:
   list [--limit N] [--fields a,b]
   view <job_id>
   run <job_id> [--wait]
   runs [job_id] [--limit N] [--fields a,b]
   runs view <run_id>
+  runs summary [job_id] [--limit N]
   logs <run_id> [--full]
   cancel <run_id>
 flags:
@@ -46,9 +49,17 @@ examples:
   databricks-axi jobs list
   databricks-axi jobs run 101
   databricks-axi jobs logs 901
+  databricks-axi jobs runs summary 101
 notes:
   run is async by default; --wait blocks up to ~20 min upstream (agents: avoid)
   logs shows failed tasks first, last 50 lines each; --full for everything
+  list/runs: --limit caps rows shown, not fetched; both report a precise
+  total from an internal ceiling-bounded fetch (see catalog --help for the
+  same shift on catalog list surfaces)
+  runs summary: audit rollup over a bounded window (default 50, max 200
+  recent runs) of state tallies plus the first failing run/task/error;
+  "running" means no terminal result_state yet (running, pending, queued,
+  or skipped), not only actively-running runs
 `;
 
 type Raw = Record<string, unknown>;
@@ -59,6 +70,7 @@ type RawTask = {
   notebook_task?: { notebook_path?: string };
   spark_python_task?: { python_file?: string };
   execution_duration?: number;
+  depends_on?: { task_key?: string }[];
 } & Raw;
 type RawJob = {
   job_id?: number | string;
@@ -89,7 +101,13 @@ export async function jobsCommand(args: string[]): Promise<AxiRenderable> {
     case "run":
       return jobsRun(rest);
     case "runs":
-      return rest[0] === "view" ? runsView(rest.slice(1)) : runsList(rest);
+      if (rest[0] === "view") {
+        return runsView(rest.slice(1));
+      }
+      if (rest[0] === "summary") {
+        return runsSummary(rest.slice(1));
+      }
+      return runsList(rest);
     case "logs":
       return jobsLogs(rest);
     case "cancel":
@@ -109,7 +127,7 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
     throw usage(`jobs list takes no arguments, got: ${positional[0]}`);
   }
   const limit = parseIntFlag(flags, "limit", 30);
-  const argv = ["jobs", "list", "--limit", String(limit)];
+  const argv = ["jobs", "list", "--limit", String(TOTAL_FETCH_CEILING)];
   const parsed = await runJobs(argv, spawnOpts(flags));
   const items = asList(parsed, "jobs");
   const flattened = items.map((job) => ({
@@ -123,7 +141,7 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
   ]);
   const p = profileSuffix(flags.get("profile"));
   return listResult("jobs", rows, limit, {
-    rerun: `databricks-axi jobs list --limit ${limit * 2}${p}`,
+    rerun: `databricks-axi jobs list --limit ${nextLimit(limit, rows.length)}${p}`,
     empty: {
       status: "no jobs in this workspace",
       help: ["Create one in the workspace UI: Workflows > Create job"],
@@ -132,6 +150,7 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
       `databricks-axi jobs view <job_id>${p}`,
       `databricks-axi jobs runs <job_id>${p}`,
     ],
+    total: true,
   });
 }
 
@@ -154,6 +173,9 @@ async function jobsView(args: string[]): Promise<AxiRenderable> {
   out.tasks = (settings.tasks ?? []).map((task) => ({
     task_key: task.task_key,
     type: taskType(task),
+    depends_on: (task.depends_on ?? [])
+      .map((d) => d.task_key)
+      .filter((k): k is string => k != null),
   }));
   const p = profileSuffix(flags.get("profile"));
   out.help = [
@@ -265,7 +287,7 @@ function durationSeconds(item: {
 async function runsList(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, LIST_FLAGS);
   const limit = parseIntFlag(flags, "limit", 20);
-  const argv = ["jobs", "list-runs", "--limit", String(limit)];
+  const argv = ["jobs", "list-runs", "--limit", String(TOTAL_FETCH_CEILING)];
   let jobId: string | undefined;
   if (positional.length > 0) {
     jobId = requireId(positional, "jobs runs [job_id]");
@@ -291,17 +313,21 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
   const rows = renderRows(flattened, flags, defaultFields);
   const p = profileSuffix(flags.get("profile"));
   const help = [`databricks-axi jobs runs view <run_id>${p}`];
-  const firstFailed = runs.find(isFailed);
+  // Search only the rows actually displayed (the --limit-sliced page), not
+  // the full ceiling fetch — a match beyond the display page is a run the
+  // agent never saw, so suggesting it as a follow-up would dangle.
+  const firstFailed = runs.slice(0, limit).find(isFailed);
   if (firstFailed) {
     help.unshift(`databricks-axi jobs logs ${firstFailed.run_id}${p}`);
   }
   return listResult("runs", rows, limit, {
-    rerun: `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${limit * 2}${p}`,
+    rerun: `databricks-axi jobs runs${jobId ? ` ${jobId}` : ""} --limit ${nextLimit(limit, rows.length)}${p}`,
     empty: {
       status: "no runs found",
       help: [`databricks-axi jobs run <job_id>${p}`],
     },
     help,
+    total: true,
   });
 }
 
@@ -329,6 +355,119 @@ async function runsView(args: string[]): Promise<AxiRenderable> {
       ? [`databricks-axi jobs logs ${runId}${p}`]
       : [`databricks-axi jobs runs ${runObj.job_id ?? ""}`.trim() + p],
   };
+}
+
+const RUNS_SUMMARY_DEFAULT_WINDOW = 50;
+const RUNS_SUMMARY_CEILING = 200;
+
+/** Audit rollup: state tallies over a bounded window of recent runs plus
+ * the most recent failing run/task/error — fixes the find-failed-run
+ * five-hop hunt (list -> pick -> runs view -> logs) into one call. Costs a
+ * small constant number of upstream calls regardless of window size or
+ * failure count: one `list-runs` for the window, one `get-run` to resolve
+ * the first failing task, one `get-run-output` for its redacted error —
+ * never a walk over every failing run. */
+// No --fields here: the output is a hand-built rollup, not a rows array —
+// unlike LIST_FLAGS' other consumers, --fields has nothing to select
+// among, so it's left off the spec rather than silently accepted and
+// ignored (AGENTS.md: fail loud on unknown flags).
+const RUNS_SUMMARY_FLAGS = { profile: "value", limit: "value" } as const;
+
+async function runsSummary(args: string[]): Promise<AxiRenderable> {
+  const { positional, flags } = parseArgs(args, RUNS_SUMMARY_FLAGS);
+  let jobId: string | undefined;
+  if (positional.length > 0) {
+    jobId = requireId(positional, "jobs runs summary [job_id]");
+  }
+  const requested = parseIntFlag(flags, "limit", RUNS_SUMMARY_DEFAULT_WINDOW);
+  const window = Math.min(requested, RUNS_SUMMARY_CEILING);
+  const argv = ["jobs", "list-runs", "--limit", String(window)];
+  if (jobId) {
+    argv.push("--job-id", jobId);
+  }
+  const parsed = await runJobs(argv, spawnOpts(flags));
+  const runs = asList(parsed, "runs") as RawRun[];
+  const p = profileSuffix(flags.get("profile"));
+
+  // Tallies compute the same way whether or not any runs came back (all
+  // zero on an empty window) — one code path, branching only on status/
+  // first_failed below, not a duplicated empty-state block.
+  const success = runs.filter(
+    (r) => r.state?.result_state === "SUCCESS",
+  ).length;
+  const failed = runs.filter(isFailed).length;
+  // Remainder: no terminal result_state yet — covers actively RUNNING plus
+  // PENDING/QUEUED/BLOCKED, not just "running" in the literal sense.
+  const running = runs.length - success - failed;
+  // A full window means the tallies only cover the newest `window` runs —
+  // `failed: 0` there is not an authoritative "nothing ever failed". True
+  // at the ceiling and at any smaller --limit alike.
+  const full = runs.length >= window;
+
+  const out: AxiStructuredOutput = {};
+  if (jobId) {
+    out.job_id = jobId;
+  }
+  out.window = runs.length;
+  out.success = success;
+  out.failed = failed;
+  out.running = running;
+  if (full) {
+    out.truncated =
+      window >= RUNS_SUMMARY_CEILING
+        ? `tallies cover the newest ${window} runs; more runs may exist beyond the ${RUNS_SUMMARY_CEILING}-run window ceiling`
+        : `tallies cover the newest ${window} runs; more runs may exist — rerun with a bigger --limit (max ${RUNS_SUMMARY_CEILING})`;
+  }
+
+  if (runs.length === 0) {
+    out.status = "no runs found";
+    out.help = [`databricks-axi jobs run <job_id>${p}`];
+    return out;
+  }
+
+  const help: string[] = [];
+  // Most recent failing run — list-runs returns newest-first, same
+  // assumption runsList already makes for its own first-failed suggestion.
+  const firstFailedRun = runs.find(isFailed);
+  if (firstFailedRun) {
+    try {
+      const runDetail = (await runJobsObject(
+        ["jobs", "get-run", String(firstFailedRun.run_id)],
+        spawnOpts(flags),
+      )) as RawRun;
+      const failedTask = (runDetail.tasks ?? []).find(isFailed);
+      let error = "";
+      if (failedTask?.run_id != null) {
+        try {
+          const output = (await runJobsObject(
+            ["jobs", "get-run-output", String(failedTask.run_id)],
+            spawnOpts(flags),
+          )) as RawRunOutput;
+          if (output.error) {
+            error = redactSecrets(output.error).split("\n")[0] ?? "";
+          }
+        } catch {
+          // Best-effort detail fetch — the rollup still reports the failing
+          // run/task without a specific error line rather than sinking the
+          // whole summary over one output fetch.
+        }
+      }
+      out.first_failed = {
+        run_id: firstFailedRun.run_id,
+        task_key: failedTask?.task_key,
+        error,
+      };
+      help.push(`databricks-axi jobs logs ${firstFailedRun.run_id}${p}`);
+    } catch {
+      // Best-effort, same as the get-run-output call above: a transient
+      // get-run failure shouldn't throw away the tallies already computed —
+      // the rollup just omits first_failed, same shape as the no-failures
+      // case below.
+    }
+  }
+  help.push(`databricks-axi jobs runs${jobId ? ` ${jobId}` : ""}${p}`);
+  out.help = help;
+  return out;
 }
 
 const LOG_TAIL_LINES = 50;

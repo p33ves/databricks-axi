@@ -10,7 +10,7 @@ const ENDPOINT = {
 };
 
 describe("serving list", () => {
-  it("passes exact argv and renders default fields from a bare array", async () => {
+  it("fetches the ceiling upstream and renders default fields from a bare array with a precise total", async () => {
     t.fake.respond("serving-endpoints list", [
       ENDPOINT,
       {
@@ -22,25 +22,31 @@ describe("serving list", () => {
     const { out, exitCode } = await t.run(["serving", "list"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["serving-endpoints", "list", "--limit", "30", "-o", "json"],
+      ["serving-endpoints", "list", "--limit", "1000", "-o", "json"],
     ]);
     expect(out).toContain("endpoints[2]{name,state,task}:");
     expect(out).toContain("databricks-gte-large-en,READY,llm/v1/embeddings");
     expect(out).toContain("NOT_READY (updating)");
     expect(out).toContain("count: 2");
+    expect(out).toContain("total: 2");
   });
 
-  it("passes --limit through", async () => {
+  it("no longer passes the display --limit upstream (fetch is always the ceiling)", async () => {
     t.fake.respond("serving-endpoints list", []);
     await t.run(["serving", "list", "--limit", "5"]);
     expect(t.fake.calls()).toEqual([
-      ["serving-endpoints", "list", "--limit", "5", "-o", "json"],
+      ["serving-endpoints", "list", "--limit", "1000", "-o", "json"],
     ]);
   });
 
-  it("flags a full page as has_more with a bigger-limit suggestion", async () => {
-    t.fake.respond("serving-endpoints list", [ENDPOINT]);
+  it("slices to the display --limit and flags has_more with the true total", async () => {
+    t.fake.respond("serving-endpoints list", [
+      ENDPOINT,
+      { name: "custom-model", state: { ready: "READY" } },
+    ]);
     const { out } = await t.run(["serving", "list", "--limit", "1"]);
+    expect(out).toContain("count: 1");
+    expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
     expect(out).toContain("serving list --limit 2");
   });
