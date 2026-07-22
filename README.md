@@ -183,8 +183,9 @@ skill is committed and shared with your team.
 
 On Claude Code, Codex, and OpenCode, add ambient session context. This
 needs a durable install first: the hooks record the path of the binary they
-were installed from, and an `npx` cache path is version-pinned and can be
-pruned, so `setup hooks` refuses to run from one.
+were installed from, and a package-runner cache path (`npx`, `pnpm dlx`,
+`bunx`) is version-pinned and can be pruned, so `setup hooks` refuses to
+run from one.
 
 ```bash
 npm i -g databricks-axi

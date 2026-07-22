@@ -99,24 +99,29 @@ describe("setup hooks", () => {
     expect(existsSync(join(home, ".claude", "settings.json"))).toBe(false);
   });
 
-  it("refuses to install from npm's ephemeral _npx cache, which would pin the hooks to a prunable path", async () => {
-    process.argv[1] = join(
-      home,
-      ".npm",
-      "_npx",
-      "abc123",
-      "node_modules",
-      "databricks-axi",
-      "dist",
-      "bin",
-      "databricks-axi.js",
-    );
-    const { out, exitCode } = await run(["setup", "hooks"]);
-    expect(exitCode).toBe(0);
-    expect(out).toContain("not installed: npx cache entrypoint");
-    expect(out).toContain("npm i -g databricks-axi");
-    expect(existsSync(join(home, ".claude", "settings.json"))).toBe(false);
-  });
+  it.each([
+    ["npx", "/fake/home/.npm/_npx/abc123"],
+    ["pnpm dlx", "/fake/home/.cache/pnpm/dlx/abc123/1700000000"],
+    ["yarn dlx", "/tmp/xfs-abc123/dlx-4242"],
+    ["bunx", "/tmp/bunx-1000-databricks-axi@1.2.0"],
+  ])(
+    "refuses to install from %s's ephemeral cache, which would pin the hooks to a prunable path",
+    async (_runner, cacheDir) => {
+      process.argv[1] = join(
+        cacheDir,
+        "node_modules",
+        "databricks-axi",
+        "dist",
+        "bin",
+        "databricks-axi.js",
+      );
+      const { out, exitCode } = await run(["setup", "hooks"]);
+      expect(exitCode).toBe(0);
+      expect(out).toContain("not installed: ephemeral package-runner entrypoint");
+      expect(out).toContain("npm i -g databricks-axi");
+      expect(existsSync(join(home, ".claude", "settings.json"))).toBe(false);
+    },
+  );
 
   it("rejects a --agent flag (dropped — installs all three agents unconditionally)", async () => {
     const { out, exitCode } = await run([

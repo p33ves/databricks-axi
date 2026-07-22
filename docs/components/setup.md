@@ -37,8 +37,8 @@ Targets written (four paths, always all of them):
 already up to date" }`.
 - Ineligible entrypoint: `{ status: "not installed: unrecognized
 entrypoint", help: [...] }` — never a false "installed" result.
-- npx cache entrypoint: `{ status: "not installed: npx cache
-entrypoint", help: [...] }` — see Sharp edges.
+- Package-runner entrypoint: `{ status: "not installed: ephemeral
+package-runner entrypoint", help: [...] }` — see Sharp edges.
 
 ## Errors
 
@@ -56,13 +56,14 @@ entrypoint", help: [...] }` — see Sharp edges.
 - Installs for all three agents unconditionally — there is no `--agent`
   selector (a human-confirmed dropped decision, referenced in the source
   as "C3").
-- `npx -y databricks-axi setup hooks` is refused. The exec path is written
-  verbatim into all four hook configs, and npm's `_npx` cache path is
+- Running via a package runner (`npx -y databricks-axi setup hooks`,
+  `pnpm dlx`, `yarn dlx`, `bunx`) is refused. The exec path is written
+  verbatim into all four hook configs, and every runner's cache path is
   pinned to whatever version was current at setup time and can be pruned
-  out from under the hooks. The check is a `_npx` path segment, tested
-  before the eligibility check because an npx path otherwise matches
-  `dist/bin/databricks-axi.js` and would install silently. Install
-  globally (`npm i -g databricks-axi`) first.
+  out from under the hooks. The check is a `_npx`, `dlx*` or `bunx-*` path
+  segment, tested before the eligibility check because those paths
+  otherwise match `dist/bin/databricks-axi.js` and would install silently.
+  Install globally (`npm i -g databricks-axi`) first.
 - Eligibility is checked against a real packaged entrypoint. `pnpm run dev`
   (`tsx bin/databricks-axi.ts`) always fails the check, since the `.ts`
   dev entrypoint can't match `dist/bin/databricks-axi.js` or the bin-name
