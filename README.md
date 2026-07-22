@@ -31,8 +31,8 @@ context every session, and it is confined to SQL: it cannot trigger a job
 run or touch anything outside that surface, so it ends up querying `system`
 tables to triage a failed job instead of just asking the jobs API.
 Databricks Field Engineering's ai-dev-kit MCP server covers the full
-surface, close to 40 tools, but pays for that coverage with the largest
-schema load of any option here.
+surface, 44 tools (~154 dispatchable operations), but pays for that coverage
+with the largest schema load of any option here.
 
 AXI is a set of interface design principles for CLIs meant to be driven by
 agents rather than humans: structured output, minimal schemas that expand
@@ -165,7 +165,25 @@ demo, not the benchmark; see [tools/arena/README.md](tools/arena/README.md).
 
 ## Usage
 
-No install needed:
+Install the Agent Skill. It works in 70+ coding agents, including Claude
+Code, Cursor, Codex, GitHub Copilot, Gemini CLI, Windsurf, Zed, Amp, Cline,
+OpenCode, Warp, Junie, goose, and Roo Code:
+
+```bash
+npx skills add p33ves/databricks-axi --skill databricks-axi -g
+```
+
+That writes to `.agents/skills/`, the cross-agent convention, and symlinks
+Claude Code. Drop `-g` to install into the current project instead, so the
+skill is committed and shared with your team.
+
+On Claude Code, Codex, and OpenCode, add ambient session context:
+
+```bash
+databricks-axi setup hooks
+```
+
+Or skip both and run it directly, no install needed:
 
 ```bash
 npx -y databricks-axi            # ambient home view
@@ -175,12 +193,6 @@ npx -y databricks-axi --help
 Cold `npx` resolution is a one-time cost on that first bare run; once
 `databricks-axi setup hooks` installs the session-start hook, every hooked
 agent session invokes the installed binary directly and pays none of it.
-
-Install the Agent Skill (Claude Code and compatible harnesses):
-
-```bash
-npx skills add p33ves/databricks-axi --skill databricks-axi -g
-```
 
 ## Roadmap
 
