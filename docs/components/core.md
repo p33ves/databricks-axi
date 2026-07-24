@@ -184,7 +184,7 @@ requireId, renderRows }` bound to that domain's name (so usage errors
   generated client-side cap ("Maximum number of results to return") over a
   drained page iterator, the server page size is a separate flag where one
   exists (`clusters list --page-size`, `tables`/`volumes list
-  --max-results`), and none accepts `--page-token`. Re-check with
+--max-results`), and none accepts `--page-token`. Re-check with
   `databricks <cmd> --help` on a CLI bump: if `--limit` ever reverts to
   naming a page length, `total` would silently under-report and these nine
   would have to fall back to the legacy heuristic.

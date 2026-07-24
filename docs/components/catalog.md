@@ -139,7 +139,9 @@ list`) — this and `sql history` are the only two commands in the repo
 ## Tests
 
 `test/catalog.test.ts` uses `setupCli()`/`fake-databricks.ts`. Covers
-bare-array vs. wrapped-object response tolerance, `has_more` pagination,
+bare-array vs. wrapped-object response tolerance, the ceiling-fetch argv
+(`--limit 1000` upstream regardless of the display `--limit`) with
+`total`/`has_more` off the sliced page and the `"1000+"` ceiling-hit note,
 empty states (including the Free Edition catalog note), `--fields`
 validation, dotted-arg splitting with the `--omit-columns`/
 `--omit-properties` flags for tables, leading-dash-smuggling rejection for

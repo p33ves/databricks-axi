@@ -3,7 +3,8 @@
 Source: `src/commands/jobs.ts`. Tests: `test/jobs.test.ts`.
 
 Read and control Databricks Jobs: list jobs, view a job's config, trigger a
-run, list/view runs, fetch run logs, and cancel a run.
+run, list/view runs, roll up recent run history, fetch run logs, and cancel
+a run.
 
 ## Subcommands
 
@@ -73,7 +74,8 @@ upstream's own ~20-minute block on `run-now`.
   dependencies).
 - `run`: `run_id` (+ `state` if upstream returns one) and a `runs view`
   follow-up.
-- `runs`: same `listResult`/`opts.total: true` treatment as `list`. Rows are
+- `runs`: same `listResult`/`opts.total: true` treatment as `list`, except
+  the display `--limit` defaults to 20 here, not 30. Rows are
   the raw upstream items with the derived display fields (`state`,
   `start_time` as ISO, `duration_s`) merged in, so `--fields` can select
   either raw upstream keys or the derived ones, from the full

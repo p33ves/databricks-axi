@@ -39,8 +39,9 @@ produce.
   deliberate exemption. Because upstream returns the true full list with
   no `--limit` of its own, the code knows the _exact_ total
   (`items.length`) and reports precise truncation
-  (`showing N of TOTAL entries — rerun with --limit TOTAL`) instead of the
-  usual `has_more: true` heuristic every other list domain uses.
+  (`showing N of TOTAL entries — rerun with --limit TOTAL`) instead of
+  either `listResult` shape — the full-page `has_more` heuristic or the
+  ceiling-bounded `total` (see [core.md](core.md)).
   Default fields: `name`, `is_directory`, `size` (human-readable, via
   `humanSize()`, applied before `renderRows` so `--fields size` also picks
   up the formatted string — there's no separate raw-byte field).

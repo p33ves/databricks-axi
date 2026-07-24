@@ -212,7 +212,7 @@ v1 command surface (see the AXI standard for the principles each follows):
 | Domain        | Verbs                                                                                            |
 | ------------- | ------------------------------------------------------------------------------------------------ |
 | `home`        | ambient context dashboard ✅                                                                     |
-| `jobs`        | list, view, run, runs, logs, cancel ✅                                                           |
+| `jobs`        | list, view, run, runs, runs summary, logs, cancel ✅                                             |
 | `clusters`    | list, view, start, stop ✅                                                                       |
 | `sql`         | warehouses, exec, statement view, history ✅                                                     |
 | `catalog`     | catalogs, schemas, tables, table view, volumes, volume view, functions, function view, grants ✅ |

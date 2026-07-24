@@ -68,7 +68,8 @@ opaque strings.
 ## Tests
 
 `test/serving.test.ts` uses `setupCli()`/`fake-databricks.ts`. Covers list
-pagination from a bare-array response, field selection, the
+pagination from a bare-array response (ceiling-fetch argv upstream,
+`total`/`has_more` off the display `--limit` slice), field selection, the
 foundation-model vs. custom-endpoint served-entity rendering (including the
 absent-`entity_version`/`workload_size` case), the "(updating)" compact
 state suffix, the live serving-404 NOT_FOUND mapping, and dispatch-level
