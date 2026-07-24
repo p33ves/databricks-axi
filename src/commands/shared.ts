@@ -116,13 +116,17 @@ export const LIST_FLAGS = {
 
 /** Internal fetch ceiling for the precise `total` on the cheaply-countable
  * list surfaces (jobs list/runs, catalog catalogs/schemas/tables/volumes/
- * functions, clusters list, serving list — the surfaces confirmed or
- * believed to auto-drain the full set into a single capped call). Those
- * domains fetch this many rows upstream regardless of the agent's own
- * `--limit` (which caps DISPLAY only) so `listResult` can report a true
- * `total` instead of the rows-shown heuristic. Bounded, not unbounded
- * auto-pagination (AGENTS.md sharp edge). ponytail: 1000 ceiling, raise if
- * a real workspace clips it. */
+ * functions, clusters list, serving list). All nine take `--limit` as a
+ * client-side cap over an auto-drained page iterator, not as a server page
+ * size: their `--limit` carries the same generated "Maximum number of
+ * results to return" help text (API-field flags keep their API wording),
+ * the server page size is a separate flag where one exists (`clusters list
+ * --page-size`, `tables`/`volumes list --max-results`), and none takes
+ * `--page-token` (pinned against CLI v1.6.0). So these domains fetch this
+ * many rows upstream regardless of the agent's own `--limit` (which caps
+ * DISPLAY only) and `listResult` can report a true `total` instead of the
+ * rows-shown heuristic. Bounded, not unbounded auto-pagination (AGENTS.md
+ * sharp edge). ponytail: 1000 ceiling, raise if a real workspace clips it. */
 export const TOTAL_FETCH_CEILING = 1000;
 
 /** `--limit` to suggest for a rerun in total mode. The full fetch is

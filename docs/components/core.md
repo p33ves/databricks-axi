@@ -172,14 +172,22 @@ requireId, renderRows }` bound to that domain's name (so usage errors
 - `LIST_FLAGS`: the `{ profile, limit, fields }` flag spec every
   list-shaped subcommand shares.
 - `TOTAL_FETCH_CEILING` (1000): the internal fetch cap for the precise
-  `total` on the surfaces confirmed or believed to auto-drain the full set
-  into a single client-capped call: `jobs list`, `jobs runs`/`list-runs`,
+  `total` on the surfaces that auto-drain the full set into a single
+  client-capped call: `jobs list`, `jobs runs`/`list-runs`,
   `catalog catalogs`/`schemas`/`tables`/`volumes`/`functions`,
   `clusters list`, `serving list`. Those nine call `listResult` with
   `opts.total: true` and always fetch `--limit TOTAL_FETCH_CEILING`
   upstream regardless of the agent's own `--limit`, which caps DISPLAY
   only. Bounded, not unbounded auto-pagination (the AGENTS.md sharp edge);
-  tunable, raise only if a real workspace clips it.
+  tunable, raise only if a real workspace clips it. The drain is a property
+  of the upstream flag, not an assumption: on all nine, `--limit` is the
+  generated client-side cap ("Maximum number of results to return") over a
+  drained page iterator, the server page size is a separate flag where one
+  exists (`clusters list --page-size`, `tables`/`volumes list
+  --max-results`), and none accepts `--page-token`. Re-check with
+  `databricks <cmd> --help` on a CLI bump: if `--limit` ever reverts to
+  naming a page length, `total` would silently under-report and these nine
+  would have to fall back to the legacy heuristic.
 - `listResult(key, rows, limit, opts)`: the shared list-result tail —
   empty state and either the legacy `count`/full-page `has_more` +
   rerun-with-double-limit envelope, or (`opts.total: true`) a precise
