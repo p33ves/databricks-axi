@@ -699,6 +699,51 @@ describe("jobs runs summary", () => {
     expect(out).toContain("failed: 1");
     expect(out).toContain("other: 0");
     expect(out).toContain("running: 1");
+    // One failure is not a "common" error — that is just first_failed.
+    expect(out).not.toContain("common_error");
+  });
+
+  it("reports the most frequent failure line as common_error, redacted, without an N+1 walk", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [
+        {
+          run_id: 5,
+          job_id: 101,
+          state: {
+            result_state: "FAILED",
+            state_message: "RuntimeError: boom (token dapifedcba9876543210)",
+          },
+        },
+        {
+          run_id: 4,
+          job_id: 101,
+          state: {
+            result_state: "FAILED",
+            state_message: "RuntimeError: boom (token dapifedcba9876543210)",
+          },
+        },
+        {
+          run_id: 3,
+          job_id: 101,
+          state: { result_state: "FAILED", state_message: "OtherError: nope" },
+        },
+        runRow(2, "SUCCESS"),
+      ],
+    });
+    t.fake.respond("jobs get-run", { run_id: 5, tasks: [] });
+    const { out } = await t.run(["jobs", "runs", "summary"]);
+    // Only the window fetch plus the single first_failed get-run — the common
+    // error comes from list-runs' own state_message, not one call per failure.
+    expect(t.fake.calls()).toEqual([
+      ["jobs", "list-runs", "--limit", "50", "-o", "json"],
+      ["jobs", "get-run", "5", "-o", "json"],
+    ]);
+    expect(out).toContain("failed: 3");
+    expect(out).toContain("common_error:");
+    expect(out).toContain("RuntimeError: boom");
+    // Secrets in the message are redacted, same as first_failed.error.
+    expect(out).not.toContain("dapifedcba9876543210");
+    expect(out).toContain("[redacted]");
   });
 
   it("keeps cancelled, timed-out, and skipped runs out of the failed tally", async () => {

@@ -57,11 +57,13 @@ notes:
   list/runs: --limit fetches one page; add --total for an exact count from a
   bounded fetch (costs extra round trips, --limit then caps rows shown only)
   runs summary: audit rollup over a bounded window (default 50, max 200
-  recent runs) of state tallies plus the first failing run/task/error;
-  "running" is every run still in flight (life_cycle running, pending, queued,
-  or blocked); "failed" counts genuine failures only, including the
-  result_state-less INTERNAL_ERROR; canceled, timed-out, excluded, disabled,
-  concurrency-capped, and skipped runs are terminal but tally as "other"
+  recent runs) of state tallies plus the first failing run/task/error, and
+  common_error (the failure line shared by the most runs, only when more than
+  one failure shares it); "running" is every run still in flight (life_cycle
+  running, pending, queued, or blocked); "failed" counts genuine failures
+  only, including the result_state-less INTERNAL_ERROR; canceled, timed-out,
+  excluded, disabled, concurrency-capped, and skipped runs are terminal but
+  tally as "other"
 `;
 
 type Raw = Record<string, unknown>;
@@ -418,15 +420,36 @@ async function runsSummary(args: string[]): Promise<AxiRenderable> {
   let failed = 0;
   // Terminal but neither: canceled, timed out, or skipped.
   let other = 0;
+  // Most-frequent failure message across the window. Read from the run-level
+  // `state_message` list-runs already returns, so the "what do the failures
+  // have in common" fan-out costs no extra calls (no N+1 over the failures).
+  const errorCounts = new Map<string, number>();
   for (const run of runs) {
     if (run.state?.result_state === "SUCCESS") {
       success++;
     } else if (isGenuineFailure(run)) {
       failed++;
+      const message = run.state?.state_message;
+      if (message) {
+        const line = redactSecrets(message).split("\n")[0]?.trim();
+        if (line) {
+          errorCounts.set(line, (errorCounts.get(line) ?? 0) + 1);
+        }
+      }
     } else if (isTerminal(run)) {
       // Including the terminal life cycles that carry no result_state at
       // all (SKIPPED) — done, so not part of the in-flight remainder.
       other++;
+    }
+  }
+  // The single most common failure line, ties broken toward the newest run
+  // (Map preserves first-seen order and runs come newest-first).
+  let commonError: string | undefined;
+  let commonErrorCount = 0;
+  for (const [line, count] of errorCounts) {
+    if (count > commonErrorCount) {
+      commonError = line;
+      commonErrorCount = count;
     }
   }
   // Remainder: not terminal in any form — actively RUNNING plus
@@ -506,6 +529,12 @@ async function runsSummary(args: string[]): Promise<AxiRenderable> {
       // the rollup just omits first_failed, same shape as the no-failures
       // case below.
     }
+  }
+  // Only when more than one failure actually shares a line — a single
+  // failure's message is already `first_failed.error`, and echoing it as a
+  // "common" error would overstate a sample of one.
+  if (commonError && commonErrorCount > 1) {
+    out.common_error = commonError;
   }
   help.push(`databricks-axi jobs runs${jobId ? ` ${jobId}` : ""}${p}`);
   out.help = help;
