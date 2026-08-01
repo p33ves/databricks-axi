@@ -57,9 +57,10 @@ notes:
   bounded fetch (costs extra round trips, --limit then caps rows shown only)
   runs summary: audit rollup over a bounded window (default 50, max 200
   recent runs) of state tallies plus the first failing run/task/error;
-  "running" means no terminal result_state yet (running, pending, queued,
-  or skipped), not only actively-running runs; "failed" counts genuine
-  failures only — canceled, timed-out, and skipped runs tally as "other"
+  "running" means no terminal result_state yet (life_cycle running, pending,
+  queued, or skipped), not only actively-running runs; "failed" counts genuine
+  failures only: canceled, timed-out, excluded, disabled, and
+  concurrency-capped runs are terminal but tally as "other"
 `;
 
 type Raw = Record<string, unknown>;
