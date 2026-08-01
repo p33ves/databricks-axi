@@ -5,8 +5,9 @@ Covers `src/cli.ts`, `src/databricks.ts`, `src/errors.ts`,
 modules every domain command depends on. Tests:
 `test/cli.test.ts`, `test/databricks.test.ts`, `test/errors.test.ts`,
 `test/truncate.test.ts`, and `test/shared.test.ts` — the last covering only
-`totalMode`'s fetch bound and spawn budget, which a CLI-level test can't
-observe without staging a real multi-page drain. The rest of
+`totalMode`'s fetch bound and spawn budget (which a CLI-level test can't
+observe without staging a real multi-page drain) plus `nextLimit`'s two
+rerun-step cases, count-bounded and past-the-bound. The rest of
 `src/commands/shared.ts` is exercised indirectly through every domain's own
 test suite, as is `src/context.ts` (plus `test/home.test.ts` and
 `test/doctor.test.ts`).
