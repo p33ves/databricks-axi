@@ -121,9 +121,31 @@ describe("jobs list", () => {
     expect(out).toContain("total: 1000");
     expect(out).toContain("has_more: true");
     expect(out).toContain("truncated:");
-    // Already showing everything the pinned ceiling fetch got — a bigger
-    // --limit can't get past TOTAL_FETCH_CEILING, so no rerun is suggested.
+    // Already showing everything the ceiling fetch got, and nextLimit is
+    // bounded by the true count, so there's no bigger page to suggest.
     expect(out).not.toContain("jobs list --limit");
+  });
+
+  it("keeps a --limit above the ceiling as the fetch bound so --total never shrinks the page", async () => {
+    t.fake.respond("jobs list", {
+      jobs: Array.from({ length: 1500 }, (_, i) => ({
+        job_id: i,
+        settings: { name: `job-${i}` },
+      })),
+    });
+    const { out } = await t.run(["jobs", "list", "--limit", "2000", "--total"]);
+    // The caller asked to display 2000 rows; --total only adds a count, so
+    // it must not drop the upstream fetch back to the 1000 ceiling.
+    expect(t.fake.calls()).toEqual([
+      ["jobs", "list", "--limit", "2000", "-o", "json"],
+    ]);
+    expect(out).toContain("jobs[1500]");
+    expect(out).toContain("count: 1500");
+    expect(out).toContain("total: 1500");
+    // Short of the 2000-row fetch bound: the true end of the list, not a
+    // clipped count, so no ceiling caveat.
+    expect(out).not.toContain("has_more");
+    expect(out).not.toContain("truncated:");
   });
 
   it("passes the display --limit upstream unless --total opts into the ceiling", async () => {
@@ -700,6 +722,40 @@ describe("jobs runs summary", () => {
     expect(out).toContain("other: 6");
     expect(out).toContain("running: 0");
     expect(out).not.toContain("first_failed");
+  });
+
+  it("counts an INTERNAL_ERROR life cycle as a failure, not as running", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [
+        runRow(1, "SUCCESS"),
+        // A Jobs-service-level failure carries no result_state at all.
+        {
+          run_id: 2,
+          job_id: 101,
+          state: { life_cycle_state: "INTERNAL_ERROR" },
+        },
+      ],
+    });
+    t.fake.respond("jobs get-run", { run_id: 2, tasks: [] });
+    const { out } = await t.run(["jobs", "runs", "summary"]);
+    expect(out).toContain("failed: 1");
+    expect(out).toContain("other: 0");
+    expect(out).toContain("running: 0");
+    expect(out).toContain("run_id: 2");
+  });
+
+  it("tallies a result_state-less SKIPPED run as other, not as running", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [
+        { run_id: 1, job_id: 101, state: { life_cycle_state: "SKIPPED" } },
+        { run_id: 2, job_id: 101, state: { life_cycle_state: "QUEUED" } },
+      ],
+    });
+    const { out } = await t.run(["jobs", "runs", "summary"]);
+    expect(out).toContain("failed: 0");
+    expect(out).toContain("other: 1");
+    // Only the genuinely in-flight QUEUED run.
+    expect(out).toContain("running: 1");
   });
 
   it("filters to one job, passing --job-id and reporting job_id", async () => {

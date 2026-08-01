@@ -9,6 +9,7 @@ import {
   domainHelpers,
   isFailed,
   isGenuineFailure,
+  isTerminal,
   listResult,
   profileSuffix,
   runWithNotFoundHelp,
@@ -57,10 +58,10 @@ notes:
   bounded fetch (costs extra round trips, --limit then caps rows shown only)
   runs summary: audit rollup over a bounded window (default 50, max 200
   recent runs) of state tallies plus the first failing run/task/error;
-  "running" means no terminal result_state yet (life_cycle running, pending,
-  queued, or skipped), not only actively-running runs; "failed" counts genuine
-  failures only: canceled, timed-out, excluded, disabled, and
-  concurrency-capped runs are terminal but tally as "other"
+  "running" is every run still in flight (life_cycle running, pending, queued,
+  or blocked); "failed" counts genuine failures only, including the
+  result_state-less INTERNAL_ERROR; canceled, timed-out, excluded, disabled,
+  concurrency-capped, and skipped runs are terminal but tally as "other"
 `;
 
 type Raw = Record<string, unknown>;
@@ -130,7 +131,7 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
   const limit = parseIntFlag(flags, "limit", 30);
   const counted = totalMode(flags, limit);
   const argv = ["jobs", "list", "--limit", String(counted.fetch)];
-  const parsed = await runJobs(argv, spawnOpts(flags));
+  const parsed = await runJobs(argv, counted.spawn);
   const items = asList(parsed, "jobs");
   const flattened = items.map((job) => ({
     ...job,
@@ -304,7 +305,7 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
     jobId = requireId(positional, "jobs runs [job_id]");
     argv.push("--job-id", jobId);
   }
-  const parsed = await runJobs(argv, spawnOpts(flags));
+  const parsed = await runJobs(argv, counted.spawn);
   const runs = asList(parsed, "runs") as RawRun[];
   // Spread-raw then override with the derived display fields, so --fields
   // can select both raw upstream keys and the computed columns the default
@@ -414,11 +415,13 @@ async function runsSummary(args: string[]): Promise<AxiRenderable> {
       success++;
     } else if (isGenuineFailure(run)) {
       failed++;
-    } else if (typeof run.state?.result_state === "string") {
+    } else if (isTerminal(run)) {
+      // Including the terminal life cycles that carry no result_state at
+      // all (SKIPPED) — done, so not part of the in-flight remainder.
       other++;
     }
   }
-  // Remainder: no terminal result_state yet — covers actively RUNNING plus
+  // Remainder: not terminal in any form — actively RUNNING plus
   // PENDING/QUEUED/BLOCKED, not just "running" in the literal sense.
   const running = runs.length - success - failed - other;
   // A full window means the tallies only cover the newest `window` runs —

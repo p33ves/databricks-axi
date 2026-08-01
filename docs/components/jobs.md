@@ -102,16 +102,19 @@ upstream's own ~20-minute block on `run-now`.
 - `runs summary`: hand-built envelope (not `listResult` — its shape isn't a
   rows array), `{ job_id?, window, success, failed, other, running,
 truncated?, first_failed?, help }`. `failed` counts genuine failures only
-  (`FAILED`, `UPSTREAM_FAILED`, ...); the cancel/timeout/skip states listed
+  (`FAILED`, `UPSTREAM_FAILED`, ...) plus the `result_state`-less
+  `INTERNAL_ERROR` life cycle; the cancel/timeout/skip states listed
   in `shared.ts`'s `NOT_FAILURE_STATES` (`CANCELED`, `UPSTREAM_CANCELED`,
   `TIMEDOUT`, `EXCLUDED`, `MAXIMUM_CONCURRENT_RUNS_REACHED`, `DISABLED`)
   are terminal but not broken, so they tally as `other` instead of
-  inflating a reported audit number. The four tallies
+  inflating a reported audit number, and so does the `SKIPPED` life cycle,
+  which is terminal with no `result_state` of its own. The four tallies
   add up to `window`. `window` is the number of runs actually fetched
   within the bounded window (`--limit`, default 50, capped at the internal
-  ceiling 200). `running` is a remainder, not "actively running": it's every
-  run with no terminal `result_state` yet, which also catches
-  PENDING/QUEUED/BLOCKED states. `truncated` is present whenever the fetch
+  ceiling 200). `running` is still a remainder, but of `isTerminal` rather
+  than of `result_state` alone, so it covers only genuinely in-flight runs:
+  actively RUNNING plus PENDING/QUEUED/BLOCKED, not runs that finished
+  without a `result_state`. `truncated` is present whenever the fetch
   filled the requested window (`runs.length >= window`), not just at the
   200-run ceiling: a full window means the tallies only cover the newest
   `window` runs, so `failed: 0` there is not an authoritative "nothing ever
@@ -170,19 +173,26 @@ error? }` — the most recent failing run (`jobs list-runs` returns
   `JSON.parse` so they survive as exact strings past the 2^53 float
   boundary — this domain's ids are treated as `number | string`.
 - `list`/`runs` fetch one `--limit` page by default; `--total` swaps that
-  for a `TOTAL_FETCH_CEILING` (1000) fetch with `--limit` capping DISPLAY
-  only — never auto-paginating past that bound (AGENTS.md sharp edge). A
-  fetch that hits the ceiling still reports a numeric `total` (1000) but
-  adds a `truncated` note, so the count is never claimed as exact.
+  for a `totalFetch(limit)` fetch (`TOTAL_FETCH_CEILING` 1000, or `--limit`
+  itself when it's above the ceiling, so `--total` never shrinks a bigger
+  page the caller asked for) with `--limit` capping DISPLAY only — never
+  auto-paginating past that bound (AGENTS.md sharp edge). A fetch that
+  fills the bound still reports a numeric `total` but adds a `truncated`
+  note, so the count is never claimed as exact. `--total` also passes
+  `TOTAL_TIMEOUT_MS` (5 min) instead of the 30s spawn default, since the
+  drain is many sequential server pages (`list-runs` has no `--page-size`).
 - `runs summary`'s window is capped at 200 (`RUNS_SUMMARY_CEILING`)
   independent of `TOTAL_FETCH_CEILING` — a smaller bound since the command
   also fans out one `get-run`/`get-run-output` pair on top of the window
   fetch.
 - `runs summary`'s `running` count is a remainder (`window - success -
-failed - other`), not "actively running": it also absorbs
-  PENDING/QUEUED/BLOCKED states, which have no terminal `result_state`
-  either. Documented in `JOBS_HELP` and here rather than silently
-  overloading the name.
+failed - other`), so it absorbs PENDING/QUEUED/BLOCKED alongside actively
+  RUNNING. It is a remainder of `isTerminal`, not of `result_state`:
+  `SKIPPED` and `INTERNAL_ERROR` are terminal life cycles that carry no
+  `result_state`, so a `result_state`-only remainder would report finished
+  runs as in-flight (and never count an `INTERNAL_ERROR` as a failure).
+  Documented in `JOBS_HELP` and here rather than silently overloading the
+  name.
 
 ## Tests
 

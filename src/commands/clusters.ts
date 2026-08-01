@@ -92,7 +92,7 @@ async function clustersList(args: string[]): Promise<AxiRenderable> {
   const counted = totalMode(flags, limit);
   const parsed = await runClusters(
     ["clusters", "list", "--limit", String(counted.fetch)],
-    spawnOpts(flags),
+    counted.spawn,
   );
   const items = asList(parsed, "clusters") as RawCluster[];
   const rows = renderRows(items, flags, [

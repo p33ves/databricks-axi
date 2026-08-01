@@ -74,10 +74,33 @@ const NOT_FAILURE_STATES = new Set([
 
 /** Terminal and actually broken (FAILED, UPSTREAM_FAILED, ...) — the
  * narrower predicate for reported audit numbers, where a cancelled run
- * counted as a failure is a wrong answer, not just a wide suggestion. */
+ * counted as a failure is a wrong answer, not just a wide suggestion.
+ * INTERNAL_ERROR is a Jobs-service-level failure that carries no
+ * `result_state` at all, so it's matched on the life cycle instead. */
 export function isGenuineFailure(item: { state?: RunState }): boolean {
   const result = item.state?.result_state;
-  return typeof result === "string" && !NOT_FAILURE_STATES.has(result);
+  if (typeof result === "string") {
+    return !NOT_FAILURE_STATES.has(result);
+  }
+  return item.state?.life_cycle_state === "INTERNAL_ERROR";
+}
+
+/** Terminal life cycle states. TERMINATED normally carries a `result_state`;
+ * SKIPPED and INTERNAL_ERROR never do, so a `result_state`-only check reads
+ * them as still in flight. */
+const TERMINAL_LIFE_CYCLE_STATES = new Set([
+  "TERMINATED",
+  "SKIPPED",
+  "INTERNAL_ERROR",
+]);
+
+/** Done, whatever the outcome — the complement of "genuinely in flight"
+ * (RUNNING, PENDING, QUEUED, BLOCKED, WAITING_FOR_RETRY, TERMINATING). */
+export function isTerminal(item: { state?: RunState }): boolean {
+  return (
+    typeof item.state?.result_state === "string" ||
+    TERMINAL_LIFE_CYCLE_STATES.has(item.state?.life_cycle_state ?? "")
+  );
 }
 
 /** Parent directory of a slash-separated workspace/dbfs path ("/" at the root). */
@@ -158,6 +181,19 @@ export const TOTAL_LIST_FLAGS = {
  * ponytail: 1000 ceiling, raise if a real workspace clips it. */
 export const TOTAL_FETCH_CEILING = 1000;
 
+/** Rows a `--total` fetch actually pulls upstream. The ceiling, except when
+ * the caller explicitly asked to display more than that: `--total` only adds
+ * a count, so it must never shrink a page they'd have got without it. */
+export function totalFetch(limit: number): number {
+  return Math.max(limit, TOTAL_FETCH_CEILING);
+}
+
+/** Spawn budget for a `--total` drain. The default 30s covers a single page,
+ * not the many sequential server pages a ceiling fetch walks (`jobs
+ * list-runs` has no `--page-size` at all), where a TIMEOUT would be bogus —
+ * the drain is working, just slower than one round trip. */
+export const TOTAL_TIMEOUT_MS = 5 * 60_000;
+
 /** `--limit` to suggest for a rerun in total mode. The full fetch is
  * already in hand, so grow the page geometrically and stop at the true
  * count instead of guessing at a doubled limit. */
@@ -176,12 +212,19 @@ export function totalMode(
 ): {
   total: boolean;
   fetch: number;
+  /** Spawn options for the list call — `spawnOpts` plus, in total mode, the
+   * wider timeout the multi-page drain needs. */
+  spawn: RunDatabricksOptions;
   rerun: (fetched: number) => string;
 } {
   const total = flags.get("total") === true;
   return {
     total,
-    fetch: total ? TOTAL_FETCH_CEILING : limit,
+    fetch: total ? totalFetch(limit) : limit,
+    spawn: {
+      ...spawnOpts(flags),
+      ...(total ? { timeoutMs: TOTAL_TIMEOUT_MS } : {}),
+    },
     // In total mode the true count is known, so the suggestion is bounded
     // by it (and keeps --total, or the rerun would silently drop back to
     // the heuristic); otherwise it's the legacy blind doubling.
@@ -220,7 +263,11 @@ export function listResult(
   }
   const allHelp = [...opts.help];
   if (opts.total) {
-    const hitCeiling = rows.length >= TOTAL_FETCH_CEILING;
+    // The fetch bound, not the bare ceiling: a caller whose --limit is above
+    // the ceiling fetched (and displays) that many rows, so a short page is
+    // the true end of the list, not a clipped count.
+    const fetched = totalFetch(limit);
+    const hitCeiling = rows.length >= fetched;
     const sliced = rows.slice(0, limit);
     // `total` stays numeric even at the ceiling — a consumer comparing or
     // summing it shouldn't get a string in the one case that matters; the
@@ -237,13 +284,13 @@ export function listResult(
       allHelp.unshift(opts.rerun);
     } else if (hitCeiling) {
       // Already displaying everything the ceiling fetch got; a bigger
-      // --limit can't get past the pinned TOTAL_FETCH_CEILING fetch, so
-      // there's no rerun suggestion to make — the `truncated` note below
-      // is the only signal that more may exist.
+      // --limit raises the fetch bound too, so the rerun suggestion would
+      // just repeat the current --limit — the `truncated` note below is the
+      // signal that more may exist.
       out.has_more = true;
     }
     if (hitCeiling) {
-      out.truncated = `stopped counting at the ${TOTAL_FETCH_CEILING}-row fetch ceiling; true total may be higher`;
+      out.truncated = `stopped counting at the ${fetched}-row fetch ceiling; true total may be higher`;
     }
     out.help = allHelp;
     return out;

@@ -4,10 +4,12 @@ Covers `src/cli.ts`, `src/databricks.ts`, `src/errors.ts`,
 `src/truncate.ts`, `src/context.ts`, and `src/commands/shared.ts` — the
 modules every domain command depends on. Tests:
 `test/cli.test.ts`, `test/databricks.test.ts`, `test/errors.test.ts`,
-`test/truncate.test.ts` (`src/context.ts` and `src/commands/shared.ts`
-have no dedicated test files; they're exercised indirectly through every
-domain's own test suite, plus `test/home.test.ts` and `test/doctor.test.ts`
-for `context.ts`).
+`test/truncate.test.ts`, and `test/shared.test.ts` — the last covering only
+`totalMode`'s fetch bound and spawn budget, which a CLI-level test can't
+observe without staging a real multi-page drain. The rest of
+`src/commands/shared.ts` is exercised indirectly through every domain's own
+test suite, as is `src/context.ts` (plus `test/home.test.ts` and
+`test/doctor.test.ts`).
 
 ## `src/cli.ts`
 
@@ -177,8 +179,11 @@ requireId, renderRows }` bound to that domain's name (so usage errors
   fetches exactly one `--limit` page upstream and keeps the legacy
   full-page `has_more` heuristic — an agent asking for 5 rows pays for one
   page, not a drain. With `--total`, `totalMode` swaps the upstream
-  `--limit` for `TOTAL_FETCH_CEILING`, the agent's own `--limit` then caps
-  DISPLAY only, and `listResult` reports the exact fetched count. The
+  `--limit` for `totalFetch(limit)` (`max(limit, TOTAL_FETCH_CEILING)` — the
+  ceiling, except when the caller explicitly asked to display more than
+  that, since `--total` only adds a count and must never shrink a page they
+  would have got without it), the agent's own `--limit` then caps DISPLAY
+  only, and `listResult` reports the exact fetched count. The
   surfaces that accept `--total` are the ones that auto-drain the full set
   into a single client-capped call: `jobs list`, `jobs runs`/`list-runs`,
   `catalog catalogs`/`schemas`/`tables`/`volumes`/`functions`,
@@ -194,14 +199,22 @@ list --max-results`; `tables list` has no such flag), and none accepts
   under-report and `--total` would have to fall back to the legacy
   heuristic. `--total` also costs round trips: `jobs list-runs` has no
   `--page-size`, so a ceiling drain there is many sequential server pages,
-  which is exactly why it isn't the default.
+  which is exactly why it isn't the default. Those round trips also don't
+  fit the 30s default spawn budget, so `totalMode` returns a `spawn` option
+  bag (`spawnOpts(flags)` plus `timeoutMs: TOTAL_TIMEOUT_MS`, 5 min, in
+  total mode) that every `--total` call site passes instead of calling
+  `spawnOpts` itself — otherwise a working drain surfaces as a bogus
+  `TIMEOUT` whose "retry" suggestion can't help.
 - `listResult(key, rows, limit, opts)`: the shared list-result tail —
   empty state and either the legacy `count`/full-page `has_more` +
   rerun-with-double-limit envelope, or (`opts.total: true`, i.e. the caller
   passed `--total`) a precise `total`: `rows` is treated as the FULL
-  `TOTAL_FETCH_CEILING`-bounded fetch, sliced to `limit` for display, with
+  `totalFetch(limit)`-bounded fetch, sliced to `limit` for display, with
   `total` set to the exact fetched count and `has_more: count < total ||
-truncated`. A fetch that hits the ceiling adds a `truncated` note saying
+truncated`. A fetch that hits that bound (`totalFetch(limit)`, recomputed
+  from the same helper rather than compared against the bare ceiling — a
+  caller with an above-ceiling `--limit` fetched more, so a short page there
+  is the true end of the list) adds a `truncated` note saying
   the true total may be higher, and sets `has_more` even when the display
   `--limit` covered every fetched row — the ceiling, not the page, is what
   may be hiding rows there. `total` itself stays numeric (1000) so a
@@ -215,9 +228,11 @@ truncated`. A fetch that hits the ceiling adds a `truncated` note saying
   still land on the full 1000). `listResult` only surfaces it when a bigger
   `--limit` would actually show more than the current page; once the
   display `--limit` already covers everything the ceiling fetch got,
-  there's no rerun suggestion to make (a bigger `--limit` can't get past
-  that pinned fetch — the `truncated` note is the only signal that more may
-  exist beyond it). `dashboards list`, `pipelines list`/`events`, and
+  there's no rerun suggestion to make (`nextLimit` is bounded by the true
+  count, so it would just repeat the current `--limit` — the `truncated`
+  note is the signal that more may exist beyond it; a caller who wants past
+  the ceiling raises `--limit` above it themselves, which raises the fetch
+  bound with it). `dashboards list`, `pipelines list`/`events`, and
   `workspace ls` call `listResult` without `opts.total` and take no
   `--total` flag — their upstream calls aren't yet confirmed to auto-drain
   past one server page, so they're deliberately out of the surface list
@@ -263,13 +278,21 @@ ls` (upstream has no `--limit` at all, so it reports exact truncation
   over `life_cycle_state`, falling back to `"UNKNOWN"`; `isFailed` is true
   for any terminal `result_state` other than `SUCCESS`. Shared by
   `jobs.ts`'s run rendering and `context.ts`'s home-panel `fetchRecentRuns`.
-- `isGenuineFailure(item)`: the narrower sibling of `isFailed` — true only
-  for a terminal `result_state` outside `NOT_FAILURE_STATES` (`SUCCESS`
-  plus the cancel/timeout/skip states). `isFailed` is deliberately wide
-  because it only widens a follow-up suggestion; `isGenuineFailure` backs
-  reported audit numbers (`jobs runs summary`'s `failed` tally and its
-  `first_failed` pick), where counting a cancelled run as a failure is a
-  wrong answer.
+- `isGenuineFailure(item)`: the narrower sibling of `isFailed` — true for a
+  terminal `result_state` outside `NOT_FAILURE_STATES` (`SUCCESS` plus the
+  cancel/timeout/skip states), and for `life_cycle_state: INTERNAL_ERROR`,
+  a Jobs-service-level failure that carries no `result_state` at all and
+  would otherwise never be counted. `isFailed` is deliberately wide because
+  it only widens a follow-up suggestion; `isGenuineFailure` backs reported
+  audit numbers (`jobs runs summary`'s `failed` tally and its
+  `first_failed` pick), where counting a cancelled run as a failure — or
+  missing a service-level one — is a wrong answer.
+- `isTerminal(item)`: done, whatever the outcome — any `result_state`, or
+  one of the terminal life cycles (`TERMINATED`, `SKIPPED`,
+  `INTERNAL_ERROR`). The last two never carry a `result_state`, so a
+  `result_state`-only check reads them as still in flight; `jobs runs
+summary` uses this so its `running` remainder counts only genuinely
+  in-flight runs.
 - `WAIT_TIMEOUT_MS` (25 min): the `--wait` budget for async start/stop/run
   mutations, since upstream blocks up to ~20 min. Shared by `jobs`,
   `clusters`, and `sql` (`warehouses start`/`stop`).

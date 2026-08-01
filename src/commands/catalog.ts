@@ -134,7 +134,7 @@ async function catalogsList(args: string[]): Promise<AxiRenderable> {
   const counted = totalMode(flags, limit);
   const parsed = await runDatabricks(
     ["catalogs", "list", "--limit", String(counted.fetch)],
-    spawnOpts(flags),
+    counted.spawn,
   );
   const rows = renderRows(asList(parsed, "catalogs"), flags, [
     "name",
@@ -165,7 +165,7 @@ async function schemasList(args: string[]): Promise<AxiRenderable> {
   const p = profileSuffix(flags.get("profile"));
   const parsed = await runWithNotFoundHelp(
     ["schemas", "list", catalog, "--limit", String(counted.fetch)],
-    spawnOpts(flags),
+    counted.spawn,
     [`databricks-axi catalog catalogs${p}`],
   );
   // Upstream `name` is already the bare schema name (full_name carries the
@@ -208,7 +208,7 @@ async function scopedList(
   const p = profileSuffix(flags.get("profile"));
   const parsed = await runWithNotFoundHelp(
     cfg.argv(catalog, schema, counted.fetch),
-    spawnOpts(flags),
+    counted.spawn,
     [`databricks-axi catalog schemas ${catalog}${p}`],
   );
   const rows = renderRows(asList(parsed, cfg.noun), flags, cfg.fields);

@@ -95,7 +95,7 @@ async function servingList(args: string[]): Promise<AxiRenderable> {
   const counted = totalMode(flags, limit);
   const parsed = await runServing(
     ["serving-endpoints", "list", "--limit", String(counted.fetch)],
-    spawnOpts(flags),
+    counted.spawn,
   );
   const items = asList(parsed, "endpoints") as RawEndpoint[];
   // renderRows selects top-level keys verbatim (no nested flattening) — the
