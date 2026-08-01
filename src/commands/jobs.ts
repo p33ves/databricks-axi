@@ -186,7 +186,7 @@ async function jobsView(args: string[]): Promise<AxiRenderable> {
   }));
   out.tasks = tasks.some((task) => task.depends_on)
     ? tasks
-    : tasks.map(({ depends_on: _drop, ...rest }) => rest);
+    : tasks.map(({ task_key, type }) => ({ task_key, type }));
   const p = profileSuffix(flags.get("profile"));
   out.help = [
     `databricks-axi jobs run ${jobId}${p}`,
