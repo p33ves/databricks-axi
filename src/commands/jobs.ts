@@ -402,15 +402,21 @@ async function runsSummary(args: string[]): Promise<AxiRenderable> {
   // Tallies compute the same way whether or not any runs came back (all
   // zero on an empty window) — one code path, branching only on status/
   // first_failed below, not a duplicated empty-state block.
-  const success = runs.filter(
-    (r) => r.state?.result_state === "SUCCESS",
-  ).length;
+  let success = 0;
   // Genuine failures only — this is a reported audit number, so a window of
   // user-cancelled runs must not read as `failed: N`.
-  const failed = runs.filter(isGenuineFailure).length;
-  // Terminal but neither: canceled, timed out, or skipped. Its own tally so
-  // window still equals success + failed + other + running.
-  const other = runs.filter(isFailed).length - failed;
+  let failed = 0;
+  // Terminal but neither: canceled, timed out, or skipped.
+  let other = 0;
+  for (const run of runs) {
+    if (run.state?.result_state === "SUCCESS") {
+      success++;
+    } else if (isGenuineFailure(run)) {
+      failed++;
+    } else if (typeof run.state?.result_state === "string") {
+      other++;
+    }
+  }
   // Remainder: no terminal result_state yet — covers actively RUNNING plus
   // PENDING/QUEUED/BLOCKED, not just "running" in the literal sense.
   const running = runs.length - success - failed - other;

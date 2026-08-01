@@ -200,10 +200,13 @@ list --max-results`; `tables list` has no such flag), and none accepts
   rerun-with-double-limit envelope, or (`opts.total: true`, i.e. the caller
   passed `--total`) a precise `total`: `rows` is treated as the FULL
   `TOTAL_FETCH_CEILING`-bounded fetch, sliced to `limit` for display, with
-  `total` set to the exact fetched count and `has_more: count < total`. A
-  fetch that hits the ceiling adds a `truncated` note saying the true total
-  may be higher; `total` itself stays numeric (1000) so a consumer doing
-  arithmetic on it never gets a string in the one case that matters. Both
+  `total` set to the exact fetched count and `has_more: count < total ||
+truncated`. A fetch that hits the ceiling adds a `truncated` note saying
+  the true total may be higher, and sets `has_more` even when the display
+  `--limit` covered every fetched row — the ceiling, not the page, is what
+  may be hiding rows there. `total` itself stays numeric (1000) so a
+  consumer doing arithmetic on it never gets a string in the one case that
+  matters. Both
   modes build `opts.rerun` from `totalMode(...).rerun`: a blind doubled
   limit when the true count isn't known, and in total mode
   `nextLimit(limit, rows.length)` (`min(rows.length, limit * 4)`) plus

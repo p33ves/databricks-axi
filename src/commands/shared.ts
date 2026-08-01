@@ -60,13 +60,16 @@ export function isFailed(item: { state?: RunState }): boolean {
 }
 
 /** Terminal result states that aren't a genuine failure: cancellations
- * (user or upstream), timeouts, and condition-skipped runs. */
+ * (user or upstream), timeouts, and runs skipped by a condition, the job's
+ * concurrency cap, or a disabled job/task. */
 const NOT_FAILURE_STATES = new Set([
   "SUCCESS",
   "CANCELED",
   "TIMEDOUT",
   "EXCLUDED",
   "UPSTREAM_CANCELED",
+  "MAXIMUM_CONCURRENT_RUNS_REACHED",
+  "DISABLED",
 ]);
 
 /** Terminal and actually broken (FAILED, UPSTREAM_FAILED, ...) — the

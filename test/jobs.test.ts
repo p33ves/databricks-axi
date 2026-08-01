@@ -678,7 +678,7 @@ describe("jobs runs summary", () => {
     expect(out).toContain("running: 1");
   });
 
-  it("keeps cancelled and timed-out runs out of the failed tally", async () => {
+  it("keeps cancelled, timed-out, and skipped runs out of the failed tally", async () => {
     t.fake.respond("jobs list-runs", {
       runs: [
         runRow(1, "SUCCESS"),
@@ -686,6 +686,8 @@ describe("jobs runs summary", () => {
         runRow(3, "TIMEDOUT"),
         runRow(4, "UPSTREAM_CANCELED"),
         runRow(5, "EXCLUDED"),
+        runRow(6, "MAXIMUM_CONCURRENT_RUNS_REACHED"),
+        runRow(7, "DISABLED"),
       ],
     });
     const { out } = await t.run(["jobs", "runs", "summary"]);
@@ -695,7 +697,7 @@ describe("jobs runs summary", () => {
     ]);
     expect(out).toContain("success: 1");
     expect(out).toContain("failed: 0");
-    expect(out).toContain("other: 4");
+    expect(out).toContain("other: 6");
     expect(out).toContain("running: 0");
     expect(out).not.toContain("first_failed");
   });

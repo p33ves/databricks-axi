@@ -61,7 +61,9 @@ upstream's own ~20-minute block on `run-now`.
   the display `--limit` (default 30) out of the full ceiling-bounded fetch:
   `count` is rows shown; `total` is the exact fetched count, numeric even
   at `TOTAL_FETCH_CEILING`, where a `truncated` note says the true total
-  may be higher; `has_more` is `count < total`. The rerun suggestion on a
+  may be higher; `has_more` is `count < total || truncated` (a ceiling-hit
+  fetch flags `has_more` even when the page showed every fetched row). The
+  rerun suggestion on a
   truncated page names `nextLimit(limit, rows.length)` — a quadrupled page
   bounded by the true count, carrying `--total` forward — and is omitted
   entirely once the display `--limit` already covers everything the ceiling

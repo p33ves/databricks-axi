@@ -55,7 +55,8 @@ only. See Output shape below.
   ceiling-bounded fetch is sliced to the display `--limit` (default 30),
   `count` is rows shown, `total` is the exact fetched count (numeric even
   at the ceiling, where a `truncated` note says the true total may be
-  higher), `has_more` is `count < total`. Each has
+  higher), `has_more` is `count < total || truncated` (a ceiling-hit fetch
+  flags `has_more` even when the page showed every fetched row). Each has
   its own default field set: `catalogs` → `name, owner, catalog_type`;
   `schemas` → `name, owner` (upstream's `name` here is already the bare
   schema name, not `full_name`); `tables` → `name, table_type,
