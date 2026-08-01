@@ -46,8 +46,14 @@ export function asList(parsed: unknown, key: string): AxiStructuredOutput[] {
   return (obj[key] as AxiStructuredOutput[] | undefined) ?? [];
 }
 
-/** Shared by jobs.ts and context.ts's home-panel run rendering. */
-export type RunState = { result_state?: string; life_cycle_state?: string };
+/** Shared by jobs.ts and context.ts's home-panel run rendering.
+ * `state_message` is the run-level error/status text `list-runs` already
+ * returns, so a failure-error rollup can read it without an N+1 walk. */
+export type RunState = {
+  result_state?: string;
+  life_cycle_state?: string;
+  state_message?: string;
+};
 
 export function compactState(item: { state?: RunState }): string {
   return item.state?.result_state ?? item.state?.life_cycle_state ?? "UNKNOWN";

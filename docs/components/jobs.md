@@ -41,7 +41,9 @@ before it reaches argv.
   `jobs get-run <run_id>` on the most recent failing run and one
   `jobs get-run-output <task_run_id>` on its first failing task — a fixed
   small number of calls regardless of window size or failure count, never
-  a walk over every failing run
+  a walk over every failing run. `common_error` adds no calls of its own:
+  it is tallied from the run-level `state_message` the window's `list-runs`
+  already returns
 - `logs` → no upstream `logs` subcommand exists. It's built from
   `jobs get-run <run_id>` for the task list, then one
   `jobs get-run-output <task_run_id>` call per task (sequential, not
@@ -104,7 +106,8 @@ upstream's own ~20-minute block on `run-now`.
   `duration_s`).
 - `runs summary`: hand-built envelope (not `listResult` — its shape isn't a
   rows array), `{ job_id?, window, success, failed, other, running,
-truncated?, first_failed?, help }`. `failed` counts genuine failures only
+truncated?, first_failed?, common_error?, common_error_count?, help }`.
+  `failed` counts genuine failures only
   (`FAILED`, `UPSTREAM_FAILED`, ...) plus the `result_state`-less
   `INTERNAL_ERROR` life cycle; the cancel/timeout/skip states listed
   in `shared.ts`'s `NOT_FAILURE_STATES` (`CANCELED`, `UPSTREAM_CANCELED`,
@@ -135,7 +138,16 @@ error? }` — the most recent failing run (`jobs list-runs` returns
   (a transient `get-run` error, or `get-run-output` failing on the resolved
   task) just omits `first_failed` from the envelope rather than discarding
   the tallies already computed — the rollup never sinks over one detail
-  fetch.
+  fetch. `common_error` is the first line of the failure `state_message`
+  shared by the most runs in the window, redacted through `redactSecrets`
+  like `first_failed.error`, with `common_error_count` giving how many of
+  the `failed` runs share it (`failed` is the denominator, so the count
+  stays a plain number rather than an "N of M" string). Both keys are
+  emitted only when more than one failure shares a line: a single failure's
+  message is already `first_failed.error`, and calling a sample of one
+  "common" would overstate it. Ties go to the newest run. A
+  `state_message` that isn't a string is skipped rather than parsed,
+  same best-effort stance as the detail fetches above.
 - `logs`: per-task entries with `state`, and either `error`/`error_trace`
   (tail-truncated to the last 50 lines unless `--full`) or `output` (same
   truncation). Failed tasks sort first. Text passed through
@@ -225,4 +237,7 @@ rejection, and `runs summary`'s window/ceiling math, tallies (including
 cancelled/timed-out runs landing in `other`, not `failed`), `first_failed`
 (including both best-effort failure paths — a failing `get-run` and a
 failing `get-run-output` — the unresolved-task shape, and the
-no-failures/no-runs envelopes).
+no-failures/no-runs envelopes), and `common_error`/`common_error_count`
+(the redacted winning line and its count with no extra upstream calls, its
+suppression when only one failure carries a message, and a non-string
+`state_message` leaving the tallies intact).
