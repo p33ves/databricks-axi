@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  nextLimit,
   totalMode,
   TOTAL_FETCH_CEILING,
   TOTAL_TIMEOUT_MS,
@@ -17,6 +18,15 @@ describe("totalMode", () => {
     expect(counted.total).toBe(false);
     expect(counted.fetch).toBe(30);
     expect(counted.spawn).toEqual({ profile: "prod" });
+    // No bound to report a short page against outside total mode.
+    expect(counted.fetched).toBeUndefined();
+  });
+
+  it("hands listResult the bound it actually fetched with", () => {
+    expect(totalMode(flags([["total", true]]), 30).fetched).toBe(
+      TOTAL_FETCH_CEILING,
+    );
+    expect(totalMode(flags([["total", true]]), 2000).fetched).toBe(2000);
   });
 
   it("widens the spawn timeout for the multi-page --total drain", () => {
@@ -30,5 +40,18 @@ describe("totalMode", () => {
   it("never fetches fewer rows than the caller asked to display", () => {
     const counted = totalMode(flags([["total", true]]), 2000);
     expect(counted.fetch).toBe(2000);
+  });
+});
+
+describe("nextLimit", () => {
+  it("stops at the true count when rows are already fetched but unshown", () => {
+    expect(nextLimit(3, 5)).toBe(5);
+    expect(nextLimit(10, 1000)).toBe(40);
+  });
+
+  it("clears the bound when the display already covers the whole fetch", () => {
+    // The fetch filled its bound, so the true count is unknown and higher —
+    // a step capped at what was fetched would just repeat the current page.
+    expect(nextLimit(1000, 1000)).toBe(4000);
   });
 });

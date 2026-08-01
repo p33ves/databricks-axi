@@ -119,7 +119,7 @@ async function clustersList(args: string[]): Promise<AxiRenderable> {
       help: ["Create one in the workspace UI: Compute > Create compute"],
     },
     help,
-    total: counted.total,
+    fetched: counted.fetched,
   });
 }
 

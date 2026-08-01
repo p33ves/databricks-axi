@@ -57,7 +57,8 @@ upstream's own ~20-minute block on `run-now`.
 - `list`: envelope via `listResult` — default fields `job_id`, `name`
   (flattened out of `settings.name`), `creator_user_name`. Without
   `--total` that's the legacy `count`/full-page `has_more` shape over one
-  fetched page. With `--total` (`opts.total: true`) the rows are sliced to
+  fetched page. With `--total` (`opts.fetched` set to the bound the fetch
+  was allowed to reach) the rows are sliced to
   the display `--limit` (default 30) out of the full ceiling-bounded fetch:
   `count` is rows shown; `total` is the exact fetched count, numeric even
   at `TOTAL_FETCH_CEILING`, where a `truncated` note says the true total
@@ -65,9 +66,11 @@ upstream's own ~20-minute block on `run-now`.
   fetch flags `has_more` even when the page showed every fetched row). The
   rerun suggestion on a
   truncated page names `nextLimit(limit, rows.length)` — a quadrupled page
-  bounded by the true count, carrying `--total` forward — and is omitted
-  entirely once the display `--limit` already covers everything the ceiling
-  fetch got (a bigger `--limit` can't get past that pinned fetch).
+  bounded by the true count, carrying `--total` forward — and once the
+  display `--limit` already covers the whole fetch it quadruples past the
+  bound instead (`--limit 1000 --total` → `--limit 4000 --total`), since
+  raising `--limit` raises the fetch bound with it. No `has_more: true`
+  ships without a follow-up.
 - `view`: `job_id`, `name`, `creator_user_name` (same key as `jobs list`), an
   optional `schedule` string
   (`"<cron> (<pause_status>)"`) when a schedule exists, and `tasks` reduced
@@ -181,6 +184,12 @@ error? }` — the most recent failing run (`jobs list-runs` returns
   note, so the count is never claimed as exact. `--total` also passes
   `TOTAL_TIMEOUT_MS` (5 min) instead of the 30s spawn default, since the
   drain is many sequential server pages (`list-runs` has no `--page-size`).
+- `runs summary`'s window fetch is the same shape of drain (`list-runs` has
+  no `--page-size`, so 200 runs is several sequential server pages) at a
+  fifth of the scale, so it passes `RUNS_SUMMARY_TIMEOUT_MS` (60s, a fifth
+  of `TOTAL_TIMEOUT_MS`) rather than sitting on the 30s spawn default. The
+  `get-run`/`get-run-output` detail calls keep the default: they're single
+  object fetches, not drains.
 - `runs summary`'s window is capped at 200 (`RUNS_SUMMARY_CEILING`)
   independent of `TOTAL_FETCH_CEILING` — a smaller bound since the command
   also fans out one `get-run`/`get-run-output` pair on top of the window

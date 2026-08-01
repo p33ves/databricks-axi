@@ -196,9 +196,12 @@ export const TOTAL_TIMEOUT_MS = 5 * 60_000;
 
 /** `--limit` to suggest for a rerun in total mode. The full fetch is
  * already in hand, so grow the page geometrically and stop at the true
- * count instead of guessing at a doubled limit. */
-export function nextLimit(limit: number, total: number): number {
-  return Math.min(total, limit * 4);
+ * count instead of guessing at a doubled limit — unless the display already
+ * covers everything fetched, which only happens on a bound-filling fetch
+ * where the true count is unknown and higher: there the step has to clear
+ * the bound (which `--limit` raises with it) to reach anything new. */
+export function nextLimit(limit: number, fetched: number): number {
+  return limit >= fetched ? limit * 4 : Math.min(fetched, limit * 4);
 }
 
 /** Opt-in exact totals. `--total` trades upstream round trips (the fetch
@@ -211,7 +214,13 @@ export function totalMode(
   limit: number,
 ): {
   total: boolean;
+  /** Upstream `--limit` for the list call. */
   fetch: number;
+  /** `listResult`'s `opts.fetched`: the row bound this fetch was allowed to
+   * reach, or undefined in one-page mode where there is no bound to report
+   * a short page against. Threaded rather than re-derived so the two calls
+   * can't disagree about `limit`. */
+  fetched: number | undefined;
   /** Spawn options for the list call — `spawnOpts` plus, in total mode, the
    * wider timeout the multi-page drain needs. */
   spawn: RunDatabricksOptions;
@@ -221,6 +230,7 @@ export function totalMode(
   return {
     total,
     fetch: total ? totalFetch(limit) : limit,
+    fetched: total ? totalFetch(limit) : undefined,
     spawn: {
       ...spawnOpts(flags),
       ...(total ? { timeoutMs: TOTAL_TIMEOUT_MS } : {}),
@@ -251,22 +261,21 @@ export function listResult(
     rerun: string;
     empty: { status: string; help: string[] };
     help: string[];
-    /** True when the caller opted into `--total`: `rows` is the FULL
-     * ceiling-bounded fetch (up to TOTAL_FETCH_CEILING), not a display page
-     * — listResult slices to `limit` itself and reports the true row count
-     * as `total` instead of `count`-equals-rows-shown. */
-    total?: boolean;
+    /** `totalMode(...).fetched` — set only when the caller opted into
+     * `--total`, and then to the row bound that fetch was allowed to reach.
+     * `rows` is that FULL fetch, not a display page: listResult slices to
+     * `limit` itself and reports the true row count as `total` instead of
+     * `count`-equals-rows-shown, and reads a bound-filling `rows` as a
+     * clipped count rather than the end of the list. */
+    fetched?: number;
   },
 ): AxiRenderable {
   if (rows.length === 0) {
     return { [key]: [], status: opts.empty.status, help: opts.empty.help };
   }
   const allHelp = [...opts.help];
-  if (opts.total) {
-    // The fetch bound, not the bare ceiling: a caller whose --limit is above
-    // the ceiling fetched (and displays) that many rows, so a short page is
-    // the true end of the list, not a clipped count.
-    const fetched = totalFetch(limit);
+  if (opts.fetched !== undefined) {
+    const fetched = opts.fetched;
     const hitCeiling = rows.length >= fetched;
     const sliced = rows.slice(0, limit);
     // `total` stays numeric even at the ceiling — a consumer comparing or
@@ -277,17 +286,13 @@ export function listResult(
       count: sliced.length,
       total: rows.length,
     };
-    if (sliced.length < rows.length) {
-      // A bigger --limit (up to rows.length, already fetched) shows more —
-      // opts.rerun names a nextLimit-bounded step toward that count.
+    if (sliced.length < rows.length || hitCeiling) {
+      // Either unseen rows are already fetched (a bigger --limit shows them)
+      // or the fetch filled its bound (a bigger --limit raises that bound
+      // too, since the bound is max(limit, ceiling)). Both are reachable by
+      // the same nextLimit step, so has_more always ships with a follow-up.
       out.has_more = true;
       allHelp.unshift(opts.rerun);
-    } else if (hitCeiling) {
-      // Already displaying everything the ceiling fetch got; a bigger
-      // --limit raises the fetch bound too, so the rerun suggestion would
-      // just repeat the current --limit — the `truncated` note below is the
-      // signal that more may exist.
-      out.has_more = true;
     }
     if (hitCeiling) {
       out.truncated = `stopped counting at the ${fetched}-row fetch ceiling; true total may be higher`;

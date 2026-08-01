@@ -153,7 +153,7 @@ async function jobsList(args: string[]): Promise<AxiRenderable> {
       `databricks-axi jobs view <job_id>${p}`,
       `databricks-axi jobs runs <job_id>${p}`,
     ],
-    total: counted.total,
+    fetched: counted.fetched,
   });
 }
 
@@ -339,7 +339,7 @@ async function runsList(args: string[]): Promise<AxiRenderable> {
       help: [`databricks-axi jobs run <job_id>${p}`],
     },
     help,
-    total: counted.total,
+    fetched: counted.fetched,
   });
 }
 
@@ -371,6 +371,11 @@ async function runsView(args: string[]): Promise<AxiRenderable> {
 
 const RUNS_SUMMARY_DEFAULT_WINDOW = 50;
 const RUNS_SUMMARY_CEILING = 200;
+/** The window fetch is the same shape of drain as a `--total` one — no
+ * `--page-size` on `list-runs`, so a 200-run window is several sequential
+ * server pages — just a fifth of the scale, so a fifth of TOTAL_TIMEOUT_MS.
+ * Still well clear of the 30s default a slow workspace would blow through. */
+const RUNS_SUMMARY_TIMEOUT_MS = 60_000;
 
 /** Audit rollup: state tallies over a bounded window of recent runs plus
  * the most recent failing run/task/error — fixes the find-failed-run
@@ -397,7 +402,10 @@ async function runsSummary(args: string[]): Promise<AxiRenderable> {
   if (jobId) {
     argv.push("--job-id", jobId);
   }
-  const parsed = await runJobs(argv, spawnOpts(flags));
+  const parsed = await runJobs(argv, {
+    ...spawnOpts(flags),
+    timeoutMs: RUNS_SUMMARY_TIMEOUT_MS,
+  });
   const runs = asList(parsed, "runs") as RawRun[];
   const p = profileSuffix(flags.get("profile"));
 

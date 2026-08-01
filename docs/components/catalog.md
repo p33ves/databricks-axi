@@ -51,7 +51,7 @@ only. See Output shape below.
 
 - `catalogs`/`schemas`/`tables`/`volumes`/`functions` go through
   `listResult`. By default that's the legacy `count`/full-page `has_more`
-  envelope over one fetched page. With `--total` (`opts.total: true`) the
+  envelope over one fetched page. With `--total` (`opts.fetched` set) the
   ceiling-bounded fetch is sliced to the display `--limit` (default 30),
   `count` is rows shown, `total` is the exact fetched count (numeric even
   at the ceiling, where a `truncated` note says the true total may be

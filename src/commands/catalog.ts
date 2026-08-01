@@ -151,7 +151,7 @@ async function catalogsList(args: string[]): Promise<AxiRenderable> {
       ],
     },
     help: [`databricks-axi catalog schemas <name>${p}`],
-    total: counted.total,
+    fetched: counted.fetched,
   });
 }
 
@@ -178,7 +178,7 @@ async function schemasList(args: string[]): Promise<AxiRenderable> {
       help: [`databricks-axi catalog catalogs${p}`],
     },
     help: [`databricks-axi catalog tables ${catalog}.<name>${p}`],
-    total: counted.total,
+    fetched: counted.fetched,
   });
 }
 
@@ -219,7 +219,7 @@ async function scopedList(
       help: [`databricks-axi catalog schemas ${catalog}${p}`],
     },
     help: cfg.help(ref, catalog, schema, p),
-    total: counted.total,
+    fetched: counted.fetched,
   });
 }
 

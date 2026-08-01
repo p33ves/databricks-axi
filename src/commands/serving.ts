@@ -114,7 +114,7 @@ async function servingList(args: string[]): Promise<AxiRenderable> {
       ],
     },
     help: [`databricks-axi serving view <name>${p}`],
-    total: counted.total,
+    fetched: counted.fetched,
   });
 }
 

@@ -110,7 +110,7 @@ describe("jobs list", () => {
     expect(out).not.toContain("jobs list --limit 1000");
   });
 
-  it("omits the rerun suggestion once the ceiling is hit and the display --limit already covers it", async () => {
+  it("suggests a --limit past the ceiling once the display already covers the whole fetch", async () => {
     t.fake.respond("jobs list", {
       jobs: Array.from({ length: 1000 }, (_, i) => ({
         job_id: i,
@@ -121,9 +121,10 @@ describe("jobs list", () => {
     expect(out).toContain("total: 1000");
     expect(out).toContain("has_more: true");
     expect(out).toContain("truncated:");
-    // Already showing everything the ceiling fetch got, and nextLimit is
-    // bounded by the true count, so there's no bigger page to suggest.
-    expect(out).not.toContain("jobs list --limit");
+    // Every fetched row is already shown, so the only way to see more is a
+    // --limit past the bound — which raises the bound with it. has_more
+    // never ships without a follow-up.
+    expect(out).toContain("jobs list --limit 4000 --total");
   });
 
   it("keeps a --limit above the ceiling as the fetch bound so --total never shrinks the page", async () => {

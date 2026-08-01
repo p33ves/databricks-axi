@@ -207,33 +207,33 @@ list --max-results`; `tables list` has no such flag), and none accepts
   `TIMEOUT` whose "retry" suggestion can't help.
 - `listResult(key, rows, limit, opts)`: the shared list-result tail —
   empty state and either the legacy `count`/full-page `has_more` +
-  rerun-with-double-limit envelope, or (`opts.total: true`, i.e. the caller
+  rerun-with-double-limit envelope, or (`opts.fetched` set, i.e. the caller
   passed `--total`) a precise `total`: `rows` is treated as the FULL
-  `totalFetch(limit)`-bounded fetch, sliced to `limit` for display, with
+  bounded fetch, sliced to `limit` for display, with
   `total` set to the exact fetched count and `has_more: count < total ||
-truncated`. A fetch that hits that bound (`totalFetch(limit)`, recomputed
-  from the same helper rather than compared against the bare ceiling — a
-  caller with an above-ceiling `--limit` fetched more, so a short page there
-  is the true end of the list) adds a `truncated` note saying
+truncated`. `opts.fetched` is the bound that fetch was allowed to reach,
+  threaded straight from `totalMode(...).fetched` rather than re-derived
+  from `limit` — otherwise correctness would rest on every call site
+  passing the identical `limit` to both calls, an invariant nothing checks.
+  A fetch that fills the bound adds a `truncated` note saying
   the true total may be higher, and sets `has_more` even when the display
-  `--limit` covered every fetched row — the ceiling, not the page, is what
+  `--limit` covered every fetched row — the bound, not the page, is what
   may be hiding rows there. `total` itself stays numeric (1000) so a
   consumer doing arithmetic on it never gets a string in the one case that
   matters. Both
   modes build `opts.rerun` from `totalMode(...).rerun`: a blind doubled
   limit when the true count isn't known, and in total mode
-  `nextLimit(limit, rows.length)` (`min(rows.length, limit * 4)`) plus
-  `--total` — a geometrically bigger page that stops at the true count
-  rather than a guess (on a ceiling-hit fetch a large enough `--limit` can
-  still land on the full 1000). `listResult` only surfaces it when a bigger
-  `--limit` would actually show more than the current page; once the
-  display `--limit` already covers everything the ceiling fetch got,
-  there's no rerun suggestion to make (`nextLimit` is bounded by the true
-  count, so it would just repeat the current `--limit` — the `truncated`
-  note is the signal that more may exist beyond it; a caller who wants past
-  the ceiling raises `--limit` above it themselves, which raises the fetch
-  bound with it). `dashboards list`, `pipelines list`/`events`, and
-  `workspace ls` call `listResult` without `opts.total` and take no
+  `nextLimit(limit, rows.length)` plus `--total`. `nextLimit` has two cases,
+  because the bound moves with `--limit`: while unshown rows are already
+  fetched it steps geometrically but stops at the true count
+  (`min(fetched, limit * 4)`) rather than guessing; once the display covers
+  the whole fetch — which only happens on a bound-filling fetch, where the
+  true count is unknown and higher — a count-bounded step would just repeat
+  the current `--limit`, so it quadruples past the bound instead (`limit *
+4`, e.g. `--limit 1000 --total` → `--limit 4000 --total`). So every
+  `has_more: true` ships with a follow-up that actually reaches new rows.
+  `dashboards list`, `pipelines list`/`events`, and
+  `workspace ls` call `listResult` without `opts.fetched` and take no
   `--total` flag — their upstream calls aren't yet confirmed to auto-drain
   past one server page, so they're deliberately out of the surface list
   above (not the same as the five exemptions below, which never call
