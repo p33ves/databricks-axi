@@ -59,6 +59,24 @@ export function isFailed(item: { state?: RunState }): boolean {
   return typeof result === "string" && result !== "SUCCESS";
 }
 
+/** Terminal result states that aren't a genuine failure: cancellations
+ * (user or upstream), timeouts, and condition-skipped runs. */
+const NOT_FAILURE_STATES = new Set([
+  "SUCCESS",
+  "CANCELED",
+  "TIMEDOUT",
+  "EXCLUDED",
+  "UPSTREAM_CANCELED",
+]);
+
+/** Terminal and actually broken (FAILED, UPSTREAM_FAILED, ...) — the
+ * narrower predicate for reported audit numbers, where a cancelled run
+ * counted as a failure is a wrong answer, not just a wide suggestion. */
+export function isGenuineFailure(item: { state?: RunState }): boolean {
+  const result = item.state?.result_state;
+  return typeof result === "string" && !NOT_FAILURE_STATES.has(result);
+}
+
 /** Parent directory of a slash-separated workspace/dbfs path ("/" at the root). */
 export function parentPath(path: string): string {
   const idx = path.lastIndexOf("/");
@@ -114,27 +132,61 @@ export const LIST_FLAGS = {
   fields: "value",
 } as const;
 
-/** Internal fetch ceiling for the precise `total` on the cheaply-countable
+/** LIST_FLAGS plus the opt-in `--total` for the surfaces that can drain a
+ * bounded fetch and report an exact count (see `totalMode`). */
+export const TOTAL_LIST_FLAGS = {
+  ...LIST_FLAGS,
+  total: "boolean",
+} as const;
+
+/** Internal fetch ceiling for the opt-in `--total` on the cheaply-countable
  * list surfaces (jobs list/runs, catalog catalogs/schemas/tables/volumes/
  * functions, clusters list, serving list). All nine take `--limit` as a
  * client-side cap over an auto-drained page iterator, not as a server page
  * size: their `--limit` carries the same generated "Maximum number of
  * results to return" help text (API-field flags keep their API wording),
  * the server page size is a separate flag where one exists (`clusters list
- * --page-size`, `tables`/`volumes list --max-results`), and none takes
- * `--page-token` (pinned against CLI v1.6.0). So these domains fetch this
- * many rows upstream regardless of the agent's own `--limit` (which caps
- * DISPLAY only) and `listResult` can report a true `total` instead of the
- * rows-shown heuristic. Bounded, not unbounded auto-pagination (AGENTS.md
- * sharp edge). ponytail: 1000 ceiling, raise if a real workspace clips it. */
+ * --page-size`, `volumes list --max-results`; `tables list` has no such
+ * flag), and none takes `--page-token` (pinned against CLI v1.6.0). So
+ * `--total` fetches this many rows upstream regardless of the agent's own
+ * `--limit` (which then caps DISPLAY only) and `listResult` can report a
+ * true `total` instead of the rows-shown heuristic. Bounded, not unbounded
+ * auto-pagination (AGENTS.md sharp edge).
+ * ponytail: 1000 ceiling, raise if a real workspace clips it. */
 export const TOTAL_FETCH_CEILING = 1000;
 
 /** `--limit` to suggest for a rerun in total mode. The full fetch is
- * already in hand, but naming its exact size would tell an agent to render
- * up to TOTAL_FETCH_CEILING rows into its context in one shot, so grow the
- * page geometrically instead and stop at the true count. */
+ * already in hand, so grow the page geometrically and stop at the true
+ * count instead of guessing at a doubled limit. */
 export function nextLimit(limit: number, total: number): number {
   return Math.min(total, limit * 4);
+}
+
+/** Opt-in exact totals. `--total` trades upstream round trips (the fetch
+ * drains up to TOTAL_FETCH_CEILING rows through the client-side `--limit`
+ * cap) for a precise `total`; without it a list fetches exactly one
+ * `--limit` page and falls back to the full-page `has_more` heuristic. The
+ * drain is never implicit: an agent asking for 5 rows gets one page. */
+export function totalMode(
+  flags: Flags,
+  limit: number,
+): {
+  total: boolean;
+  fetch: number;
+  rerun: (fetched: number) => string;
+} {
+  const total = flags.get("total") === true;
+  return {
+    total,
+    fetch: total ? TOTAL_FETCH_CEILING : limit,
+    // In total mode the true count is known, so the suggestion is bounded
+    // by it (and keeps --total, or the rerun would silently drop back to
+    // the heuristic); otherwise it's the legacy blind doubling.
+    rerun: (fetched: number) =>
+      total
+        ? `--limit ${nextLimit(limit, fetched)} --total`
+        : `--limit ${limit * 2}`,
+  };
 }
 
 /** Shared list-result tail: empty state, count envelope, and either the
@@ -146,18 +198,17 @@ export function listResult(
   limit: number,
   opts: {
     /** Rerun-with-a-bigger---limit suggestion, prepended when there's more
-     * to see. Legacy mode: caller bakes in a doubled limit (the true count
-     * isn't known). Total mode: caller already has the full ceiling-bounded
-     * `rows` in hand, so this should name `nextLimit(limit, rows.length)` —
-     * a bigger page bounded by the true count, never the whole ceiling
-     * fetch. listResult only uses it when the page is short of that count. */
+     * to see. Both modes build it from `totalMode(flags, limit).rerun`:
+     * a doubled limit when the true count isn't known, otherwise a
+     * geometrically bigger page bounded by that count. listResult only uses
+     * it when the page is short of what was fetched. */
     rerun: string;
     empty: { status: string; help: string[] };
     help: string[];
-    /** True for the surfaces §3.1 promotes to a precise total: `rows` is
-     * the FULL ceiling-bounded fetch (up to TOTAL_FETCH_CEILING), not a
-     * display page — listResult slices to `limit` itself and reports the
-     * true row count as `total` instead of `count`-equals-rows-shown. */
+    /** True when the caller opted into `--total`: `rows` is the FULL
+     * ceiling-bounded fetch (up to TOTAL_FETCH_CEILING), not a display page
+     * — listResult slices to `limit` itself and reports the true row count
+     * as `total` instead of `count`-equals-rows-shown. */
     total?: boolean;
   },
 ): AxiRenderable {
@@ -168,10 +219,13 @@ export function listResult(
   if (opts.total) {
     const hitCeiling = rows.length >= TOTAL_FETCH_CEILING;
     const sliced = rows.slice(0, limit);
+    // `total` stays numeric even at the ceiling — a consumer comparing or
+    // summing it shouldn't get a string in the one case that matters; the
+    // `truncated` note below carries "may be higher".
     const out: AxiStructuredOutput = {
       [key]: sliced,
       count: sliced.length,
-      total: hitCeiling ? `${TOTAL_FETCH_CEILING}+` : rows.length,
+      total: rows.length,
     };
     if (sliced.length < rows.length) {
       // A bigger --limit (up to rows.length, already fetched) shows more —

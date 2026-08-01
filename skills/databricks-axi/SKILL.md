@@ -37,15 +37,15 @@ commands[45]:
   (none)=home
   whoami [--profile <name>]
   doctor [--profile <name>] [--full]
-  jobs list [--limit N] [--fields a,b]
+  jobs list [--limit N] [--total] [--fields a,b]
   jobs view <job_id>
   jobs run <job_id> [--wait]
-  jobs runs [job_id] [--limit N] [--fields a,b]
+  jobs runs [job_id] [--limit N] [--total] [--fields a,b]
   jobs runs view <run_id>
   jobs runs summary [job_id] [--limit N]
   jobs logs <run_id> [--full]
   jobs cancel <run_id>
-  clusters list [--limit N] [--fields a,b]
+  clusters list [--limit N] [--total] [--fields a,b]
   clusters view <cluster_id>
   clusters start <cluster_id> [--wait]
   clusters stop <cluster_id> [--wait]
@@ -54,13 +54,13 @@ commands[45]:
   sql exec "<query>" [--warehouse <id>] [--limit N] [--timeout S] [--full]
   sql statement view <statement_id>
   sql history [--limit N] [--status S] [--full] [--fields a,b]
-  catalog catalogs [--limit N] [--fields a,b]
-  catalog schemas <catalog> [--limit N] [--fields a,b]
-  catalog tables <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog catalogs [--limit N] [--total] [--fields a,b]
+  catalog schemas <catalog> [--limit N] [--total] [--fields a,b]
+  catalog tables <catalog>.<schema> [--limit N] [--total] [--fields a,b]
   catalog table view <catalog>.<schema>.<table>
-  catalog volumes <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog volumes <catalog>.<schema> [--limit N] [--total] [--fields a,b]
   catalog volume view <catalog>.<schema>.<volume>
-  catalog functions <catalog>.<schema> [--limit N] [--fields a,b]
+  catalog functions <catalog>.<schema> [--limit N] [--total] [--fields a,b]
   catalog function view <catalog>.<schema>.<function>
   catalog grants <securable-type> <name> [--principal P] [--full] [--fields a,b]
   dashboards list [--limit N] [--trashed] [--fields a,b]
@@ -75,7 +75,7 @@ commands[45]:
   pipelines start <pipeline_id>
   pipelines stop <pipeline_id>
   pipelines events <pipeline_id> [--limit N] [--fields a,b] [--full]
-  serving list [--limit N] [--fields a,b]
+  serving list [--limit N] [--total] [--fields a,b]
   serving view <name>
   setup hooks
   api <method> <path> [--body <json>]

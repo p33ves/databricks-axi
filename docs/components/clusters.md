@@ -19,9 +19,9 @@ one being smuggled onto argv as a flag), not a strict id pattern.
 
 ## Upstream calls
 
-- `list` → `databricks clusters list --limit 1000` (`TOTAL_FETCH_CEILING`,
-  `shared.ts`) — the agent's own `--limit` caps DISPLAY only; see
-  Output shape below
+- `list` → `databricks clusters list --limit N` (N = the agent's `--limit`,
+  default 30; `TOTAL_FETCH_CEILING` 1000 from `shared.ts` when `--total` is
+  passed, and then `--limit` caps DISPLAY only) — see Output shape below
 - `view` → `databricks clusters get <cluster_id>`
 - `start` → `databricks clusters start <cluster_id>` (+ `--no-wait` unless
   `--wait`)
@@ -36,10 +36,11 @@ one being smuggled onto argv as a flag), not a strict id pattern.
 
 ## Output shape
 
-- `list`: `listResult` envelope with `opts.total: true` — sliced to
-  the display `--limit` (default 30) out of the full ceiling-bounded fetch,
-  `count` rows shown, `total` the exact fetched count (or `"1000+"` if the
-  fetch hit the ceiling). Default fields `cluster_id`, `cluster_name`,
+- `list`: `listResult` envelope — the legacy `count`/`has_more` shape over
+  one fetched page, or with `--total` sliced to the display `--limit`
+  (default 30) out of the full ceiling-bounded fetch, `count` rows shown,
+  `total` the exact fetched count (numeric even at the ceiling, where a
+  `truncated` note is added). Default fields `cluster_id`, `cluster_name`,
   `state`. If a `TERMINATED` cluster appears within the displayed `--limit`
   page, a `clusters start <id>` follow-up is appended to `help` — the search
   only covers the displayed page, not the full ceiling-bounded fetch, so a

@@ -101,11 +101,12 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
   `jobs get-run` → per-task `get-run-output` fan-out.
 - CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
   cap, so pagination is a client-side concern. Never auto-paginate
-  unboundedly: a list either reports `has_more` from the full-page
-  heuristic, or (on the surfaces that auto-drain into one capped call)
-  fetches a bounded `TOTAL_FETCH_CEILING` and reports a precise `total`
-  while the agent's `--limit` caps display only. Which surfaces do which,
-  and the rerun-suggestion rules, live in
+  unboundedly: a list fetches one `--limit` page and reports `has_more`
+  from the full-page heuristic, unless the caller opts into `--total` on
+  one of the nine surfaces that auto-drain into a single capped call —
+  those fetch a bounded `TOTAL_FETCH_CEILING` and report a precise `total`
+  while `--limit` caps display only. Which surfaces do which, and the
+  rerun-suggestion rules, live in
   [docs/components/core.md](docs/components/core.md).
 - Exception: `query-history list` still has real server-side pagination
   (`--max-results`/`--page-token`, `has_next_page` in the response). `sql

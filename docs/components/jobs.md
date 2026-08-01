@@ -10,10 +10,10 @@ a run.
 
 From `JOBS_HELP` in the source:
 
-- `jobs list [--limit N] [--fields a,b]`
+- `jobs list [--limit N] [--total] [--fields a,b]`
 - `jobs view <job_id>`
 - `jobs run <job_id> [--wait]`
-- `jobs runs [job_id] [--limit N] [--fields a,b]`
+- `jobs runs [job_id] [--limit N] [--total] [--fields a,b]`
 - `jobs runs view <run_id>`
 - `jobs runs summary [job_id] [--limit N]`
 - `jobs logs <run_id> [--full]`
@@ -25,14 +25,16 @@ before it reaches argv.
 
 ## Upstream calls
 
-- `list` → `databricks jobs list --limit 1000` (`TOTAL_FETCH_CEILING`,
-  `shared.ts`) — the agent's own `--limit` caps DISPLAY only; see Output
-  shape below
+- `list` → `databricks jobs list --limit N` (N = the agent's `--limit`,
+  default 30; `TOTAL_FETCH_CEILING` 1000 from `shared.ts` when `--total` is
+  passed, and then `--limit` caps DISPLAY only) — see Output shape below
 - `view` → `databricks jobs get <job_id>`
 - `run` → `databricks jobs run-now <job_id>` (plus `--no-wait` unless
   `--wait` is passed)
-- `runs` → `databricks jobs list-runs --limit 1000 [--job-id <job_id>]`
-  (same ceiling-fetch shift as `list`)
+- `runs` → `databricks jobs list-runs --limit N [--job-id <job_id>]` (same
+  opt-in ceiling fetch as `list`; note `list-runs` has no `--page-size`, so
+  a `--total` drain there is many sequential server pages — the reason it
+  is opt-in and not the default)
 - `runs view` → `databricks jobs get-run <run_id>`
 - `runs summary` → `databricks jobs list-runs --limit <window>
 [--job-id <job_id>]`, plus (only when a failure is found) one
@@ -52,17 +54,18 @@ upstream's own ~20-minute block on `run-now`.
 
 ## Output shape
 
-- `list`: envelope via `listResult` with `opts.total: true` —
-  default fields `job_id`, `name` (flattened out of `settings.name`),
-  `creator_user_name`, sliced to the display `--limit` (default 30) out of
-  the full ceiling-bounded fetch. `count` is rows shown; `total` is the
-  exact fetched count (or `"1000+"` plus a `truncated` note if the fetch
-  hit `TOTAL_FETCH_CEILING`); `has_more` is `count < total`. The rerun
-  suggestion on a truncated page names `nextLimit(limit, rows.length)` —
-  a quadrupled page bounded by the true count, never the whole ceiling
-  fetch (an agent following it shouldn't render 1000 rows at once) — and is
-  omitted entirely once the display `--limit` already covers everything the
-  ceiling fetch got (a bigger `--limit` can't get past that pinned fetch).
+- `list`: envelope via `listResult` — default fields `job_id`, `name`
+  (flattened out of `settings.name`), `creator_user_name`. Without
+  `--total` that's the legacy `count`/full-page `has_more` shape over one
+  fetched page. With `--total` (`opts.total: true`) the rows are sliced to
+  the display `--limit` (default 30) out of the full ceiling-bounded fetch:
+  `count` is rows shown; `total` is the exact fetched count, numeric even
+  at `TOTAL_FETCH_CEILING`, where a `truncated` note says the true total
+  may be higher; `has_more` is `count < total`. The rerun suggestion on a
+  truncated page names `nextLimit(limit, rows.length)` — a quadrupled page
+  bounded by the true count, carrying `--total` forward — and is omitted
+  entirely once the display `--limit` already covers everything the ceiling
+  fetch got (a bigger `--limit` can't get past that pinned fetch).
 - `view`: `job_id`, `name`, `creator_user_name` (same key as `jobs list`), an
   optional `schedule` string
   (`"<cron> (<pause_status>)"`) when a schedule exists, and `tasks` reduced
@@ -70,12 +73,15 @@ upstream's own ~20-minute block on `run-now`.
   `notebook_task`/`spark_python_task` or a generic `<x>_task` key name;
   `depends_on` is the task's `settings.tasks[].depends_on[].task_key` list,
   filtered to drop any entry with no `task_key`, read straight off the
-  response with no extra call — `[]` for a root task with no upstream
-  dependencies).
+  response with no extra call, and joined with `"|"` — a scalar, not a
+  nested array, so the tasks array stays uniform and TOON keeps its compact
+  tabular form. It is emitted on every task or none: `""` for a root task
+  in a job that has a DAG, and omitted entirely from a job whose tasks have
+  no dependencies at all).
 - `run`: `run_id` (+ `state` if upstream returns one) and a `runs view`
   follow-up.
-- `runs`: same `listResult`/`opts.total: true` treatment as `list`, except
-  the display `--limit` defaults to 20 here, not 30. Rows are
+- `runs`: same `listResult`/`--total` treatment as `list`, except the
+  display `--limit` defaults to 20 here, not 30. Rows are
   the raw upstream items with the derived display fields (`state`,
   `start_time` as ISO, `duration_s`) merged in, so `--fields` can select
   either raw upstream keys or the derived ones, from the full
@@ -92,8 +98,12 @@ upstream's own ~20-minute block on `run-now`.
   `duration_s`, and a flattened `tasks` array (`task_key`, `state`,
   `duration_s`).
 - `runs summary`: hand-built envelope (not `listResult` — its shape isn't a
-  rows array), `{ job_id?, window, success, failed, running, truncated?,
-first_failed?, help }`. `window` is the number of runs actually fetched
+  rows array), `{ job_id?, window, success, failed, other, running,
+truncated?, first_failed?, help }`. `failed` counts genuine failures only
+  (`FAILED`, `UPSTREAM_FAILED`, ...); `CANCELED`, `TIMEDOUT`, `EXCLUDED`,
+  and `UPSTREAM_CANCELED` are terminal but not failures, so they tally as
+  `other` instead of inflating a reported audit number. The four tallies
+  add up to `window`. `window` is the number of runs actually fetched
   within the bounded window (`--limit`, default 50, capped at the internal
   ceiling 200). `running` is a remainder, not "actively running": it's every
   run with no terminal `result_state` yet, which also catches
@@ -103,11 +113,14 @@ first_failed?, help }`. `window` is the number of runs actually fetched
   `window` runs, so `failed: 0` there is not an authoritative "nothing ever
   failed". Below the ceiling the note points at a bigger `--limit`; at the
   ceiling it says more runs may exist beyond it. Same note style as
-  `listResult`'s ceiling-hit case, no separate `total_available` field. `first_failed` is omitted when no
-  failure is found in the window; otherwise it's `{ run_id, task_key, error
-}` — the most recent failing run (`jobs list-runs` returns newest-first),
-  its first failing task (from one `get-run` call), and that task's redacted
-  first error line (from one `get-run-output` call). Resolving
+  `listResult`'s ceiling-hit case, no separate `total_available` field. `first_failed` is omitted when no genuine
+  failure is found in the window; otherwise it's `{ run_id, task_key?,
+error? }` — the most recent failing run (`jobs list-runs` returns
+  newest-first), its first failing task (from one `get-run` call), and that
+  task's redacted first error line (from one `get-run-output` call).
+  `task_key`/`error` are omitted rather than emitted empty when they can't
+  be resolved (a run that never started its tasks), leaving just the
+  `run_id` the `jobs logs` follow-up points at. Resolving
   `first_failed` is entirely best-effort: either upstream call failing
   (a transient `get-run` error, or `get-run-output` failing on the resolved
   task) just omits `first_failed` from the envelope rather than discarding
@@ -137,8 +150,8 @@ first_failed?, help }`. `window` is the number of runs actually fetched
   the `get-run` call that resolves the failing task is wrapped so a
   transient failure there just omits `first_failed` (tallies already
   computed still render); the nested `get-run-output` call for that task's
-  error line is wrapped the same way, falling back to `error: ""` rather
-  than sinking either call over one detail fetch.
+  error line is wrapped the same way, dropping the `error` key rather than
+  sinking either call over one detail fetch.
 
 ## Sharp edges
 
@@ -152,36 +165,41 @@ first_failed?, help }`. `window` is the number of runs actually fetched
 - int64 `job_id`/`run_id` values are quoted by `runDatabricks` before
   `JSON.parse` so they survive as exact strings past the 2^53 float
   boundary — this domain's ids are treated as `number | string`.
-- `list`/`runs` always fetch `TOTAL_FETCH_CEILING` (1000) rows upstream
-  regardless of the agent's own `--limit`, which now caps DISPLAY only —
-  never auto-paginates past that bound (AGENTS.md sharp edge); a fetch that
-  hits the ceiling renders `total: "1000+"` rather than claiming a false
-  precise count.
+- `list`/`runs` fetch one `--limit` page by default; `--total` swaps that
+  for a `TOTAL_FETCH_CEILING` (1000) fetch with `--limit` capping DISPLAY
+  only — never auto-paginating past that bound (AGENTS.md sharp edge). A
+  fetch that hits the ceiling still reports a numeric `total` (1000) but
+  adds a `truncated` note, so the count is never claimed as exact.
 - `runs summary`'s window is capped at 200 (`RUNS_SUMMARY_CEILING`)
   independent of `TOTAL_FETCH_CEILING` — a smaller bound since the command
   also fans out one `get-run`/`get-run-output` pair on top of the window
   fetch.
 - `runs summary`'s `running` count is a remainder (`window - success -
-failed`), not "actively running": it also absorbs PENDING/QUEUED/BLOCKED
-  states, which have no terminal `result_state` either. Documented in
-  `JOBS_HELP` and here rather than silently overloading the name.
+failed - other`), not "actively running": it also absorbs
+  PENDING/QUEUED/BLOCKED states, which have no terminal `result_state`
+  either. Documented in `JOBS_HELP` and here rather than silently
+  overloading the name.
 
 ## Tests
 
 `test/jobs.test.ts` uses the standard `setupCli()`/`fake-databricks.ts` rig:
 a fresh fake `databricks` on PATH per test, `respond`/`respondError` to seed
 canned JSON or stderr, `t.run(argv)` to invoke the CLI, and `calls()` to
-assert exact argv. Covers list/runs ceiling-fetch argv (`--limit 1000`
-upstream regardless of the display `--limit`), `total`/`has_more`
-(including the `"1000+"` ceiling-hit case and the exact-`--limit`,
-not-doubled, rerun suggestion), field selection and rejection, the bulk
+assert exact argv. Covers the default one-page argv (`--limit 30`/`20`
+upstream) vs. the `--total` ceiling-fetch argv (`--limit 1000`),
+`total`/`has_more` (including the numeric-`total`-plus-`truncated`
+ceiling-hit case and the exact-`--limit`, not-doubled, rerun suggestion
+that carries `--total` forward), field selection and rejection, the bulk
 vs single-job `runs` default columns (`job_id` leads only in bulk mode), the
 first-failed-run `jobs logs` suggestion scoped to the displayed `--limit`
 page (a failure beyond it isn't suggested), empty states, auth-error
-mapping, job/run views (including `depends_on` per task, empty for a root
-task, and dropping a `depends_on` entry with no `task_key`), the `--wait`
+mapping, job/run views (including the joined `depends_on` scalar per task,
+empty for a root task, omitted entirely for a job with no DAG, and dropping
+a `depends_on` entry with no `task_key`), the `--wait`
 timeout path, log truncation and `--full`, the already-terminated cancel
 no-op, the decimal-only `--limit` guard (rejecting `1e3`), an unknown-flag
-rejection, and `runs summary`'s window/ceiling math, tallies, `first_failed`
+rejection, and `runs summary`'s window/ceiling math, tallies (including
+cancelled/timed-out runs landing in `other`, not `failed`), `first_failed`
 (including both best-effort failure paths — a failing `get-run` and a
-failing `get-run-output` — and the no-failures/no-runs envelopes).
+failing `get-run-output` — the unresolved-task shape, and the
+no-failures/no-runs envelopes).

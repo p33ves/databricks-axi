@@ -170,45 +170,54 @@ requireId, renderRows }` bound to that domain's name (so usage errors
   key selection, validated against the actual keys present in the result
   set) or a domain-supplied default field list.
 - `LIST_FLAGS`: the `{ profile, limit, fields }` flag spec every
-  list-shaped subcommand shares.
-- `TOTAL_FETCH_CEILING` (1000): the internal fetch cap for the precise
-  `total` on the surfaces that auto-drain the full set into a single
-  client-capped call: `jobs list`, `jobs runs`/`list-runs`,
+  list-shaped subcommand shares. `TOTAL_LIST_FLAGS` adds the opt-in
+  `--total` for the nine surfaces below.
+- `TOTAL_FETCH_CEILING` (1000) and `totalMode(flags, limit)`: the exact
+  `total` is opt-in per call, never implicit. Without `--total` a list
+  fetches exactly one `--limit` page upstream and keeps the legacy
+  full-page `has_more` heuristic — an agent asking for 5 rows pays for one
+  page, not a drain. With `--total`, `totalMode` swaps the upstream
+  `--limit` for `TOTAL_FETCH_CEILING`, the agent's own `--limit` then caps
+  DISPLAY only, and `listResult` reports the exact fetched count. The
+  surfaces that accept `--total` are the ones that auto-drain the full set
+  into a single client-capped call: `jobs list`, `jobs runs`/`list-runs`,
   `catalog catalogs`/`schemas`/`tables`/`volumes`/`functions`,
-  `clusters list`, `serving list`. Those nine call `listResult` with
-  `opts.total: true` and always fetch `--limit TOTAL_FETCH_CEILING`
-  upstream regardless of the agent's own `--limit`, which caps DISPLAY
-  only. Bounded, not unbounded auto-pagination (the AGENTS.md sharp edge);
-  tunable, raise only if a real workspace clips it. The drain is a property
-  of the upstream flag, not an assumption: on all nine, `--limit` is the
-  generated client-side cap ("Maximum number of results to return") over a
-  drained page iterator, the server page size is a separate flag where one
-  exists (`clusters list --page-size`, `tables`/`volumes list
---max-results`), and none accepts `--page-token`. Re-check with
-  `databricks <cmd> --help` on a CLI bump: if `--limit` ever reverts to
-  naming a page length, `total` would silently under-report and these nine
-  would have to fall back to the legacy heuristic.
+  `clusters list`, `serving list`. Bounded, not unbounded auto-pagination
+  (the AGENTS.md sharp edge); tunable, raise only if a real workspace clips
+  it. The drain is a property of the upstream flag, not an assumption: on
+  all nine, `--limit` is the generated client-side cap ("Maximum number of
+  results to return") over a drained page iterator, the server page size is
+  a separate flag where one exists (`clusters list --page-size`, `volumes
+list --max-results`; `tables list` has no such flag), and none accepts
+  `--page-token`. Re-check with `databricks <cmd> --help` on a CLI bump: if
+  `--limit` ever reverts to naming a page length, `total` would silently
+  under-report and `--total` would have to fall back to the legacy
+  heuristic. `--total` also costs round trips: `jobs list-runs` has no
+  `--page-size`, so a ceiling drain there is many sequential server pages,
+  which is exactly why it isn't the default.
 - `listResult(key, rows, limit, opts)`: the shared list-result tail —
   empty state and either the legacy `count`/full-page `has_more` +
-  rerun-with-double-limit envelope, or (`opts.total: true`) a precise
-  `total`: `rows` is treated as the FULL `TOTAL_FETCH_CEILING`-bounded
-  fetch, sliced to `limit` for display, with `total` set to the exact
-  fetched count (or `"1000+"` plus a `truncated` note if the ceiling
-  itself was hit) and `has_more: count < total`. In total mode `opts.rerun`
-  is not a blind doubled-limit guess — the caller already has the full
-  fetched `rows` in hand, so it names `nextLimit(limit, rows.length)`
-  (`min(rows.length, limit * 4)`): a bigger page bounded by the true count,
-  never the whole ceiling fetch, so following the suggestion can't dump
-  1000 rows into an agent's context in one shot. `listResult`
-  only surfaces it when a bigger `--limit` would actually show more than
-  the current page; once the display `--limit` already covers everything
-  the ceiling fetch got, there's no rerun suggestion to make (a bigger
-  `--limit` can't get past that pinned fetch — the `truncated` note is the
-  only signal that more may exist beyond it). `dashboards list`,
-  `pipelines list`/`events`, and `workspace ls` call `listResult` without
-  `opts.total` and keep the legacy rows-shown/has_more contract unchanged
-  — their upstream calls aren't yet confirmed to auto-drain past one
-  server page, so they're deliberately out of the `total` surface list
+  rerun-with-double-limit envelope, or (`opts.total: true`, i.e. the caller
+  passed `--total`) a precise `total`: `rows` is treated as the FULL
+  `TOTAL_FETCH_CEILING`-bounded fetch, sliced to `limit` for display, with
+  `total` set to the exact fetched count and `has_more: count < total`. A
+  fetch that hits the ceiling adds a `truncated` note saying the true total
+  may be higher; `total` itself stays numeric (1000) so a consumer doing
+  arithmetic on it never gets a string in the one case that matters. Both
+  modes build `opts.rerun` from `totalMode(...).rerun`: a blind doubled
+  limit when the true count isn't known, and in total mode
+  `nextLimit(limit, rows.length)` (`min(rows.length, limit * 4)`) plus
+  `--total` — a geometrically bigger page that stops at the true count
+  rather than a guess (on a ceiling-hit fetch a large enough `--limit` can
+  still land on the full 1000). `listResult` only surfaces it when a bigger
+  `--limit` would actually show more than the current page; once the
+  display `--limit` already covers everything the ceiling fetch got,
+  there's no rerun suggestion to make (a bigger `--limit` can't get past
+  that pinned fetch — the `truncated` note is the only signal that more may
+  exist beyond it). `dashboards list`, `pipelines list`/`events`, and
+  `workspace ls` call `listResult` without `opts.total` and take no
+  `--total` flag — their upstream calls aren't yet confirmed to auto-drain
+  past one server page, so they're deliberately out of the surface list
   above (not the same as the five exemptions below, which never call
   `listResult` at all). The five documented `listResult` exemptions: `fs
 ls` (upstream has no `--limit` at all, so it reports exact truncation

@@ -10,7 +10,7 @@ const JOB = {
 };
 
 describe("jobs list", () => {
-  it("fetches the ceiling upstream and renders default fields with a precise total", async () => {
+  it("fetches one display page by default and renders default fields", async () => {
     t.fake.respond("jobs list", {
       jobs: [
         JOB,
@@ -24,13 +24,26 @@ describe("jobs list", () => {
     const { out, exitCode } = await t.run(["jobs", "list"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["jobs", "list", "--limit", "1000", "-o", "json"],
+      ["jobs", "list", "--limit", "30", "-o", "json"],
     ]);
     expect(out).toContain("jobs[2]{job_id,name,creator_user_name}:");
     expect(out).toContain("101,axi-bench-etl,a@b.c");
     expect(out).toContain("count: 2");
-    expect(out).toContain("total: 2");
+    expect(out).not.toContain("total: 2");
     expect(out).not.toContain("has_more");
+  });
+
+  it("drains the ceiling and reports a precise total only with --total", async () => {
+    t.fake.respond("jobs list", {
+      jobs: [JOB, { job_id: 102, settings: { name: "other" } }],
+    });
+    const { out, exitCode } = await t.run(["jobs", "list", "--total"]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      ["jobs", "list", "--limit", "1000", "-o", "json"],
+    ]);
+    expect(out).toContain("count: 2");
+    expect(out).toContain("total: 2");
   });
 
   it("tolerates a bare-array response", async () => {
@@ -45,23 +58,25 @@ describe("jobs list", () => {
     t.fake.respond("jobs list", {
       jobs: [JOB, { job_id: 102, settings: { name: "other" } }],
     });
-    const { out } = await t.run(["jobs", "list", "--limit", "1"]);
+    const { out } = await t.run(["jobs", "list", "--limit", "1", "--total"]);
     expect(out).toContain("jobs[1]");
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("jobs list --limit 2");
+    expect(out).toContain("jobs list --limit 2 --total");
   });
 
-  it("reports 1000+ and a truncated note when the fetch hits the ceiling", async () => {
+  it("reports a numeric total and a truncated note when the fetch hits the ceiling", async () => {
     t.fake.respond("jobs list", {
       jobs: Array.from({ length: 1000 }, (_, i) => ({
         job_id: i,
         settings: { name: `job-${i}` },
       })),
     });
-    const { out } = await t.run(["jobs", "list"]);
-    expect(out).toContain("total: 1000+");
+    const { out } = await t.run(["jobs", "list", "--total"]);
+    expect(out).toContain("total: 1000");
+    // Numeric, not the string "1000+" — `truncated` carries the imprecision.
+    expect(out).not.toContain("1000+");
     expect(out).toContain("has_more: true");
     expect(out).toContain("truncated:");
   });
@@ -73,11 +88,11 @@ describe("jobs list", () => {
         settings: { name: `job-${i}` },
       })),
     });
-    const { out } = await t.run(["jobs", "list", "--limit", "3"]);
+    const { out } = await t.run(["jobs", "list", "--limit", "3", "--total"]);
     expect(out).toContain("total: 5");
     // Doubling --limit 3 would suggest 6 (still short of the true 5); the
     // exact total (5) is what actually shows everything already fetched.
-    expect(out).toContain("jobs list --limit 5");
+    expect(out).toContain("jobs list --limit 5 --total");
     expect(out).not.toContain("--limit 6");
   });
 
@@ -88,10 +103,10 @@ describe("jobs list", () => {
         settings: { name: `job-${i}` },
       })),
     });
-    const { out } = await t.run(["jobs", "list", "--limit", "10"]);
-    expect(out).toContain("total: 1000+");
+    const { out } = await t.run(["jobs", "list", "--limit", "10", "--total"]);
+    expect(out).toContain("total: 1000");
     // A bigger page (4x), not the full 1000 rows in one context dump.
-    expect(out).toContain("jobs list --limit 40");
+    expect(out).toContain("jobs list --limit 40 --total");
     expect(out).not.toContain("jobs list --limit 1000");
   });
 
@@ -102,8 +117,8 @@ describe("jobs list", () => {
         settings: { name: `job-${i}` },
       })),
     });
-    const { out } = await t.run(["jobs", "list", "--limit", "1000"]);
-    expect(out).toContain("total: 1000+");
+    const { out } = await t.run(["jobs", "list", "--limit", "1000", "--total"]);
+    expect(out).toContain("total: 1000");
     expect(out).toContain("has_more: true");
     expect(out).toContain("truncated:");
     // Already showing everything the pinned ceiling fetch got — a bigger
@@ -111,11 +126,11 @@ describe("jobs list", () => {
     expect(out).not.toContain("jobs list --limit");
   });
 
-  it("no longer passes the display --limit upstream (fetch is always the ceiling)", async () => {
+  it("passes the display --limit upstream unless --total opts into the ceiling", async () => {
     t.fake.respond("jobs list", { jobs: [] });
     await t.run(["jobs", "list", "--limit", "5"]);
     expect(t.fake.calls()).toEqual([
-      ["jobs", "list", "--limit", "1000", "-o", "json"],
+      ["jobs", "list", "--limit", "5", "-o", "json"],
     ]);
   });
 
@@ -200,7 +215,7 @@ describe("jobs list", () => {
     t.fake.respond("-p dev jobs list", { jobs: [] });
     await t.run(["jobs", "list", "--profile", "dev"]);
     expect(t.fake.calls()).toEqual([
-      ["-p", "dev", "jobs", "list", "--limit", "1000", "-o", "json"],
+      ["-p", "dev", "jobs", "list", "--limit", "30", "-o", "json"],
     ]);
   });
 
@@ -243,9 +258,11 @@ describe("jobs view", () => {
     // Same key as jobs list and the spec — not a bare `creator`.
     expect(out).toContain("creator_user_name: a@b.c");
     expect(out).toContain("0 0 3 * * ?");
-    expect(out).toContain("tasks[1]:");
-    expect(out).toContain("task_key: extract");
-    expect(out).toContain("depends_on: []");
+    // No DAG anywhere in this job, so depends_on is omitted entirely and
+    // the tasks array keeps TOON's compact tabular form.
+    expect(out).toContain("tasks[1]{task_key,type}:");
+    expect(out).toContain("extract");
+    expect(out).not.toContain("depends_on");
     expect(out).toContain("jobs run 101");
   });
 
@@ -273,13 +290,17 @@ describe("jobs view", () => {
       },
     });
     const { out } = await t.run(["jobs", "view", "881"]);
-    // Root task: depends_on is [], not omitted.
-    expect(out).toContain("task_key: ingest");
-    expect(out).toContain("depends_on: []");
-    expect(out).toContain("task_key: transform");
-    expect(out).toContain("depends_on[1]: ingest");
-    expect(out).toContain("task_key: report");
-    expect(out).toContain("depends_on[1]: transform");
+    // A "|"-joined scalar on every task keeps the array uniform, so TOON
+    // still renders one row per task instead of a nested block each.
+    expect(out).toContain("tasks[3]{task_key,type,depends_on}:");
+    // Row assertions stay tolerant of TOON's quoting of the type cell.
+    expect(out).toContain('ingest,"notebook: /Shared/axi-bench/ingest",""');
+    expect(out).toContain(
+      'transform,"notebook: /Shared/axi-bench/transform",ingest',
+    );
+    expect(out).toContain(
+      'report,"notebook: /Shared/axi-bench/report",transform',
+    );
   });
 
   it("drops depends_on entries with no task_key instead of an undefined slot", async () => {
@@ -297,7 +318,8 @@ describe("jobs view", () => {
       },
     });
     const { out } = await t.run(["jobs", "view", "882"]);
-    expect(out).toContain("depends_on[1]: transform");
+    expect(out).toContain("tasks[1]{task_key,type,depends_on}:");
+    expect(out).toContain(',"notebook: /Shared/axi-bench/report",transform');
     expect(out).not.toContain("undefined");
   });
 
@@ -447,7 +469,7 @@ describe("jobs runs", () => {
     const { out, exitCode } = await t.run(["jobs", "runs"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["jobs", "list-runs", "--limit", "1000", "-o", "json"],
+      ["jobs", "list-runs", "--limit", "20", "-o", "json"],
     ]);
     // Bulk mode (no job_id positional): job_id is in the default columns so
     // an agent can answer cross-job questions ("jobs never run") in one call.
@@ -460,6 +482,15 @@ describe("jobs runs", () => {
     expect(out).toContain("2025-07-06T00:00:00.000Z");
     expect(out).toContain("101,902,FAILED");
     expect(out).toContain("2025-07-06T01:00:00.000Z");
+    expect(out).not.toContain("total: 2");
+  });
+
+  it("drains the ceiling and reports a precise total only with --total", async () => {
+    t.fake.respond("jobs list-runs", RUNS);
+    const { out } = await t.run(["jobs", "runs", "--total"]);
+    expect(t.fake.calls()).toEqual([
+      ["jobs", "list-runs", "--limit", "1000", "-o", "json"],
+    ]);
     expect(out).toContain("total: 2");
   });
 
@@ -467,7 +498,7 @@ describe("jobs runs", () => {
     t.fake.respond("jobs list-runs", RUNS);
     const { out } = await t.run(["jobs", "runs", "101"]);
     expect(t.fake.calls()).toEqual([
-      ["jobs", "list-runs", "--limit", "1000", "--job-id", "101", "-o", "json"],
+      ["jobs", "list-runs", "--limit", "20", "--job-id", "101", "-o", "json"],
     ]);
     expect(out).toContain("runs[2]{run_id,state,start_time,duration_s}:");
     expect(out).toContain("jobs logs 902");
@@ -508,11 +539,18 @@ describe("jobs runs", () => {
 
   it("slices to the display --limit and flags has_more with the true total, keeping the job_id filter", async () => {
     t.fake.respond("jobs list-runs", RUNS);
-    const { out } = await t.run(["jobs", "runs", "101", "--limit", "1"]);
+    const { out } = await t.run([
+      "jobs",
+      "runs",
+      "101",
+      "--limit",
+      "1",
+      "--total",
+    ]);
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("jobs runs 101 --limit 2");
+    expect(out).toContain("jobs runs 101 --limit 2 --total");
   });
 
   it("does not suggest logs for a failed run beyond the displayed --limit page", async () => {
@@ -521,7 +559,14 @@ describe("jobs runs", () => {
     // suggested as a follow-up (the search must not run over the full
     // ceiling-bounded fetch, only the displayed page).
     t.fake.respond("jobs list-runs", RUNS);
-    const { out } = await t.run(["jobs", "runs", "101", "--limit", "1"]);
+    const { out } = await t.run([
+      "jobs",
+      "runs",
+      "101",
+      "--limit",
+      "1",
+      "--total",
+    ]);
     expect(out).not.toContain("jobs logs");
   });
 
@@ -629,7 +674,30 @@ describe("jobs runs summary", () => {
     expect(out).not.toContain("total_available");
     expect(out).toContain("success: 1");
     expect(out).toContain("failed: 1");
+    expect(out).toContain("other: 0");
     expect(out).toContain("running: 1");
+  });
+
+  it("keeps cancelled and timed-out runs out of the failed tally", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [
+        runRow(1, "SUCCESS"),
+        runRow(2, "CANCELED"),
+        runRow(3, "TIMEDOUT"),
+        runRow(4, "UPSTREAM_CANCELED"),
+        runRow(5, "EXCLUDED"),
+      ],
+    });
+    const { out } = await t.run(["jobs", "runs", "summary"]);
+    // No genuine failure in the window, so no get-run fan-out either.
+    expect(t.fake.calls()).toEqual([
+      ["jobs", "list-runs", "--limit", "50", "-o", "json"],
+    ]);
+    expect(out).toContain("success: 1");
+    expect(out).toContain("failed: 0");
+    expect(out).toContain("other: 4");
+    expect(out).toContain("running: 0");
+    expect(out).not.toContain("first_failed");
   });
 
   it("filters to one job, passing --job-id and reporting job_id", async () => {
@@ -747,7 +815,19 @@ describe("jobs runs summary", () => {
     expect(exitCode).toBe(0);
     expect(out).toContain("run_id: 1");
     expect(out).toContain("task_key: t");
-    expect(out).toContain('error: ""');
+    // Unresolved error line is omitted, not emitted as an empty slot.
+    expect(out).not.toContain("error:");
+  });
+
+  it("omits task_key and error when the failing run resolves no task", async () => {
+    t.fake.respond("jobs list-runs", { runs: [runRow(1, "FAILED")] });
+    t.fake.respond("jobs get-run", { run_id: 1, tasks: [] });
+    const { out } = await t.run(["jobs", "runs", "summary"]);
+    expect(out).toContain("first_failed");
+    expect(out).toContain("run_id: 1");
+    expect(out).not.toContain("task_key");
+    expect(out).not.toContain("error:");
+    expect(out).toContain("jobs logs 1");
   });
 
   it("stays best-effort when the get-run call itself fails, keeping tallies without first_failed", async () => {
@@ -780,6 +860,7 @@ describe("jobs runs summary", () => {
     expect(out).not.toContain("total_available");
     expect(out).toContain("success: 0");
     expect(out).toContain("failed: 0");
+    expect(out).toContain("other: 0");
     expect(out).toContain("running: 0");
     expect(out).toContain("no runs found");
   });

@@ -4,13 +4,12 @@ import {
   asList,
   assertObject,
   domainHelpers,
-  LIST_FLAGS,
   listResult,
-  nextLimit,
+  totalMode,
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
-  TOTAL_FETCH_CEILING,
+  TOTAL_LIST_FLAGS,
   WAIT_TIMEOUT_MS,
   type AxiRenderable,
   type AxiStructuredOutput,
@@ -31,7 +30,7 @@ const requireId = (positional: string[], usageText: string) =>
 
 export const CLUSTERS_HELP = `usage: databricks-axi clusters <subcommand> [args] [flags]
 subcommands[4]:
-  list [--limit N] [--fields a,b]
+  list [--limit N] [--total] [--fields a,b]
   view <cluster_id>
   start <cluster_id> [--wait]
   stop <cluster_id> [--wait]
@@ -45,8 +44,8 @@ notes:
   stop maps to upstream \`clusters delete\` (keeps config, restartable) —
   never permanent-delete, which destroys the cluster
   start/stop are async by default; --wait blocks up to ~20 min upstream (agents: avoid)
-  list: --limit caps rows shown, not fetched; reports a precise total from
-  an internal ceiling-bounded fetch
+  list: --limit fetches one page; add --total for an exact count from a
+  bounded fetch (costs extra round trips, --limit then caps rows shown only)
 `;
 
 type RawCluster = {
@@ -85,13 +84,14 @@ export async function clustersCommand(args: string[]): Promise<AxiRenderable> {
 // --- subcommands ---
 
 async function clustersList(args: string[]): Promise<AxiRenderable> {
-  const { positional, flags } = parseArgs(args, LIST_FLAGS);
+  const { positional, flags } = parseArgs(args, TOTAL_LIST_FLAGS);
   if (positional.length > 0) {
     throw usage(`clusters list takes no arguments, got: ${positional[0]}`);
   }
   const limit = parseIntFlag(flags, "limit", 30);
+  const counted = totalMode(flags, limit);
   const parsed = await runClusters(
-    ["clusters", "list", "--limit", String(TOTAL_FETCH_CEILING)],
+    ["clusters", "list", "--limit", String(counted.fetch)],
     spawnOpts(flags),
   );
   const items = asList(parsed, "clusters") as RawCluster[];
@@ -112,14 +112,14 @@ async function clustersList(args: string[]): Promise<AxiRenderable> {
     help.push(`databricks-axi clusters start ${terminated.cluster_id}${p}`);
   }
   return listResult("clusters", rows, limit, {
-    rerun: `databricks-axi clusters list --limit ${nextLimit(limit, rows.length)}${p}`,
+    rerun: `databricks-axi clusters list ${counted.rerun(rows.length)}${p}`,
     empty: {
       status:
         "no clusters in this workspace — serverless/Free Edition workspaces never show clusters here",
       help: ["Create one in the workspace UI: Compute > Create compute"],
     },
     help,
-    total: true,
+    total: counted.total,
   });
 }
 

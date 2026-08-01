@@ -10,7 +10,7 @@ const CATALOG = {
 };
 
 describe("catalog catalogs", () => {
-  it("fetches the ceiling upstream and renders default fields with a precise total", async () => {
+  it("fetches one display page by default and renders default fields", async () => {
     t.fake.respond("catalogs list", [
       CATALOG,
       { name: "system", owner: "System", catalog_type: "SYSTEM_CATALOG" },
@@ -18,13 +18,27 @@ describe("catalog catalogs", () => {
     const { out, exitCode } = await t.run(["catalog", "catalogs"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["catalogs", "list", "--limit", "1000", "-o", "json"],
+      ["catalogs", "list", "--limit", "30", "-o", "json"],
     ]);
     expect(out).toContain("catalogs[2]{name,owner,catalog_type}:");
     expect(out).toContain("workspace,a@b.c,MANAGED_CATALOG");
     expect(out).toContain("count: 2");
-    expect(out).toContain("total: 2");
+    expect(out).not.toContain("total: 2");
     expect(out).toContain("catalog schemas <name>");
+  });
+
+  it("fetches the ceiling and reports a precise total only with --total", async () => {
+    t.fake.respond("catalogs list", [
+      CATALOG,
+      { name: "system", owner: "System", catalog_type: "SYSTEM_CATALOG" },
+    ]);
+    const { out, exitCode } = await t.run(["catalog", "catalogs", "--total"]);
+    expect(exitCode).toBe(0);
+    expect(t.fake.calls()).toEqual([
+      ["catalogs", "list", "--limit", "1000", "-o", "json"],
+    ]);
+    expect(out).toContain("count: 2");
+    expect(out).toContain("total: 2");
   });
 
   it("tolerates a wrapped {catalogs:[...]} response", async () => {
@@ -39,11 +53,17 @@ describe("catalog catalogs", () => {
       CATALOG,
       { name: "other", owner: "a@b.c", catalog_type: "MANAGED_CATALOG" },
     ]);
-    const { out } = await t.run(["catalog", "catalogs", "--limit", "1"]);
+    const { out } = await t.run([
+      "catalog",
+      "catalogs",
+      "--limit",
+      "1",
+      "--total",
+    ]);
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("catalog catalogs --limit 2");
+    expect(out).toContain("catalog catalogs --limit 2 --total");
   });
 
   it("renders a definitive empty state noting Free Edition", async () => {
@@ -79,17 +99,25 @@ describe("catalog schemas", () => {
     { name: "information_schema", owner: "System" },
   ];
 
-  it("passes catalog as a positional, fetches the ceiling, and renders default fields", async () => {
+  it("passes catalog as a positional and fetches one display page by default", async () => {
     t.fake.respond("schemas list", SCHEMAS);
     const { out, exitCode } = await t.run(["catalog", "schemas", "workspace"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["schemas", "list", "workspace", "--limit", "1000", "-o", "json"],
+      ["schemas", "list", "workspace", "--limit", "30", "-o", "json"],
     ]);
     expect(out).toContain("schemas[2]{name,owner}:");
     expect(out).toContain("default,a@b.c");
-    expect(out).toContain("total: 2");
     expect(out).toContain("catalog tables workspace.<name>");
+  });
+
+  it("fetches the ceiling and reports a precise total with --total", async () => {
+    t.fake.respond("schemas list", SCHEMAS);
+    const { out } = await t.run(["catalog", "schemas", "workspace", "--total"]);
+    expect(t.fake.calls()).toEqual([
+      ["schemas", "list", "workspace", "--limit", "1000", "-o", "json"],
+    ]);
+    expect(out).toContain("total: 2");
   });
 
   it("slices to the display --limit and flags has_more with the true total", async () => {
@@ -100,11 +128,12 @@ describe("catalog schemas", () => {
       "workspace",
       "--limit",
       "1",
+      "--total",
     ]);
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("catalog schemas workspace --limit 2");
+    expect(out).toContain("catalog schemas workspace --limit 2 --total");
   });
 
   it("renders a definitive empty state", async () => {
@@ -164,7 +193,7 @@ describe("catalog tables", () => {
     { name: "other", table_type: "VIEW", data_source_format: "" },
   ];
 
-  it("splits the dotted arg into positional pair with omit flags, fetching the ceiling", async () => {
+  it("splits the dotted arg into positional pair with omit flags, fetching one page", async () => {
     t.fake.respond("tables list", TABLES);
     const { out, exitCode } = await t.run([
       "catalog",
@@ -179,7 +208,7 @@ describe("catalog tables", () => {
         "workspace",
         "default",
         "--limit",
-        "1000",
+        "30",
         "--omit-columns",
         "--omit-properties",
         "-o",
@@ -188,8 +217,19 @@ describe("catalog tables", () => {
     ]);
     expect(out).toContain("tables[2]{name,table_type,data_source_format}:");
     expect(out).toContain("axi_bench_trips,MANAGED,DELTA");
-    expect(out).toContain("total: 2");
     expect(out).toContain("catalog table view workspace.default.<name>");
+  });
+
+  it("fetches the ceiling and reports a precise total with --total", async () => {
+    t.fake.respond("tables list", TABLES);
+    const { out } = await t.run([
+      "catalog",
+      "tables",
+      "workspace.default",
+      "--total",
+    ]);
+    expect(t.fake.calls()[0]).toContain("1000");
+    expect(out).toContain("total: 2");
   });
 
   it("slices to the display --limit and flags has_more, keeping the dotted arg", async () => {
@@ -200,22 +240,29 @@ describe("catalog tables", () => {
       "workspace.default",
       "--limit",
       "1",
+      "--total",
     ]);
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("catalog tables workspace.default --limit 2");
+    expect(out).toContain("catalog tables workspace.default --limit 2 --total");
   });
 
-  it("reports 1000+ and a truncated note when the fetch hits the ceiling (finding-4 UC scale probe: single capped call drains fully)", async () => {
+  it("reports a numeric total plus a truncated note when the fetch hits the ceiling (finding-4 UC scale probe: single capped call drains fully)", async () => {
     t.fake.respond("tables list", {
       tables: Array.from({ length: 1000 }, (_, i) => ({
         name: `t${i}`,
         table_type: "MANAGED",
       })),
     });
-    const { out } = await t.run(["catalog", "tables", "workspace.default"]);
-    expect(out).toContain("total: 1000+");
+    const { out } = await t.run([
+      "catalog",
+      "tables",
+      "workspace.default",
+      "--total",
+    ]);
+    expect(out).toContain("total: 1000");
+    expect(out).not.toContain("1000+");
     expect(out).toContain("has_more: true");
     expect(out).toContain("truncated:");
   });
@@ -382,7 +429,7 @@ describe("catalog table view", () => {
 describe("catalog volumes", () => {
   const VOLUME = { name: "axi_bench_vol", volume_type: "MANAGED" };
 
-  it("splits the dotted arg, fetches the ceiling, and renders default fields", async () => {
+  it("splits the dotted arg, fetches one page, and renders default fields", async () => {
     t.fake.respond("volumes list", [VOLUME]);
     const { out, exitCode } = await t.run([
       "catalog",
@@ -397,14 +444,13 @@ describe("catalog volumes", () => {
         "workspace",
         "default",
         "--limit",
-        "1000",
+        "30",
         "-o",
         "json",
       ],
     ]);
     expect(out).toContain("volumes[1]{name,volume_type}:");
     expect(out).toContain("axi_bench_vol,MANAGED");
-    expect(out).toContain("total: 1");
     expect(out).toContain("catalog volume view workspace.default.<name>");
     expect(out).toContain("fs ls /Volumes/workspace/default/<name>");
   });
@@ -432,11 +478,15 @@ describe("catalog volumes", () => {
       "workspace.default",
       "--limit",
       "1",
+      "--total",
     ]);
+    expect(t.fake.calls()[0]).toContain("1000");
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("catalog volumes workspace.default --limit 2");
+    expect(out).toContain(
+      "catalog volumes workspace.default --limit 2 --total",
+    );
   });
 
   it("maps a missing schema to NOT_FOUND with a schemas suggestion", async () => {
@@ -551,7 +601,7 @@ describe("catalog functions", () => {
     comment: "computes fare with a flat 20 percent tip",
   };
 
-  it("splits the dotted arg, fetches the ceiling, and renders default fields", async () => {
+  it("splits the dotted arg, fetches one page, and renders default fields", async () => {
     t.fake.respond("functions list", [FUNCTION]);
     const { out, exitCode } = await t.run([
       "catalog",
@@ -566,14 +616,13 @@ describe("catalog functions", () => {
         "workspace",
         "axi_bench",
         "--limit",
-        "1000",
+        "30",
         "-o",
         "json",
       ],
     ]);
     expect(out).toContain("functions[1]{name,data_type,comment}:");
     expect(out).toContain("axi_fare_with_tip");
-    expect(out).toContain("total: 1");
     expect(out).toContain("catalog function view workspace.axi_bench.<name>");
   });
 
@@ -599,11 +648,15 @@ describe("catalog functions", () => {
       "workspace.axi_bench",
       "--limit",
       "1",
+      "--total",
     ]);
+    expect(t.fake.calls()[0]).toContain("1000");
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("catalog functions workspace.axi_bench --limit 2");
+    expect(out).toContain(
+      "catalog functions workspace.axi_bench --limit 2 --total",
+    );
   });
 
   it("maps a missing schema to NOT_FOUND with a schemas suggestion", async () => {

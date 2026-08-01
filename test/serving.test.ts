@@ -10,7 +10,7 @@ const ENDPOINT = {
 };
 
 describe("serving list", () => {
-  it("fetches the ceiling upstream and renders default fields from a bare array with a precise total", async () => {
+  it("fetches one display page by default and renders default fields from a bare array", async () => {
     t.fake.respond("serving-endpoints list", [
       ENDPOINT,
       {
@@ -22,20 +22,32 @@ describe("serving list", () => {
     const { out, exitCode } = await t.run(["serving", "list"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["serving-endpoints", "list", "--limit", "1000", "-o", "json"],
+      ["serving-endpoints", "list", "--limit", "30", "-o", "json"],
     ]);
     expect(out).toContain("endpoints[2]{name,state,task}:");
     expect(out).toContain("databricks-gte-large-en,READY,llm/v1/embeddings");
     expect(out).toContain("NOT_READY (updating)");
     expect(out).toContain("count: 2");
+    expect(out).not.toContain("total: 2");
+  });
+
+  it("fetches the ceiling and reports a precise total only with --total", async () => {
+    t.fake.respond("serving-endpoints list", [
+      ENDPOINT,
+      { name: "custom-model", state: { ready: "READY" } },
+    ]);
+    const { out } = await t.run(["serving", "list", "--total"]);
+    expect(t.fake.calls()).toEqual([
+      ["serving-endpoints", "list", "--limit", "1000", "-o", "json"],
+    ]);
     expect(out).toContain("total: 2");
   });
 
-  it("no longer passes the display --limit upstream (fetch is always the ceiling)", async () => {
+  it("passes the display --limit upstream unless --total opts into the ceiling", async () => {
     t.fake.respond("serving-endpoints list", []);
     await t.run(["serving", "list", "--limit", "5"]);
     expect(t.fake.calls()).toEqual([
-      ["serving-endpoints", "list", "--limit", "1000", "-o", "json"],
+      ["serving-endpoints", "list", "--limit", "5", "-o", "json"],
     ]);
   });
 
@@ -44,11 +56,11 @@ describe("serving list", () => {
       ENDPOINT,
       { name: "custom-model", state: { ready: "READY" } },
     ]);
-    const { out } = await t.run(["serving", "list", "--limit", "1"]);
+    const { out } = await t.run(["serving", "list", "--limit", "1", "--total"]);
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("serving list --limit 2");
+    expect(out).toContain("serving list --limit 2 --total");
   });
 
   it("renders a definitive empty state", async () => {

@@ -10,7 +10,7 @@ const CLUSTER = {
 };
 
 describe("clusters list", () => {
-  it("fetches the ceiling upstream and renders default fields with a precise total", async () => {
+  it("fetches one display page by default and renders default fields", async () => {
     t.fake.respond("clusters list", {
       clusters: [
         CLUSTER,
@@ -24,10 +24,22 @@ describe("clusters list", () => {
     const { out, exitCode } = await t.run(["clusters", "list"]);
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([
-      ["clusters", "list", "--limit", "1000", "-o", "json"],
+      ["clusters", "list", "--limit", "30", "-o", "json"],
     ]);
     expect(out).toContain("clusters[2]{cluster_id,cluster_name,state}:");
     expect(out).toContain("1234-567890-abc123,axi-bench-cluster,RUNNING");
+    expect(out).toContain("count: 2");
+    expect(out).not.toContain("total: 2");
+  });
+
+  it("fetches the ceiling and reports a precise total only with --total", async () => {
+    t.fake.respond("clusters list", {
+      clusters: [CLUSTER, { cluster_id: "abc", state: "RUNNING" }],
+    });
+    const { out } = await t.run(["clusters", "list", "--total"]);
+    expect(t.fake.calls()).toEqual([
+      ["clusters", "list", "--limit", "1000", "-o", "json"],
+    ]);
     expect(out).toContain("count: 2");
     expect(out).toContain("total: 2");
   });
@@ -52,11 +64,17 @@ describe("clusters list", () => {
     t.fake.respond("clusters list", {
       clusters: [CLUSTER, { cluster_id: "abc", state: "RUNNING" }],
     });
-    const { out } = await t.run(["clusters", "list", "--limit", "1"]);
+    const { out } = await t.run([
+      "clusters",
+      "list",
+      "--limit",
+      "1",
+      "--total",
+    ]);
     expect(out).toContain("count: 1");
     expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("clusters list --limit 2");
+    expect(out).toContain("clusters list --limit 2 --total");
   });
 
   it("does not suggest starting a TERMINATED cluster beyond the displayed --limit page", async () => {
@@ -74,15 +92,21 @@ describe("clusters list", () => {
         },
       ],
     });
-    const { out } = await t.run(["clusters", "list", "--limit", "1"]);
+    const { out } = await t.run([
+      "clusters",
+      "list",
+      "--limit",
+      "1",
+      "--total",
+    ]);
     expect(out).not.toContain("clusters start");
   });
 
-  it("no longer passes the display --limit upstream (fetch is always the ceiling)", async () => {
+  it("passes the display --limit upstream unless --total opts into the ceiling", async () => {
     t.fake.respond("clusters list", { clusters: [] });
     await t.run(["clusters", "list", "--limit", "5"]);
     expect(t.fake.calls()).toEqual([
-      ["clusters", "list", "--limit", "1000", "-o", "json"],
+      ["clusters", "list", "--limit", "5", "-o", "json"],
     ]);
   });
 
