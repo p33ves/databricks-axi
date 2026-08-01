@@ -59,6 +59,50 @@ export function isFailed(item: { state?: RunState }): boolean {
   return typeof result === "string" && result !== "SUCCESS";
 }
 
+/** Terminal result states that aren't a genuine failure: cancellations
+ * (user or upstream), timeouts, and runs skipped by a condition, the job's
+ * concurrency cap, or a disabled job/task. */
+const NOT_FAILURE_STATES = new Set([
+  "SUCCESS",
+  "CANCELED",
+  "TIMEDOUT",
+  "EXCLUDED",
+  "UPSTREAM_CANCELED",
+  "MAXIMUM_CONCURRENT_RUNS_REACHED",
+  "DISABLED",
+]);
+
+/** Terminal and actually broken (FAILED, UPSTREAM_FAILED, ...) — the
+ * narrower predicate for reported audit numbers, where a cancelled run
+ * counted as a failure is a wrong answer, not just a wide suggestion.
+ * INTERNAL_ERROR is a Jobs-service-level failure that carries no
+ * `result_state` at all, so it's matched on the life cycle instead. */
+export function isGenuineFailure(item: { state?: RunState }): boolean {
+  const result = item.state?.result_state;
+  if (typeof result === "string") {
+    return !NOT_FAILURE_STATES.has(result);
+  }
+  return item.state?.life_cycle_state === "INTERNAL_ERROR";
+}
+
+/** Terminal life cycle states. TERMINATED normally carries a `result_state`;
+ * SKIPPED and INTERNAL_ERROR never do, so a `result_state`-only check reads
+ * them as still in flight. */
+const TERMINAL_LIFE_CYCLE_STATES = new Set([
+  "TERMINATED",
+  "SKIPPED",
+  "INTERNAL_ERROR",
+]);
+
+/** Done, whatever the outcome — the complement of "genuinely in flight"
+ * (RUNNING, PENDING, QUEUED, BLOCKED, WAITING_FOR_RETRY, TERMINATING). */
+export function isTerminal(item: { state?: RunState }): boolean {
+  return (
+    typeof item.state?.result_state === "string" ||
+    TERMINAL_LIFE_CYCLE_STATES.has(item.state?.life_cycle_state ?? "")
+  );
+}
+
 /** Parent directory of a slash-separated workspace/dbfs path ("/" at the root). */
 export function parentPath(path: string): string {
   const idx = path.lastIndexOf("/");
@@ -114,23 +158,148 @@ export const LIST_FLAGS = {
   fields: "value",
 } as const;
 
-/** Shared list-result tail: empty state, count envelope, and the
- * full-page has_more + rerun-with-double-limit suggestion. */
+/** LIST_FLAGS plus the opt-in `--total` for the surfaces that can drain a
+ * bounded fetch and report an exact count (see `totalMode`). */
+export const TOTAL_LIST_FLAGS = {
+  ...LIST_FLAGS,
+  total: "boolean",
+} as const;
+
+/** Internal fetch ceiling for the opt-in `--total` on the cheaply-countable
+ * list surfaces (jobs list/runs, catalog catalogs/schemas/tables/volumes/
+ * functions, clusters list, serving list). All nine take `--limit` as a
+ * client-side cap over an auto-drained page iterator, not as a server page
+ * size: their `--limit` carries the same generated "Maximum number of
+ * results to return" help text (API-field flags keep their API wording),
+ * the server page size is a separate flag where one exists (`clusters list
+ * --page-size`, `volumes list --max-results`; `tables list` has no such
+ * flag), and none takes `--page-token` (pinned against CLI v1.6.0). So
+ * `--total` fetches this many rows upstream regardless of the agent's own
+ * `--limit` (which then caps DISPLAY only) and `listResult` can report a
+ * true `total` instead of the rows-shown heuristic. Bounded, not unbounded
+ * auto-pagination (AGENTS.md sharp edge).
+ * ponytail: 1000 ceiling, raise if a real workspace clips it. */
+export const TOTAL_FETCH_CEILING = 1000;
+
+/** Rows a `--total` fetch actually pulls upstream. The ceiling, except when
+ * the caller explicitly asked to display more than that: `--total` only adds
+ * a count, so it must never shrink a page they'd have got without it. */
+export function totalFetch(limit: number): number {
+  return Math.max(limit, TOTAL_FETCH_CEILING);
+}
+
+/** Spawn budget for a `--total` drain. The default 30s covers a single page,
+ * not the many sequential server pages a ceiling fetch walks (`jobs
+ * list-runs` has no `--page-size` at all), where a TIMEOUT would be bogus —
+ * the drain is working, just slower than one round trip. */
+export const TOTAL_TIMEOUT_MS = 5 * 60_000;
+
+/** `--limit` to suggest for a rerun in total mode. The full fetch is
+ * already in hand, so grow the page geometrically and stop at the true
+ * count instead of guessing at a doubled limit — unless the display already
+ * covers everything fetched, which only happens on a bound-filling fetch
+ * where the true count is unknown and higher: there the step has to clear
+ * the bound (which `--limit` raises with it) to reach anything new. */
+export function nextLimit(limit: number, fetched: number): number {
+  return limit >= fetched ? limit * 4 : Math.min(fetched, limit * 4);
+}
+
+/** Opt-in exact totals. `--total` trades upstream round trips (the fetch
+ * drains up to TOTAL_FETCH_CEILING rows through the client-side `--limit`
+ * cap) for a precise `total`; without it a list fetches exactly one
+ * `--limit` page and falls back to the full-page `has_more` heuristic. The
+ * drain is never implicit: an agent asking for 5 rows gets one page. */
+export function totalMode(
+  flags: Flags,
+  limit: number,
+): {
+  total: boolean;
+  /** Upstream `--limit` for the list call. */
+  fetch: number;
+  /** `listResult`'s `opts.fetched`: the row bound this fetch was allowed to
+   * reach, or undefined in one-page mode where there is no bound to report
+   * a short page against. Threaded rather than re-derived so the two calls
+   * can't disagree about `limit`. */
+  fetched: number | undefined;
+  /** Spawn options for the list call — `spawnOpts` plus, in total mode, the
+   * wider timeout the multi-page drain needs. */
+  spawn: RunDatabricksOptions;
+  rerun: (fetched: number) => string;
+} {
+  const total = flags.get("total") === true;
+  return {
+    total,
+    fetch: total ? totalFetch(limit) : limit,
+    fetched: total ? totalFetch(limit) : undefined,
+    spawn: {
+      ...spawnOpts(flags),
+      ...(total ? { timeoutMs: TOTAL_TIMEOUT_MS } : {}),
+    },
+    // In total mode the true count is known, so the suggestion is bounded
+    // by it (and keeps --total, or the rerun would silently drop back to
+    // the heuristic); otherwise it's the legacy blind doubling.
+    rerun: (fetched: number) =>
+      total
+        ? `--limit ${nextLimit(limit, fetched)} --total`
+        : `--limit ${limit * 2}`,
+  };
+}
+
+/** Shared list-result tail: empty state, count envelope, and either the
+ * legacy full-page has_more heuristic or (opts.total) a precise `total`
+ * sliced from a ceiling-bounded fetch. */
 export function listResult(
   key: string,
   rows: AxiStructuredOutput[],
   limit: number,
   opts: {
-    /** Rerun-with-double-limit suggestion, prepended on a full page. */
+    /** Rerun-with-a-bigger---limit suggestion, prepended when there's more
+     * to see. Both modes build it from `totalMode(flags, limit).rerun`:
+     * a doubled limit when the true count isn't known, otherwise a
+     * geometrically bigger page bounded by that count. listResult only uses
+     * it when the page is short of what was fetched. */
     rerun: string;
     empty: { status: string; help: string[] };
     help: string[];
+    /** `totalMode(...).fetched` — set only when the caller opted into
+     * `--total`, and then to the row bound that fetch was allowed to reach.
+     * `rows` is that FULL fetch, not a display page: listResult slices to
+     * `limit` itself and reports the true row count as `total` instead of
+     * `count`-equals-rows-shown, and reads a bound-filling `rows` as a
+     * clipped count rather than the end of the list. */
+    fetched?: number;
   },
 ): AxiRenderable {
   if (rows.length === 0) {
     return { [key]: [], status: opts.empty.status, help: opts.empty.help };
   }
   const allHelp = [...opts.help];
+  if (opts.fetched !== undefined) {
+    const fetched = opts.fetched;
+    const hitCeiling = rows.length >= fetched;
+    const sliced = rows.slice(0, limit);
+    // `total` stays numeric even at the ceiling — a consumer comparing or
+    // summing it shouldn't get a string in the one case that matters; the
+    // `truncated` note below carries "may be higher".
+    const out: AxiStructuredOutput = {
+      [key]: sliced,
+      count: sliced.length,
+      total: rows.length,
+    };
+    if (sliced.length < rows.length || hitCeiling) {
+      // Either unseen rows are already fetched (a bigger --limit shows them)
+      // or the fetch filled its bound (a bigger --limit raises that bound
+      // too, since the bound is max(limit, ceiling)). Both are reachable by
+      // the same nextLimit step, so has_more always ships with a follow-up.
+      out.has_more = true;
+      allHelp.unshift(opts.rerun);
+    }
+    if (hitCeiling) {
+      out.truncated = `stopped counting at the ${fetched}-row fetch ceiling; true total may be higher`;
+    }
+    out.help = allHelp;
+    return out;
+  }
   const out: AxiStructuredOutput = { [key]: rows, count: rows.length };
   // CLI >= 0.298 caps results client-side at --limit; a full page means
   // there may be more.

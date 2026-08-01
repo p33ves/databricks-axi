@@ -28,7 +28,13 @@ a leading dash smuggled past `--` and enforces the expected arity.
 
 ## Upstream calls
 
-- `catalogs` → `databricks catalogs list --limit N`
+`catalogs`/`schemas`/`tables`/`volumes`/`functions` fetch the agent's own
+`--limit` (default 30) as one page, or `TOTAL_FETCH_CEILING` (1000,
+`shared.ts`) rows when `--total` is passed — `--limit` then caps DISPLAY
+only. See Output shape below.
+
+- `catalogs` → `databricks catalogs list --limit N` (N = 1000 with
+  `--total`)
 - `schemas` → `databricks schemas list <catalog> --limit N`
 - `tables` → `databricks tables list <catalog> <schema> --limit N
 --omit-columns --omit-properties` (the default payload carries full
@@ -43,11 +49,18 @@ a leading dash smuggled past `--` and enforces the expected arity.
 
 ## Output shape
 
-- All list subcommands go through `listResult`, each with its own default
-  field set: `catalogs` → `name, owner, catalog_type`; `schemas` →
-  `name, owner` (upstream's `name` here is already the bare schema name,
-  not `full_name`); `tables` → `name, table_type, data_source_format`;
-  `volumes` → `name, volume_type`; `functions` →
+- `catalogs`/`schemas`/`tables`/`volumes`/`functions` go through
+  `listResult`. By default that's the legacy `count`/full-page `has_more`
+  envelope over one fetched page. With `--total` (`opts.fetched` set) the
+  ceiling-bounded fetch is sliced to the display `--limit` (default 30),
+  `count` is rows shown, `total` is the exact fetched count (numeric even
+  at the ceiling, where a `truncated` note says the true total may be
+  higher), `has_more` is `count < total || truncated` (a ceiling-hit fetch
+  flags `has_more` even when the page showed every fetched row). Each has
+  its own default field set: `catalogs` → `name, owner, catalog_type`;
+  `schemas` → `name, owner` (upstream's `name` here is already the bare
+  schema name, not `full_name`); `tables` → `name, table_type,
+data_source_format`; `volumes` → `name, volume_type`; `functions` →
   `name, data_type, comment`.
 - `table view`: `full_name`, `table_type`, `owner`, optional `comment`,
   and `columns` flattened to `{ name, type_text, nullable }`. `help`
@@ -131,7 +144,10 @@ list`) — this and `sql history` are the only two commands in the repo
 ## Tests
 
 `test/catalog.test.ts` uses `setupCli()`/`fake-databricks.ts`. Covers
-bare-array vs. wrapped-object response tolerance, `has_more` pagination,
+bare-array vs. wrapped-object response tolerance, the default one-page
+argv (`--limit 30` upstream) vs. the `--total` ceiling-fetch argv
+(`--limit 1000`) with `total`/`has_more` off the sliced page and the
+numeric-`total`-plus-`truncated` ceiling-hit case,
 empty states (including the Free Edition catalog note), `--fields`
 validation, dotted-arg splitting with the `--omit-columns`/
 `--omit-properties` flags for tables, leading-dash-smuggling rejection for

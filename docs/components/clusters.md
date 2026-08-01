@@ -19,7 +19,9 @@ one being smuggled onto argv as a flag), not a strict id pattern.
 
 ## Upstream calls
 
-- `list` → `databricks clusters list --limit N`
+- `list` → `databricks clusters list --limit N` (N = the agent's `--limit`,
+  default 30; `TOTAL_FETCH_CEILING` 1000 from `shared.ts` when `--total` is
+  passed, and then `--limit` caps DISPLAY only) — see Output shape below
 - `view` → `databricks clusters get <cluster_id>`
 - `start` → `databricks clusters start <cluster_id>` (+ `--no-wait` unless
   `--wait`)
@@ -34,9 +36,16 @@ one being smuggled onto argv as a flag), not a strict id pattern.
 
 ## Output shape
 
-- `list`: `listResult` envelope, default fields `cluster_id`,
-  `cluster_name`, `state`. If any row is `TERMINATED`, a `clusters start
-<id>` follow-up is appended to `help`.
+- `list`: `listResult` envelope — the legacy `count`/`has_more` shape over
+  one fetched page, or with `--total` sliced to the display `--limit`
+  (default 30) out of the full ceiling-bounded fetch, `count` rows shown,
+  `total` the exact fetched count (numeric even at the ceiling, where a
+  `truncated` note is added). Default fields `cluster_id`, `cluster_name`,
+  `state`. If a `TERMINATED` cluster appears within the displayed `--limit`
+  page, a `clusters start <id>` follow-up is appended to `help` — the search
+  only covers the displayed page, not the full ceiling-bounded fetch, so a
+  `TERMINATED` cluster beyond the display page (never shown to the agent)
+  isn't suggested.
 - `view`: `cluster_id`, `cluster_name`, `state`, optional `state_message`
   (only when non-empty), `spark_version`, `node_type_id`,
   `num_workers` (rendered as `"<min>-<max>"` when `autoscale` has both
@@ -89,5 +98,6 @@ paths (`"requested"` by default, reached state with `--wait`), autoscale
 min-max vs. fixed `num_workers`
 fallback logic, the `state_message` presence/absence branches, the
 "is in unexpected state" no-op conversion for `start`, the silent-idempotent
-`stop` path, 403 → `PERMISSION_DENIED` mapping, and an unknown-flag
-rejection.
+`stop` path, 403 → `PERMISSION_DENIED` mapping, an unknown-flag rejection,
+and the `TERMINATED`-cluster `start` suggestion being scoped to the
+displayed `--limit` page (a match beyond it isn't suggested).

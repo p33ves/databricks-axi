@@ -18,12 +18,19 @@ opaque strings.
 
 ## Upstream calls
 
-- `list` → `databricks serving-endpoints list --limit N`
+- `list` → `databricks serving-endpoints list --limit N` (N = the agent's
+  `--limit`, default 30; `TOTAL_FETCH_CEILING` 1000 from `shared.ts` when
+  `--total` is passed, and then `--limit` caps DISPLAY only) — see Output
+  shape below
 - `view` → `databricks serving-endpoints get <name>`
 
 ## Output shape
 
-- `list`: `listResult` envelope, default fields `name`, `state`, `task`.
+- `list`: `listResult` envelope — the legacy `count`/`has_more` shape over
+  one fetched page, or with `--total` sliced to the display `--limit`
+  (default 30) out of the full ceiling-bounded fetch, `count` rows shown,
+  `total` the exact fetched count (numeric even at the ceiling, where a
+  `truncated` note is added). Default fields `name`, `state`, `task`.
   `state` in the raw response is a `{ ready, config_update }` object, not a
   string — it's flattened to a compact string (`compactState`) before
   rendering: `READY`/`NOT_READY` etc., with `" (updating)"` appended when
@@ -63,7 +70,9 @@ opaque strings.
 ## Tests
 
 `test/serving.test.ts` uses `setupCli()`/`fake-databricks.ts`. Covers list
-pagination from a bare-array response, field selection, the
+pagination from a bare-array response (one-page argv by default, the
+`--total` ceiling-fetch argv, and `total`/`has_more` off the display
+`--limit` slice), field selection, the
 foundation-model vs. custom-endpoint served-entity rendering (including the
 absent-`entity_version`/`workload_size` case), the "(updating)" compact
 state suffix, the live serving-404 NOT_FOUND mapping, and dispatch-level

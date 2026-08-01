@@ -10,7 +10,7 @@ const CLUSTER = {
 };
 
 describe("clusters list", () => {
-  it("passes exact argv and renders default fields", async () => {
+  it("fetches one display page by default and renders default fields", async () => {
     t.fake.respond("clusters list", {
       clusters: [
         CLUSTER,
@@ -29,6 +29,19 @@ describe("clusters list", () => {
     expect(out).toContain("clusters[2]{cluster_id,cluster_name,state}:");
     expect(out).toContain("1234-567890-abc123,axi-bench-cluster,RUNNING");
     expect(out).toContain("count: 2");
+    expect(out).not.toContain("total: 2");
+  });
+
+  it("fetches the ceiling and reports a precise total only with --total", async () => {
+    t.fake.respond("clusters list", {
+      clusters: [CLUSTER, { cluster_id: "abc", state: "RUNNING" }],
+    });
+    const { out } = await t.run(["clusters", "list", "--total"]);
+    expect(t.fake.calls()).toEqual([
+      ["clusters", "list", "--limit", "1000", "-o", "json"],
+    ]);
+    expect(out).toContain("count: 2");
+    expect(out).toContain("total: 2");
   });
 
   it("suggests starting a TERMINATED cluster by id", async () => {
@@ -47,14 +60,49 @@ describe("clusters list", () => {
     expect(out).toContain("clusters start 9999-000000-xyz999");
   });
 
-  it("flags a full page as has_more with a bigger-limit suggestion", async () => {
-    t.fake.respond("clusters list", { clusters: [CLUSTER] });
-    const { out } = await t.run(["clusters", "list", "--limit", "1"]);
+  it("slices to the display --limit and flags has_more with the true total", async () => {
+    t.fake.respond("clusters list", {
+      clusters: [CLUSTER, { cluster_id: "abc", state: "RUNNING" }],
+    });
+    const { out } = await t.run([
+      "clusters",
+      "list",
+      "--limit",
+      "1",
+      "--total",
+    ]);
+    expect(out).toContain("count: 1");
+    expect(out).toContain("total: 2");
     expect(out).toContain("has_more: true");
-    expect(out).toContain("clusters list --limit 2");
+    expect(out).toContain("clusters list --limit 2 --total");
   });
 
-  it("passes --limit through", async () => {
+  it("does not suggest starting a TERMINATED cluster beyond the displayed --limit page", async () => {
+    // Only CLUSTER (RUNNING) is within --limit 1 — the TERMINATED cluster
+    // at index 1 was never shown to the agent and must not be suggested
+    // (the search must not run over the full ceiling-bounded fetch, only
+    // the displayed page).
+    t.fake.respond("clusters list", {
+      clusters: [
+        CLUSTER,
+        {
+          cluster_id: "9999-000000-xyz999",
+          cluster_name: "other",
+          state: "TERMINATED",
+        },
+      ],
+    });
+    const { out } = await t.run([
+      "clusters",
+      "list",
+      "--limit",
+      "1",
+      "--total",
+    ]);
+    expect(out).not.toContain("clusters start");
+  });
+
+  it("passes the display --limit upstream unless --total opts into the ceiling", async () => {
     t.fake.respond("clusters list", { clusters: [] });
     await t.run(["clusters", "list", "--limit", "5"]);
     expect(t.fake.calls()).toEqual([

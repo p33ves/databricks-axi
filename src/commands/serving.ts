@@ -3,11 +3,12 @@ import {
   asList,
   assertObject,
   domainHelpers,
-  LIST_FLAGS,
   listResult,
+  totalMode,
   profileSuffix,
   runWithNotFoundHelp,
   spawnOpts,
+  TOTAL_LIST_FLAGS,
   type AxiRenderable,
   type AxiStructuredOutput,
 } from "./shared.js";
@@ -27,7 +28,7 @@ const requireId = (positional: string[], usageText: string) =>
 
 export const SERVING_HELP = `usage: databricks-axi serving <subcommand> [args] [flags]
 subcommands[2]:
-  list [--limit N] [--fields a,b]
+  list [--limit N] [--total] [--fields a,b]
   view <name>
 flags:
   --profile <name>  databricks auth profile passthrough
@@ -36,6 +37,8 @@ examples:
   databricks-axi serving view <name>
 notes:
   read-only in this release — axi does not invoke serving endpoints
+  list: --limit fetches one page; add --total for an exact count from a
+  bounded fetch (costs extra round trips, --limit then caps rows shown only)
 `;
 
 type RawState = { ready?: string; config_update?: string };
@@ -84,14 +87,15 @@ function compactState(state?: RawState): string {
 }
 
 async function servingList(args: string[]): Promise<AxiRenderable> {
-  const { positional, flags } = parseArgs(args, LIST_FLAGS);
+  const { positional, flags } = parseArgs(args, TOTAL_LIST_FLAGS);
   if (positional.length > 0) {
     throw usage(`serving list takes no arguments, got: ${positional[0]}`);
   }
   const limit = parseIntFlag(flags, "limit", 30);
+  const counted = totalMode(flags, limit);
   const parsed = await runServing(
-    ["serving-endpoints", "list", "--limit", String(limit)],
-    spawnOpts(flags),
+    ["serving-endpoints", "list", "--limit", String(counted.fetch)],
+    counted.spawn,
   );
   const items = asList(parsed, "endpoints") as RawEndpoint[];
   // renderRows selects top-level keys verbatim (no nested flattening) — the
@@ -102,7 +106,7 @@ async function servingList(args: string[]): Promise<AxiRenderable> {
   const rows = renderRows(flattened, flags, ["name", "state", "task"]);
   const p = profileSuffix(flags.get("profile"));
   return listResult("endpoints", rows, limit, {
-    rerun: `databricks-axi serving list --limit ${limit * 2}${p}`,
+    rerun: `databricks-axi serving list ${counted.rerun(rows.length)}${p}`,
     empty: {
       status: "no serving endpoints in this workspace",
       help: [
@@ -110,6 +114,7 @@ async function servingList(args: string[]): Promise<AxiRenderable> {
       ],
     },
     help: [`databricks-axi serving view <name>${p}`],
+    fetched: counted.fetched,
   });
 }
 

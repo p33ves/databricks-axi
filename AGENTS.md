@@ -33,7 +33,7 @@ these instead of auto-detecting): `pnpm test`,
 truncation for view/cat/logs), `src/commands/shared.ts`
 (`domainHelpers(domain)`: the shared `parseArgs`/`parseIntFlag`/`requireId`/
 `renderRows`, built on `node:util`'s `parseArgs` in strict mode; plus
-`listResult` for the empty-state/count/has_more list envelope and
+`listResult` for the empty-state/count/total/has_more list envelope and
 `runWithNotFoundHelp` for domain-flavored NOT_FOUND suggestions). Field
 selection, suggestions, and pagination rendering live in `shared.ts`; the
 separate `fields.ts`/`suggestions.ts` files from the original design were
@@ -100,8 +100,14 @@ start/stop` on an already-in-state warehouse exits 0 silently upstream
 - There is no `logs` subcommand upstream: `jobs logs <run_id>` =
   `jobs get-run` → per-task `get-run-output` fan-out.
 - CLI >= 0.298 removed `--page-token`; `--limit` is a client-side result
-  cap. A full page → `has_more: true` + a rerun-with-`--limit <2N>`
-  suggestion, never auto-paginate unboundedly.
+  cap, so pagination is a client-side concern. Never auto-paginate
+  unboundedly: a list fetches one `--limit` page and reports `has_more`
+  from the full-page heuristic, unless the caller opts into `--total` on
+  one of the nine surfaces that auto-drain into a single capped call —
+  those fetch a bounded `TOTAL_FETCH_CEILING` and report a precise `total`
+  while `--limit` caps display only. Which surfaces do which, and the
+  rerun-suggestion rules, live in
+  [docs/components/core.md](docs/components/core.md).
 - Exception: `query-history list` still has real server-side pagination
   (`--max-results`/`--page-token`, `has_next_page` in the response). `sql
 history` maps its own `--limit` to `--max-results`, sources `has_more`
