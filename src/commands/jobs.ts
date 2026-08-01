@@ -58,8 +58,9 @@ notes:
   bounded fetch (costs extra round trips, --limit then caps rows shown only)
   runs summary: audit rollup over a bounded window (default 50, max 200
   recent runs) of state tallies plus the first failing run/task/error, and
-  common_error (the failure line shared by the most runs, only when more than
-  one failure shares it); "running" is every run still in flight (life_cycle
+  common_error/common_error_count (the failure line shared by the most runs
+  and how many of the failures share it, emitted only when more than one
+  does); "running" is every run still in flight (life_cycle
   running, pending, queued, or blocked); "failed" counts genuine failures
   only, including the result_state-less INTERNAL_ERROR; canceled, timed-out,
   excluded, disabled, concurrency-capped, and skipped runs are terminal but
@@ -430,7 +431,7 @@ async function runsSummary(args: string[]): Promise<AxiRenderable> {
     } else if (isGenuineFailure(run)) {
       failed++;
       const message = run.state?.state_message;
-      if (message) {
+      if (typeof message === "string") {
         const line = redactSecrets(message).split("\n")[0]?.trim();
         if (line) {
           errorCounts.set(line, (errorCounts.get(line) ?? 0) + 1);
@@ -535,6 +536,9 @@ async function runsSummary(args: string[]): Promise<AxiRenderable> {
   // "common" error would overstate a sample of one.
   if (commonError && commonErrorCount > 1) {
     out.common_error = commonError;
+    // How many of the `failed` runs share it — 2 of 40 and 40 of 40 are very
+    // different signals and read identically without the count.
+    out.common_error_count = commonErrorCount;
   }
   help.push(`databricks-axi jobs runs${jobId ? ` ${jobId}` : ""}${p}`);
   out.help = help;

@@ -741,9 +741,53 @@ describe("jobs runs summary", () => {
     expect(out).toContain("failed: 3");
     expect(out).toContain("common_error:");
     expect(out).toContain("RuntimeError: boom");
+    // The share of the failures, so 2 of 3 doesn't read like 3 of 3.
+    expect(out).toContain("common_error_count: 2");
     // Secrets in the message are redacted, same as first_failed.error.
     expect(out).not.toContain("dapifedcba9876543210");
     expect(out).toContain("[redacted]");
+  });
+
+  it("omits common_error when only one failure carries a message", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [
+        {
+          run_id: 3,
+          job_id: 101,
+          state: {
+            result_state: "FAILED",
+            state_message: "RuntimeError: lonely",
+          },
+        },
+        runRow(2, "FAILED"),
+        runRow(1, "SUCCESS"),
+      ],
+    });
+    t.fake.respond("jobs get-run", { run_id: 3, tasks: [] });
+    const { out } = await t.run(["jobs", "runs", "summary"]);
+    expect(out).toContain("failed: 2");
+    // A sample of one is not "common" — that message is first_failed's job.
+    expect(out).not.toContain("common_error");
+    expect(out).not.toContain("RuntimeError: lonely");
+  });
+
+  it("keeps the tallies when a run's state_message isn't a string", async () => {
+    t.fake.respond("jobs list-runs", {
+      runs: [
+        {
+          run_id: 2,
+          job_id: 101,
+          state: { result_state: "FAILED", state_message: { code: 500 } },
+        },
+        runRow(1, "SUCCESS"),
+      ],
+    });
+    t.fake.respond("jobs get-run", { run_id: 2, tasks: [] });
+    const { out, exitCode } = await t.run(["jobs", "runs", "summary"]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("failed: 1");
+    expect(out).toContain("success: 1");
+    expect(out).not.toContain("common_error");
   });
 
   it("keeps cancelled, timed-out, and skipped runs out of the failed tally", async () => {
