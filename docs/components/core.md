@@ -263,6 +263,13 @@ ls` (upstream has no `--limit` at all, so it reports exact truncation
   over `life_cycle_state`, falling back to `"UNKNOWN"`; `isFailed` is true
   for any terminal `result_state` other than `SUCCESS`. Shared by
   `jobs.ts`'s run rendering and `context.ts`'s home-panel `fetchRecentRuns`.
+- `isGenuineFailure(item)`: the narrower sibling of `isFailed` — true only
+  for a terminal `result_state` outside `NOT_FAILURE_STATES` (`SUCCESS`
+  plus the cancel/timeout/skip states). `isFailed` is deliberately wide
+  because it only widens a follow-up suggestion; `isGenuineFailure` backs
+  reported audit numbers (`jobs runs summary`'s `failed` tally and its
+  `first_failed` pick), where counting a cancelled run as a failure is a
+  wrong answer.
 - `WAIT_TIMEOUT_MS` (25 min): the `--wait` budget for async start/stop/run
   mutations, since upstream blocks up to ~20 min. Shared by `jobs`,
   `clusters`, and `sql` (`warehouses start`/`stop`).

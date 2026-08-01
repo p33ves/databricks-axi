@@ -102,9 +102,11 @@ upstream's own ~20-minute block on `run-now`.
 - `runs summary`: hand-built envelope (not `listResult` — its shape isn't a
   rows array), `{ job_id?, window, success, failed, other, running,
 truncated?, first_failed?, help }`. `failed` counts genuine failures only
-  (`FAILED`, `UPSTREAM_FAILED`, ...); `CANCELED`, `TIMEDOUT`, `EXCLUDED`,
-  and `UPSTREAM_CANCELED` are terminal but not failures, so they tally as
-  `other` instead of inflating a reported audit number. The four tallies
+  (`FAILED`, `UPSTREAM_FAILED`, ...); the cancel/timeout/skip states listed
+  in `shared.ts`'s `NOT_FAILURE_STATES` (`CANCELED`, `UPSTREAM_CANCELED`,
+  `TIMEDOUT`, `EXCLUDED`, `MAXIMUM_CONCURRENT_RUNS_REACHED`, `DISABLED`)
+  are terminal but not broken, so they tally as `other` instead of
+  inflating a reported audit number. The four tallies
   add up to `window`. `window` is the number of runs actually fetched
   within the bounded window (`--limit`, default 50, capped at the internal
   ceiling 200). `running` is a remainder, not "actively running": it's every
