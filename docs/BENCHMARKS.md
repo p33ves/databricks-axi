@@ -320,12 +320,14 @@ bare CLI: `dag-shape-aws` (14 turns) and `find-failed-run-aws` (10 turns).
 v1.3.0 targeted both, and added two list surfaces built for the same class of
 question: `jobs runs summary` (a one-call rollup over a job's recent runs) and
 a `total` field on cheaply-countable lists. A focused re-run on 2026-08-01
-measured the four affected tasks, `runs-audit-aws` and `table-count-scale-aws`
-exercising the two new surfaces.
+measured those two tasks plus two new tasks written for the new surfaces,
+`runs-audit-aws` and `table-count-scale-aws`. The two new tasks do not appear
+in the matrix above; they did not exist when it ran.
 
-Different build (v1.3.0, not the matrix's v1.2.0) and three arms, not five, so
-these numbers are not comparable across the tables above and are kept out of
-the headline averages. Read them only as before/after on the specific change.
+Different build (v1.3.0, not the matrix's v1.2.0), three arms not five, and 3
+repeats per cell against the matrix's 5, so these numbers are not comparable
+across the tables above and are kept out of the headline averages. Read them
+only as before/after on the specific change.
 
 ### Turns (2026-08-01, v1.3.0)
 
@@ -353,7 +355,10 @@ Median over repeats. **Bold** = row winner (lowest).
 `dag-shape-aws` drops from 14 turns to 3, level with raw-cli: `jobs view` now
 surfaces each task's `depends_on`, so the agent reads the graph in one pass
 instead of looping on it. `find-failed-run-aws` falls from 10 turns to 6, also
-level. The two new-surface tasks go to axi: `runs-audit-aws`, which
+level, though raw-cli itself moved from 5 turns to 6 between the two runs, so
+part of that convergence is baseline drift rather than the product change;
+`dag-shape-aws` is clean on that count, with raw-cli at 3.0 in both runs. The
+two new-surface tasks go to axi: `runs-audit-aws`, which
 `jobs runs summary` answers in one call, at 7 turns against 11 for raw-cli and
 15 for MCP, and `table-count-scale-aws`, the `total` field, at 2 turns against
 4. Cost tracks turns only loosely at this sample size, so the turn counts are
