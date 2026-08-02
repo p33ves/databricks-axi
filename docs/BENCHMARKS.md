@@ -56,6 +56,11 @@ tasks (`notebook-read`, `notebook-discovery`, `api-current-user`,
 deterministically where the answer is machine-checkable, by an LLM judge
 otherwise.
 
+A later focused re-run on 2026-08-01 measured four tasks against v1.3.0 on
+three of these arms. It is reported separately in
+[The 1.3.0 reliability changes](#the-130-reliability-changes) and stays out
+of the matrix and averages below.
+
 `cli-skills`' agent instructions hand-feed the router step that tells the
 agent to load the matching product skill, even though this arm ships no
 router hook of its own. Deliberately generous: its numbers below are a floor
@@ -296,7 +301,9 @@ bare CLI. `dag-shape-aws` is the clearest: 14 turns and $0.284 median for
 axi against 3 turns and $0.132 for raw-cli, with one failed repeat, the agent
 looping on the job's task graph instead of reading it in one pass.
 `find-failed-run-aws` is milder (10 turns vs 5). These are real and worth
-chasing down; axi is not uniformly ahead of its own underlying CLI.
+chasing down; axi is not uniformly ahead of its own underlying CLI. Both are
+level with raw-cli in v1.3.0; see
+[The 1.3.0 reliability changes](#the-130-reliability-changes) below.
 
 **Where cli-skills pays a premium.** It loads skill-body documentation on top
 of the raw CLI's plain-text output, and that load costs real turns and
@@ -310,6 +317,58 @@ in a cold deployment, the ~77.5k schema tax every session. Deferred trims the
 tokens but spends turns looking tools up. `clusters-view-aws` is the standout
 cost: both MCP arms hunt for the right cluster-read call (9 and 11 turns, up
 to 125s), against axi's 3 turns and 13s.
+
+## The 1.3.0 reliability changes
+
+The matrix above measured v1.2.0, where two tasks ran worse on axi than on the
+bare CLI: `dag-shape-aws` (14 turns) and `find-failed-run-aws` (10 turns).
+v1.3.0 targeted both, and added two list surfaces built for the same class of
+question: `jobs runs summary` (a one-call rollup over a job's recent runs) and
+a `total` field on cheaply-countable lists. A focused re-run on 2026-08-01
+measured those two tasks plus two new tasks written for the new surfaces,
+`runs-audit-aws` and `table-count-scale-aws`. The two new tasks do not appear
+in the matrix above; they did not exist when it ran.
+
+Different build (v1.3.0, not the matrix's v1.2.0), three arms not five, and 3
+repeats per cell against the matrix's 5, so these numbers are not comparable
+across the tables above and are kept out of the headline averages. Read them
+only as before/after on the specific change.
+
+### Turns (2026-08-01, v1.3.0)
+
+Median over repeats. **Bold** = row winner (lowest).
+
+| task                  | databricks-axi | raw-cli | mcp-aidevkit-deferred |
+| --------------------- | -------------- | ------- | --------------------- |
+| runs-audit-aws        | **7.0**        | 11.0    | 15.0                  |
+| find-failed-run-aws   | **6.0**        | **6.0** | 7.0                   |
+| table-count-scale-aws | **2.0**        | 4.0     | 4.0                   |
+| dag-shape-aws         | **3.0**        | **3.0** | 4.0                   |
+
+<details>
+<summary><b>Cost per task (USD)</b></summary>
+
+| task                  | databricks-axi | raw-cli   | mcp-aidevkit-deferred |
+| --------------------- | -------------- | --------- | --------------------- |
+| runs-audit-aws        | **0.232**      | 0.284     | 1.064                 |
+| find-failed-run-aws   | 0.222          | **0.203** | 0.404                 |
+| table-count-scale-aws | **0.128**      | 0.147     | 0.151                 |
+| dag-shape-aws         | 0.142          | **0.130** | 0.151                 |
+
+</details>
+
+`dag-shape-aws` drops from 14 turns to 3, level with raw-cli: `jobs view` now
+surfaces each task's `depends_on`, so the agent reads the graph in one pass
+instead of looping on it. `find-failed-run-aws` falls from 10 turns to 6, also
+level, though raw-cli itself moved from 5 turns to 6 between the two runs, so
+part of that convergence is baseline drift rather than the product change;
+`dag-shape-aws` is clean on that count, with raw-cli at 3.0 in both runs. The
+two new-surface tasks go to axi: `runs-audit-aws`, which
+`jobs runs summary` answers in one call, at 7 turns against 11 for raw-cli and
+15 for MCP, and `table-count-scale-aws`, the `total` field, at 2 turns
+against 4. Cost tracks turns only loosely at this sample size, so the turn
+counts are the clean signal. 35 of 36 cells passed (the miss was one
+`mcp-aidevkit-deferred` repeat on `runs-audit-aws`).
 
 ## Limitations
 

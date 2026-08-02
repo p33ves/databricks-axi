@@ -154,7 +154,8 @@ model already knows how to do, so documentation and schemas can only be a
 cost here. Authoring workflows and the MCP server's wider operation
 coverage are untested.
 
-Full per-task numbers, the eager-vs-deferred cold-cache caveat, and the
+Full per-task numbers, the eager-vs-deferred cold-cache caveat, the v1.3.0
+reliability follow-up (which closed axi's two biggest per-task gaps), and the
 complete limitations live in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 To watch the comparison live against your own workspace, the repo ships a
