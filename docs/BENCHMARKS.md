@@ -301,9 +301,9 @@ bare CLI. `dag-shape-aws` is the clearest: 14 turns and $0.284 median for
 axi against 3 turns and $0.132 for raw-cli, with one failed repeat, the agent
 looping on the job's task graph instead of reading it in one pass.
 `find-failed-run-aws` is milder (10 turns vs 5). These are real and worth
-chasing down; axi is not uniformly ahead of its own underlying CLI. Both were
-fixed in v1.3.0; see [The 1.3.0 reliability changes](#the-130-reliability-changes)
-below.
+chasing down; axi is not uniformly ahead of its own underlying CLI. Both are
+level with raw-cli in v1.3.0; see
+[The 1.3.0 reliability changes](#the-130-reliability-changes) below.
 
 **Where cli-skills pays a premium.** It loads skill-body documentation on top
 of the raw CLI's plain-text output, and that load costs real turns and
