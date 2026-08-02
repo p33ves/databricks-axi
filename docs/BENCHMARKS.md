@@ -56,6 +56,11 @@ tasks (`notebook-read`, `notebook-discovery`, `api-current-user`,
 deterministically where the answer is machine-checkable, by an LLM judge
 otherwise.
 
+A later focused re-run on 2026-08-01 measured four tasks against v1.3.0 on
+three of these arms. It is reported separately in
+[The 1.3.0 reliability changes](#the-130-reliability-changes) and stays out
+of the matrix and averages below.
+
 `cli-skills`' agent instructions hand-feed the router step that tells the
 agent to load the matching product skill, even though this arm ships no
 router hook of its own. Deliberately generous: its numbers below are a floor
@@ -360,9 +365,9 @@ part of that convergence is baseline drift rather than the product change;
 `dag-shape-aws` is clean on that count, with raw-cli at 3.0 in both runs. The
 two new-surface tasks go to axi: `runs-audit-aws`, which
 `jobs runs summary` answers in one call, at 7 turns against 11 for raw-cli and
-15 for MCP, and `table-count-scale-aws`, the `total` field, at 2 turns against
-4. Cost tracks turns only loosely at this sample size, so the turn counts are
-the clean signal. 35 of 36 cells passed (the miss was one
+15 for MCP, and `table-count-scale-aws`, the `total` field, at 2 turns
+against 4. Cost tracks turns only loosely at this sample size, so the turn
+counts are the clean signal. 35 of 36 cells passed (the miss was one
 `mcp-aidevkit-deferred` repeat on `runs-audit-aws`).
 
 ## Limitations
