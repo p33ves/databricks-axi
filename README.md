@@ -222,6 +222,7 @@ v1 command surface (see the AXI standard for the principles each follows):
 | `workspace`   | ls, view ✅                                                                                      |
 | `fs`          | ls, cat ✅                                                                                       |
 | `pipelines`   | list, view, start, stop, events ✅                                                               |
+| `bundle`      | validate, plan, summary, deploy, run, destroy (Declarative Automation Bundles) ✅                |
 | `serving`     | list, view ✅                                                                                    |
 | `api`         | raw REST passthrough ✅                                                                          |
 | `setup`       | hooks install (Claude Code, Codex, OpenCode) ✅                                                  |

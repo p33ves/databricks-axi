@@ -23,6 +23,11 @@ export type RunDatabricksOptions = {
    * stdout text as-is. Only fs cat uses this — file content is data, not
    * a structured response. */
   raw?: boolean;
+  /** Extra environment variables, merged over process.env for the child.
+   * `bundle`'s `--var` delivery uses this (`BUNDLE_VAR_<name>`) instead of
+   * argv, since /proc/<pid>/cmdline is world-readable and a deploy can run
+   * for minutes. */
+  env?: Record<string, string>;
 };
 
 type SpawnResult = {
@@ -32,18 +37,33 @@ type SpawnResult = {
   enoent: boolean;
   timedOut: boolean;
   tooLarge: boolean;
+  /** True once stderr hit STDERR_CAP_BYTES and further chunks were dropped —
+   * only meaningful to `capture` callers; the non-capture path never reads it. */
+  stderrTruncated: boolean;
+};
+
+/** The result of `runDatabricksCaptured` — verbatim stdout/stderr strings,
+ * never `JSON.parse`d and never int64-quoted, since bundle's diagnostic
+ * text isn't a structured response. Never thrown for a nonzero exit code;
+ * the caller inspects `exitCode` itself. */
+export type CapturedResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  stderrTruncated: boolean;
 };
 
 /**
- * Run the official databricks CLI and return its parsed JSON output (or, in
- * raw mode, the verbatim stdout string). Array argv only (never a shell),
- * stdin ignored, hard timeout, always `-o json` unless raw. All failures
- * surface as AxiError.
+ * Shared guard ladder: builds argv, spawns, and throws the same
+ * CLI_MISSING/TIMEOUT/TOO_LARGE AxiErrors both `runDatabricks` and
+ * `runDatabricksCaptured` need — so the ladder exists exactly once and
+ * can't drift between the two entry points. Never inspects the exit code;
+ * that decision differs between the two callers.
  */
-export async function runDatabricks(
+async function runGuarded(
   args: string[],
-  opts: RunDatabricksOptions = {},
-): Promise<unknown> {
+  opts: RunDatabricksOptions,
+): Promise<SpawnResult> {
   const argv = [
     ...(opts.profile ? ["-p", opts.profile] : []),
     ...args,
@@ -54,6 +74,7 @@ export async function runDatabricks(
     argv,
     timeoutMs,
     opts.raw ? RAW_OUTPUT_CAP_BYTES : undefined,
+    opts.env,
   );
   if (result.enoent) {
     throw new AxiError("databricks CLI not found on PATH", "CLI_MISSING", [
@@ -76,6 +97,20 @@ export async function runDatabricks(
       ],
     );
   }
+  return result;
+}
+
+/**
+ * Run the official databricks CLI and return its parsed JSON output (or, in
+ * raw mode, the verbatim stdout string). Array argv only (never a shell),
+ * stdin ignored, hard timeout, always `-o json` unless raw. All failures
+ * surface as AxiError.
+ */
+export async function runDatabricks(
+  args: string[],
+  opts: RunDatabricksOptions = {},
+): Promise<unknown> {
+  const result = await runGuarded(args, opts);
   if (result.code !== 0) {
     throw await diagnoseFailure(result.stderr);
   }
@@ -97,6 +132,34 @@ export async function runDatabricks(
     // any of it into an error message, even redacted.
     throw new AxiError("databricks returned invalid JSON", "UPSTREAM_ERROR");
   }
+}
+
+/**
+ * Bundle-domain variant: never throws on a nonzero upstream exit — bundle
+ * diagnostics (validate/plan warnings, deploy failures) live on stderr
+ * alongside a payload on stdout, a shape `runDatabricks`'s throw-on-nonzero
+ * contract can't represent. Still throws the shared CLI_MISSING/TIMEOUT/
+ * TOO_LARGE ladder, and still raises CLI_TOO_OLD on a nonzero exit (C11) —
+ * a pre-0.298 CLI's "unknown flag" stderr must not be handed to a caller's
+ * diagnostic parser as if it were a bundle config problem.
+ */
+export async function runDatabricksCaptured(
+  args: string[],
+  opts: RunDatabricksOptions = {},
+): Promise<CapturedResult> {
+  const result = await runGuarded(args, opts);
+  if (result.code !== 0) {
+    const tooOld = await checkCliTooOld(result.stderr);
+    if (tooOld) {
+      throw tooOld;
+    }
+  }
+  return {
+    exitCode: result.code ?? 1,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    stderrTruncated: result.stderrTruncated,
+  };
 }
 
 /**
@@ -142,14 +205,17 @@ function spawnCollect(
   argv: string[],
   timeoutMs: number,
   maxBytes?: number,
+  env?: Record<string, string>,
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const child = spawn("databricks", argv, {
       stdio: ["ignore", "pipe", "pipe"],
+      ...(env ? { env: { ...process.env, ...env } } : {}),
     });
     const stdoutChunks: Buffer[] = [];
     let stdoutBytes = 0;
     let stderr = "";
+    let stderrTruncated = false;
     let timedOut = false;
     let tooLarge = false;
     const timer = setTimeout(() => {
@@ -170,9 +236,17 @@ function spawnCollect(
       stdoutChunks.push(chunk);
     });
     child.stderr.on("data", (chunk: string) => {
-      if (stderr.length < STDERR_CAP_BYTES) {
-        stderr += chunk;
+      if (stderr.length >= STDERR_CAP_BYTES) {
+        stderrTruncated = true;
+        return;
       }
+      const room = STDERR_CAP_BYTES - stderr.length;
+      if (chunk.length > room) {
+        stderr += chunk.slice(0, room);
+        stderrTruncated = true;
+        return;
+      }
+      stderr += chunk;
     });
     child.on("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
@@ -183,6 +257,7 @@ function spawnCollect(
         enoent: error.code === "ENOENT",
         timedOut,
         tooLarge,
+        stderrTruncated,
       });
     });
     child.on("close", (code) => {
@@ -194,6 +269,7 @@ function spawnCollect(
         enoent: false,
         timedOut,
         tooLarge,
+        stderrTruncated,
       });
     });
   });
@@ -202,7 +278,7 @@ function spawnCollect(
 // ponytail: version guard runs only on the failure path — a pre-flight
 // `databricks -v` would tax every happy-path invocation for nothing; revisit
 // if users report confusing errors from old CLIs before any command fails.
-async function diagnoseFailure(stderr: string): Promise<AxiError> {
+async function checkCliTooOld(stderr: string): Promise<AxiError | null> {
   if (
     /unknown (command|flag|shorthand)|no such (option|command)/i.test(stderr)
   ) {
@@ -215,7 +291,11 @@ async function diagnoseFailure(stderr: string): Promise<AxiError> {
       );
     }
   }
-  return mapUpstreamError(stderr);
+  return null;
+}
+
+async function diagnoseFailure(stderr: string): Promise<AxiError> {
+  return (await checkCliTooOld(stderr)) ?? mapUpstreamError(stderr);
 }
 
 type Version = { major: number; minor: number; raw: string };

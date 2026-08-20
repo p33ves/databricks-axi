@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runAxiCli } from "axi-sdk-js";
 import { apiCommand, API_HELP } from "./commands/api.js";
+import { bundleCommand, BUNDLE_HELP } from "./commands/bundle.js";
 import { catalogCommand, CATALOG_HELP } from "./commands/catalog.js";
 import { clustersCommand, CLUSTERS_HELP } from "./commands/clusters.js";
 import { dashboardsCommand, DASHBOARDS_HELP } from "./commands/dashboards.js";
@@ -26,7 +27,7 @@ export const DESCRIPTION =
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: databricks-axi [command] [args] [flags]
-commands[45]:
+commands[51]:
   (none)=home
   whoami [--profile <name>]
   doctor [--profile <name>] [--full]
@@ -68,6 +69,12 @@ commands[45]:
   pipelines start <pipeline_id>
   pipelines stop <pipeline_id>
   pipelines events <pipeline_id> [--limit N] [--fields a,b] [--full]
+  bundle validate [--strict] [--full] [--target <name>] [--var k=v]
+  bundle plan [--select <type>.<name>] [--full] [--fields a,b] [--target <name>]
+  bundle summary [--force-pull] [--full] [--fields a,b] [--target <name>]
+  bundle deploy [--yes] [--full] [--target <name>] [--var k=v] [--force-lock]
+  bundle run <resource_key> [--wait] [--target <name>]
+  bundle destroy --yes [--full] [--target <name>] [--force-lock]
   serving list [--limit N] [--total] [--fields a,b]
   serving view <name>
   setup hooks
@@ -103,6 +110,7 @@ export const COMMANDS = {
   workspace: workspaceCommand,
   fs: fsCommand,
   pipelines: pipelinesCommand,
+  bundle: bundleCommand,
   serving: servingCommand,
   setup: setupCommand,
   api: apiCommand,
@@ -121,6 +129,7 @@ const COMMAND_HELP: Record<string, string> = {
   workspace: WORKSPACE_HELP,
   fs: FS_HELP,
   pipelines: PIPELINES_HELP,
+  bundle: BUNDLE_HELP,
   serving: SERVING_HELP,
   setup: SETUP_HELP,
   api: API_HELP,

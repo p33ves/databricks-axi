@@ -6,6 +6,7 @@ import {
   probeCli,
   runDatabricks,
   runDatabricksApi,
+  runDatabricksCaptured,
 } from "../src/databricks.js";
 import {
   installFakeDatabricks,
@@ -231,6 +232,109 @@ for (let i = 0; i < 8; i++) process.stdout.write(chunk);
     fake.respond("jobs list", { jobs: bigArray });
     const result = await runDatabricks(["jobs", "list"]);
     expect(result).toEqual({ jobs: bigArray });
+  });
+});
+
+describe("runDatabricksCaptured", () => {
+  it("returns the result object instead of throwing on a nonzero exit", async () => {
+    const fake = useFake();
+    fake.respondError("bundle validate", "Error: boom", 1);
+    const result = await runDatabricksCaptured(["bundle", "validate"]);
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr: "Error: boom",
+      stderrTruncated: false,
+    });
+    expect(fake.calls()).toEqual([["bundle", "validate", "-o", "json"]]);
+  });
+
+  it("returns exitCode 0 with stdout/stderr verbatim, no JSON.parse", async () => {
+    const fake = useFake();
+    fake.respondWith("bundle validate", {
+      stdoutRaw: '{"name":"x"}',
+      stderr: "Warning: unknown field: nmae\n",
+    });
+    const result = await runDatabricksCaptured(["bundle", "validate"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('{"name":"x"}');
+    expect(result.stderr).toBe("Warning: unknown field: nmae\n");
+  });
+
+  it("still appends -o json when raw is not set", async () => {
+    const fake = useFake();
+    fake.respond("bundle plan", {});
+    await runDatabricksCaptured(["bundle", "plan"]);
+    expect(fake.calls()).toEqual([["bundle", "plan", "-o", "json"]]);
+  });
+
+  it("skips -o json in raw mode (deploy/destroy)", async () => {
+    const fake = useFake();
+    fake.respondWith("bundle deploy", { stdoutRaw: "", exitCode: 0 });
+    await runDatabricksCaptured(["bundle", "deploy"], { raw: true });
+    expect(fake.calls()).toEqual([["bundle", "deploy"]]);
+  });
+
+  it("still throws CLI_MISSING on ENOENT", async () => {
+    process.env.PATH = mkdtempSync(join(tmpdir(), "empty-path-"));
+    await expect(
+      runDatabricksCaptured(["bundle", "validate"]),
+    ).rejects.toMatchObject({ code: "CLI_MISSING" });
+  });
+
+  it("still throws TIMEOUT on a hung CLI", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "slow-databricks-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(bin, "#!/usr/bin/env node\nsetTimeout(() => {}, 60000);\n");
+    chmodSync(bin, 0o755);
+    process.env.PATH = `${dir}:${prevPath ?? ""}`;
+    await expect(
+      runDatabricksCaptured(["bundle", "deploy"], { timeoutMs: 300 }),
+    ).rejects.toMatchObject({ code: "TIMEOUT" });
+  });
+
+  it("still throws TOO_LARGE past the 5MB raw cap", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "huge-databricks-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+const chunk = "a".repeat(1024 * 1024);
+for (let i = 0; i < 8; i++) process.stdout.write(chunk);
+`,
+    );
+    chmodSync(bin, 0o755);
+    process.env.PATH = `${dir}:${prevPath ?? ""}`;
+    await expect(
+      runDatabricksCaptured(["bundle", "deploy"], { raw: true }),
+    ).rejects.toMatchObject({ code: "TOO_LARGE" });
+  });
+
+  it("still throws CLI_TOO_OLD instead of returning the unknown-flag stderr", async () => {
+    const fake = useFake();
+    fake.respondError("bundle validate", 'Error: unknown flag "--strict"', 1);
+    fake.respond("-v", "Databricks CLI v0.200.0");
+    await expect(
+      runDatabricksCaptured(["bundle", "validate"]),
+    ).rejects.toMatchObject({ code: "CLI_TOO_OLD" });
+  });
+
+  it("sets stderrTruncated past the 64KB stderr cap", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "big-stderr-databricks-"));
+    const bin = join(dir, "databricks");
+    writeFileSync(
+      bin,
+      `#!/usr/bin/env node
+const chunk = "e".repeat(1024);
+for (let i = 0; i < 80; i++) process.stderr.write(chunk);
+process.exitCode = 1;
+`,
+    );
+    chmodSync(bin, 0o755);
+    process.env.PATH = `${dir}:${prevPath ?? ""}`;
+    const result = await runDatabricksCaptured(["bundle", "deploy"]);
+    expect(result.stderrTruncated).toBe(true);
+    expect(result.stderr.length).toBeLessThanOrEqual(64 * 1024);
   });
 });
 

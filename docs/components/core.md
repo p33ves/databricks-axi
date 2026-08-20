@@ -16,7 +16,8 @@ test suite, as is `src/context.ts` (plus `test/home.test.ts` and
 
 Wires every domain command into `runAxiCli` (from `axi-sdk-js`): the
 `COMMANDS` map (`home`, `doctor`, `jobs`, `clusters`, `sql`, `catalog`,
-`workspace`, `fs`, `pipelines`, `serving`, `setup`, `api`, `whoami`), the
+`dashboards`, `permissions`, `workspace`, `fs`, `pipelines`, `bundle`,
+`serving`, `setup`, `api`, `whoami`), the
 top-level help text
 (`TOP_HELP`), and per-command help lookup (`COMMAND_HELP`). Also resolves
 the package version by reading `package.json` from either one or two
@@ -47,6 +48,15 @@ CLI only through this file's exports:
   triggers a one-off `databricks -v` check, producing `CLI_TOO_OLD` if the
   installed CLI is below the `0.298` minor-version floor, instead of a
   confusing generic error.
+- `runDatabricksCaptured(args, opts)`: the `bundle`-domain variant — returns
+  `CapturedResult` (`{exitCode, stdout, stderr, stderrTruncated}`, verbatim
+  strings, no JSON parse, no int64 quoting) and never throws on a nonzero
+  exit; shares the ENOENT/TIMEOUT/TOO_LARGE guard ladder with
+  `runDatabricks` via an internal `runGuarded`, and still raises
+  `CLI_TOO_OLD` on a nonzero exit. Contract rationale and usage:
+  [bundle.md](bundle.md). Both entry points take `opts.env`, extra
+  environment variables merged over `process.env` for the child (bundle's
+  `--var` → `BUNDLE_VAR_<name>` delivery).
 - `runDatabricksApi(method, path, body, opts)`: the `api` subcommand
   passthrough used by `sql exec`/`sql statement view` (statements API) and
   the `api` domain command. An inline body is never placed on child argv
@@ -72,7 +82,9 @@ CLI only through this file's exports:
   once at the end so a multi-byte UTF-8 sequence split across pipe reads
   is never mangled by incremental decoding. stderr is capped at 64KB
   (`STDERR_CAP_BYTES`) — error text is never legitimately larger than that,
-  so it just stops appending past the cap instead of buffering unbounded.
+  so it stops appending past the cap instead of buffering unbounded,
+  setting a `stderrTruncated` flag that only `runDatabricksCaptured`
+  callers read.
 
 ## `src/errors.ts`
 
@@ -237,18 +249,19 @@ truncated`. `opts.fetched` is the bound that fetch was allowed to reach,
   `workspace ls` call `listResult` without `opts.fetched` and take no
   `--total` flag — their upstream calls aren't yet confirmed to auto-drain
   past one server page, so they're deliberately out of the surface list
-  above (not the same as the five exemptions below, which never call
-  `listResult` at all). The five documented `listResult` exemptions: `fs
-ls` (upstream has no `--limit` at all, so it reports exact truncation
-  instead of `has_more`), `sql history` (real server-side `has_next_page`
-  pagination plus two distinct empty states that don't fit this helper's
-  `rows.length >= limit` heuristic), `sql warehouses` (no `--limit` flag
-  at all, by deliberate spec decision, so it hand-builds its own `count`-only
-  envelope with no client-side cap safeguard), `permissions` (upstream has
-  no pagination at all; hand-built envelope, see
-  [permissions.md](permissions.md)), and `catalog grants` (drains real
-  server-side pagination into a hand-built envelope with no `--limit`, see
-  [catalog.md](catalog.md)).
+  above (not the same as the seven exemptions below, which never call
+  `listResult` at all). The seven documented `listResult` exemptions:
+
+  | Surface          | Why it's exempt                                                                                                                                                                                                                                                                          |
+  | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `fs ls`          | Upstream has no `--limit` at all, so it reports exact truncation instead of `has_more`.                                                                                                                                                                                                  |
+  | `sql history`    | Real server-side `has_next_page` pagination plus two distinct empty states that don't fit this helper's `rows.length >= limit` heuristic — see [sql.md](sql.md).                                                                                                                         |
+  | `sql warehouses` | No `--limit` flag at all, by deliberate spec decision (a workspace has a handful of warehouses), so it hand-builds its own `count`-only envelope with no client-side cap safeguard.                                                                                                      |
+  | `permissions`    | Upstream `permissions get` has no `--limit` or pagination at all — a hand-built `{object_type, object_id, permissions, count, help}` envelope. See [permissions.md](permissions.md).                                                                                                     |
+  | `catalog grants` | Upstream `grants get-effective` has real server-side pagination (`--max-results`/`--page-token`, same family as `query-history list`) with no agent-facing `--limit` — the page loop drains every page into a hand-built `{grants, count, help}` envelope. See [catalog.md](catalog.md). |
+  | `bundle summary` | No `--limit`-shaped page — returns every resource in the bundle (bounded by the file on disk, not by workspace size); hand-built `{resources, count, help}` envelope. See [bundle.md](bundle.md).                                                                                        |
+  | `bundle plan`    | Same reasoning as `bundle summary` — every plan entry for the bundle, hand-built `{resources, count, ...}` envelope. See [bundle.md](bundle.md).                                                                                                                                         |
+
 - `foldNotFoundHelp(promise, notFoundHelp)`: folds a bare `NOT_FOUND` (no
   suggestions already attached) into a domain-flavored one. Shared by
   `runWithNotFoundHelp` and callers that go through `runDatabricksApi`
@@ -324,7 +337,8 @@ list envelope or a private NOT_FOUND wrapper.
   diagnosis on both unknown-command and legacy no-such-option failures,
   multibyte UTF-8 decoding split across pipe-chunk boundaries, malformed-
   JSON wrapping, and raw mode's skip of `-o json`/int64-quoting plus its
-  5MB streaming cap.
+  5MB streaming cap. Also covers `runDatabricksCaptured` (see
+  [bundle.md](bundle.md)'s Tests section for the list).
 - `test/errors.test.ts`: every `redactSecrets` pattern (dapi, dkea, hex,
   base64-ish, an inline host URL, an inline email) including edge cases (a
   dkea token preceded by a word character, keeping workspace paths and SQL
@@ -342,8 +356,12 @@ list envelope or a private NOT_FOUND wrapper.
   by token-wise argv prefix (so `jobs get` never matches `jobs get-run`).
   `setupCli()` wraps this in `beforeEach`/`afterEach` and exposes
   `t.run(argv)` to invoke `main()` and capture stdout/exit code. Supports
-  `respond`/`respondSeq`/`respondRaw`/`respondError`/`respondHang` for
-  canned success, sequential replies, raw (unparsed) stdout, error stderr,
-  and hang-until-killed. `bodies()` captures `--json @path` temp-file
+  `respond`/`respondSeq`/`respondRaw`/`respondError`/`respondHang`/
+  `respondWith` for canned success, sequential replies, raw (unparsed)
+  stdout, error stderr, hang-until-killed, and (`respondWith`) stdout AND
+  stderr AND a nonzero exit together — the shape bundle fixtures need.
+  `bodies()` captures `--json @path` temp-file
   contents before the file is deleted, since inline JSON bodies never land
   on argv and `calls()` would otherwise only show the `@path` reference.
+  `envs()` returns the `BUNDLE_VAR_*` environment variables each call saw,
+  since bundle's `--var` delivery never lands on argv either.
