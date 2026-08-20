@@ -301,6 +301,27 @@ get-effective` — the bench principal has admin on every reachable
   `dist/bin/databricks-axi.js` and would otherwise install cleanly, baking a
   version-pinned, prunable cache path into all four hook configs. Hooks need
   a durable install (`npm i -g databricks-axi`).
+- Upstream `bundle run -- <cmd>` executes an arbitrary local command with the
+  bundle's Databricks credentials injected into its environment (three
+  worked examples in `bundle run --help`, including `/bin/bash -c`) — for a
+  wrapper an agent invokes on a user's behalf, that's a credential-bearing
+  arbitrary-command executor. `bundle.ts` never spawns `databricks bundle
+run` at all: `run <resource_key>` resolves the key via `bundle summary`
+  and delegates to `jobs run-now`/`pipelines start-update` instead. The `--`
+  guard stays anyway as defense in depth — agents type `-- --param v`
+  reflexively (it's in upstream's own `--help`), and node's `parseArgs`
+  silently swallows a bare trailing `--` (`["x","--"] -> ["x"]`), so the
+  check runs on the raw argv, before `parseArgs` ever sees it.
+- `bundle validate`/`plan`/`summary`'s stderr is a diagnostic block
+  (`Error:`/`Warning:`/`Recommendation:` prefixed lines, each with optional
+  `  at <config.path>` continuation lines), not a single-line error —
+  `mapUpstreamError` returning only the first line would report a `Warning:`
+  as the failure and drop the real `Error:` beneath it. `bundle.ts`'s own
+  ~15-line diagnostic-block parser stays domain-local (not hoisted to
+  `errors.ts`, since the shape is unique to this one domain's stderr
+  channel) and is paired with `runDatabricksCaptured` (`databricks.ts`),
+  which never throws on a nonzero exit so both the stdout payload and the
+  stderr diagnostics stay available to classify together.
 
 ## Generated files (never hand-edit)
 

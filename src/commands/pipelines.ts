@@ -161,7 +161,10 @@ async function pipelinesView(args: string[]): Promise<AxiRenderable> {
   };
 }
 
-const CONFLICT = /An active update '([^']+)' already exists/;
+// Exported for bundle.ts's `run` delegation (§4.5/C7): the only piece of
+// pipelines.ts reused across the boundary — jobsRun/pipelinesStart stay
+// private (see bundle.ts's own header comment for why).
+export const CONFLICT = /An active update '([^']+)' already exists/;
 
 async function pipelinesStart(args: string[]): Promise<AxiRenderable> {
   const { positional, flags } = parseArgs(args, { profile: "value" });

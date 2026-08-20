@@ -24,6 +24,10 @@ export type FakeDatabricks = {
   /** Never respond — the stub idles until the caller's own spawn timeout
    * SIGKILLs it, for testing timeout/budget handling. */
   respondHang: (prefix: string) => void;
+  /** Seed stdout AND stderr AND a nonzero exit together — the shape every
+   * bundle validate/plan fixture needs (diagnostics on stderr coexisting
+   * with a payload on stdout). */
+  respondWith: (prefix: string, reply: CannedReply) => void;
   /** Every recorded invocation, as raw argv arrays, in call order. */
   calls: () => string[][];
   /** Contents of `--json @path` temp-file bodies, in call order. */
@@ -156,6 +160,7 @@ if (!matched) {
     respondError: (prefix, stderr, exitCode = 1) =>
       seed(prefix, { stderr, exitCode }),
     respondHang: (prefix) => seed(prefix, { hang: true }),
+    respondWith: (prefix, reply) => seed(prefix, reply),
     calls: () =>
       existsSync(callsFile)
         ? readFileSync(callsFile, "utf8")

@@ -1,11 +1,11 @@
 ---
 name: databricks-axi
-description: "Agent-ergonomic wrapper around the Databricks CLI: home, doctor, whoami, jobs, clusters, sql, catalog, dashboards, permissions, pipelines, serving, workspace, fs, setup, api. Run `databricks-axi --help` for the current surface."
+description: "Agent-ergonomic wrapper around the Databricks CLI: home, doctor, whoami, jobs, clusters, sql, catalog, dashboards, permissions, pipelines, bundle, serving, workspace, fs, setup, api. Run `databricks-axi --help` for the current surface."
 user-invocable: false
 author: Vignesh Perumal (p33ves)
 metadata:
   hermes:
-    tags: [databricks, spark, doctor, health, preflight, whoami, identity, current-user, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model, hooks, dashboard, lakeview, permissions, grants, acl]
+    tags: [databricks, spark, doctor, health, preflight, whoami, identity, current-user, jobs, cluster, compute, start, stop, sql, warehouse, query, history, catalog, schema, table, unity, notebook, dbfs, volume, function, udf, file, pipeline, dlt, lakeflow, serving, endpoint, model, hooks, dashboard, lakeview, permissions, grants, acl, bundle, dab, deploy, iac]
     category: data
 ---
 
@@ -28,12 +28,12 @@ databricks-axi requires the official [`databricks` CLI](https://docs.databricks.
 
 ## Status
 
-The full v1 command surface is implemented (home, doctor, whoami, jobs, clusters, sql, catalog, dashboards, permissions, workspace, fs, pipelines, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
+The full v1 command surface is implemented (home, doctor, whoami, jobs, clusters, sql, catalog, dashboards, permissions, workspace, fs, pipelines, bundle, serving, setup, api). Run `databricks-axi --help` (per the invocation note above) for the current command list.
 
 ## Commands
 
 ```
-commands[45]:
+commands[51]:
   (none)=home
   whoami [--profile <name>]
   doctor [--profile <name>] [--full]
@@ -75,6 +75,12 @@ commands[45]:
   pipelines start <pipeline_id>
   pipelines stop <pipeline_id>
   pipelines events <pipeline_id> [--limit N] [--fields a,b] [--full]
+  bundle validate [--strict] [--full] [--target <name>] [--var k=v]
+  bundle plan [--select <type>.<name>] [--full] [--fields a,b] [--target <name>]
+  bundle summary [--force-pull] [--full] [--fields a,b] [--target <name>]
+  bundle deploy [--yes] [--full] [--target <name>] [--var k=v] [--force-lock]
+  bundle run <resource_key> [--wait] [--target <name>]
+  bundle destroy --yes [--target <name>] [--force-lock]
   serving list [--limit N] [--total] [--fields a,b]
   serving view <name>
   setup hooks

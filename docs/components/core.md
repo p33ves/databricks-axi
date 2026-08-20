@@ -237,18 +237,19 @@ truncated`. `opts.fetched` is the bound that fetch was allowed to reach,
   `workspace ls` call `listResult` without `opts.fetched` and take no
   `--total` flag — their upstream calls aren't yet confirmed to auto-drain
   past one server page, so they're deliberately out of the surface list
-  above (not the same as the five exemptions below, which never call
-  `listResult` at all). The five documented `listResult` exemptions: `fs
-ls` (upstream has no `--limit` at all, so it reports exact truncation
-  instead of `has_more`), `sql history` (real server-side `has_next_page`
-  pagination plus two distinct empty states that don't fit this helper's
-  `rows.length >= limit` heuristic), `sql warehouses` (no `--limit` flag
-  at all, by deliberate spec decision, so it hand-builds its own `count`-only
-  envelope with no client-side cap safeguard), `permissions` (upstream has
-  no pagination at all; hand-built envelope, see
-  [permissions.md](permissions.md)), and `catalog grants` (drains real
-  server-side pagination into a hand-built envelope with no `--limit`, see
-  [catalog.md](catalog.md)).
+  above (not the same as the seven exemptions below, which never call
+  `listResult` at all). The seven documented `listResult` exemptions:
+
+  | Surface          | Why it's exempt                                                                                                                                                                                                                                                                          |
+  | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `fs ls`          | Upstream has no `--limit` at all, so it reports exact truncation instead of `has_more`.                                                                                                                                                                                                  |
+  | `sql history`    | Real server-side `has_next_page` pagination plus two distinct empty states that don't fit this helper's `rows.length >= limit` heuristic — see [sql.md](sql.md).                                                                                                                         |
+  | `sql warehouses` | No `--limit` flag at all, by deliberate spec decision (a workspace has a handful of warehouses), so it hand-builds its own `count`-only envelope with no client-side cap safeguard.                                                                                                      |
+  | `permissions`    | Upstream `permissions get` has no `--limit` or pagination at all — a hand-built `{object_type, object_id, permissions, count, help}` envelope. See [permissions.md](permissions.md).                                                                                                     |
+  | `catalog grants` | Upstream `grants get-effective` has real server-side pagination (`--max-results`/`--page-token`, same family as `query-history list`) with no agent-facing `--limit` — the page loop drains every page into a hand-built `{grants, count, help}` envelope. See [catalog.md](catalog.md). |
+  | `bundle summary` | No `--limit`-shaped page — returns every resource in the bundle (bounded by the file on disk, not by workspace size); hand-built `{resources, count, help}` envelope. See [bundle.md](bundle.md).                                                                                        |
+  | `bundle plan`    | Same reasoning as `bundle summary` — every plan entry for the bundle, hand-built `{resources, count, ...}` envelope. See [bundle.md](bundle.md).                                                                                                                                         |
+
 - `foldNotFoundHelp(promise, notFoundHelp)`: folds a bare `NOT_FOUND` (no
   suggestions already attached) into a domain-flavored one. Shared by
   `runWithNotFoundHelp` and callers that go through `runDatabricksApi`
