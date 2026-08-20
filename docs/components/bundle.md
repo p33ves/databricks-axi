@@ -65,7 +65,11 @@ help rather than silently dropping the tail.
   `destroy`).
 - **`--var` guards** (`scanVarGuards`, on `validate` and `deploy` — the two
   upstream signatures that document `[--var k=v]`): a raw-argv scan, before
-  `parseArgs` ever runs. A comma in a `--var` value is real silent data
+  `parseArgs` ever runs. The pair must be `<identifier>=<value>` (key is
+  `[A-Za-z_][A-Za-z0-9_]*`) — a malformed pair would otherwise silently
+  export an env var upstream can't read, deploying a typo with the
+  variable unset. Rejected with `VALIDATION_ERROR` that never echoes the
+  pair (it may carry a secret). A comma in a `--var` value is real silent data
   loss upstream (`--var "a=1,b=2"` exits 0 having silently set two
   variables) — rejected with `VALIDATION_ERROR` naming only the variable
   key (never the value) in the message, no spawn. A repeated `--var` is
@@ -113,9 +117,10 @@ collides with the sibling subcommand). `at` comes from an indented `  at
 <config.path>` continuation line; unmatched lines (the logger's own `Warn:
 [hostmetadata] …`) are dropped, not counted. Every message goes through
 `redactSecrets`. Zero boundary matches on non-empty stderr means the shape
-wasn't recognized at all — falls back to `{ diagnostics: [], parse_failed:
-true, raw_stderr: <redacted, tail-truncated> }` with `valid` derived from
-the exit code in that branch only, never inventing a severity. Diagnostics
+wasn't recognized at all — on a nonzero exit only, falls back to
+`{ diagnostics: [], parse_failed: true, raw_stderr: <redacted,
+tail-truncated> }`, never inventing a severity; an exit-0 validate whose
+stderr carries only logger noise keeps its full digest. Diagnostics
 are capped at 10, errors sorted first, with a `truncated` note when
 clipped; `--full` returns every diagnostic and the raw resolved `config`.
 
@@ -290,7 +295,9 @@ summary`'s `id` is the real Jobs/Pipelines API id, live-confirmed).
    `{run_id, state?}`. `id` is already a string from summary; passed
    through verbatim.
 3. `pipelines` type → `["pipelines", "start-update", id]` →
-   `{update_id}`, including the existing "an active update already exists"
+   `{update_id}`. `--wait` is jobs-only: the pipeline path always returns
+   immediately, adding a `note` field flagging the no-op when `--wait` was
+   passed. Includes the existing "an active update already exists"
    → exit-0 no-op conversion (the `CONFLICT` regex exported from
    `pipelines.ts` — the only piece of that module reused here; `jobsRun`/
    `pipelinesStart` stay private, `bundle.ts` builds the two argvs itself

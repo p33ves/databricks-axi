@@ -29,7 +29,7 @@ subcommands[6]:
   plan [--select <type>.<name>] [--full] [--fields a,b] [--target <name>]
   summary [--force-pull] [--full] [--fields a,b] [--target <name>]
   deploy [--yes] [--full] [--target <name>] [--var k=v] [--force-lock]
-  run <resource_key> [--wait] [--target <name>]
+  run <resource_key> [--wait (jobs only)] [--target <name>]
   destroy --yes [--full] [--target <name>] [--force-lock]
 flags:
   --profile <name>  databricks auth profile passthrough
@@ -44,6 +44,8 @@ notes:
   same as upstream — there is no --dir flag
   validate/plan always exit 0 when they produce a verdict (severity lives in
   the payload, never the exit code) — don't branch on $? alone, check "valid"
+  run --wait blocks for jobs only — pipeline updates always return
+  immediately with update_id
   run never spawns \`databricks bundle run\`: it resolves <resource_key> via
   \`bundle summary\` and delegates to \`jobs run-now\`/\`pipelines start-update\`.
   Upstream's \`bundle run -- <cmd>\` executes arbitrary local commands with the
@@ -77,12 +79,16 @@ function checkNotInBundle(stderr: string): void {
   }
 }
 
-/** Pre-parse raw-argv scan for the two --var hazards (C5/C6). Both close
- * silent data loss: a comma in a --var value is real data loss upstream
- * (exits 0 having silently set two variables), and node's parseArgs in
- * strict mode silently keeps only the last of a repeated --var — it never
- * throws — so the count has to come from an explicit occurrence scan, run
- * before parseArgs ever sees the args. */
+/** Pre-parse raw-argv scan for the --var hazards (C5/C6). All close
+ * silent data loss: a malformed pair would silently export an env var
+ * upstream can't read (a typo'd deploy with the variable unset), a comma
+ * in a --var value is real data loss upstream (exits 0 having silently
+ * set two variables), and node's parseArgs in strict mode silently keeps
+ * only the last of a repeated --var — it never throws — so the count has
+ * to come from an explicit occurrence scan, run before parseArgs ever
+ * sees the args. Error messages name only the key, never the value. */
+const VAR_PAIR = /^([A-Za-z_][A-Za-z0-9_]*)=/;
+
 function scanVarGuards(args: string[]): void {
   let count = 0;
   for (let i = 0; i < args.length; i++) {
@@ -97,10 +103,22 @@ function scanVarGuards(args: string[]): void {
     } else {
       continue;
     }
-    if (typeof pair === "string" && pair.includes(",")) {
-      const key = pair.slice(0, pair.indexOf("="));
+    if (typeof pair !== "string") {
+      continue;
+    }
+    const keyMatch = VAR_PAIR.exec(pair);
+    if (!keyMatch) {
       throw usage(
-        `--var value for "${key}" contains a comma — upstream silently splits it into multiple variable assignments`,
+        "--var requires <name>=<value> where <name> is an identifier (letters, digits, underscore, not starting with a digit) — the pair is not echoed here in case it carries a secret",
+        [
+          "Example: --var my_var=some_value",
+          "Or set the BUNDLE_VAR_<name> environment variable directly",
+        ],
+      );
+    }
+    if (pair.includes(",")) {
+      throw usage(
+        `--var value for "${keyMatch[1]}" contains a comma — upstream silently splits it into multiple variable assignments`,
         [
           "Pass raw `databricks bundle ... --var a=1 --var b=2` (repeatable, comma-free) instead",
           "Or set the BUNDLE_VAR_<name> environment variable, which takes the value verbatim with no splitting",
@@ -121,12 +139,12 @@ function scanVarGuards(args: string[]): void {
 /** BUNDLE_VAR_<name> env delivery for --var (C5/F1): never lands on child
  * argv, which /proc/<pid>/cmdline would expose for the whole 600s a deploy
  * can run. `varFlag` is the "key=value" pair; scanVarGuards has already
- * rejected a comma in it. */
+ * validated the <identifier>=<value> shape and rejected a comma in it. */
 function bundleVarEnv(varFlag: string): Record<string, string> {
   const eq = varFlag.indexOf("=");
-  const key = eq === -1 ? varFlag : varFlag.slice(0, eq);
-  const value = eq === -1 ? "" : varFlag.slice(eq + 1);
-  return { [`BUNDLE_VAR_${key}`]: value };
+  return {
+    [`BUNDLE_VAR_${varFlag.slice(0, eq)}`]: varFlag.slice(eq + 1),
+  };
 }
 
 // The credential-bearing local-exec hazard (§4.6): a bare trailing `--`
@@ -190,7 +208,9 @@ function deployFailure(
     : truncate(redacted, { lines: TAIL_LINES, mode: "tail" });
   const allHelp = [...help];
   if (t.truncated) {
-    allHelp.unshift(`databricks-axi ${label} --full${tf}${p}`);
+    allHelp.unshift(
+      `Full tail: databricks-axi ${label} --full${tf}${p} — reruns the operation and will ask for confirmation again`,
+    );
   }
   if (captured.stderrTruncated) {
     allHelp.push(
@@ -320,9 +340,12 @@ async function bundleValidate(args: string[]): Promise<AxiRenderable> {
   if (captured.exitCode !== 0) {
     checkNotInBundle(captured.stderr);
   }
-  const { diagnostics: allDiagnostics, parseFailed } = parseDiagnostics(
-    captured.stderr,
-  );
+  const { diagnostics: allDiagnostics, parseFailed: rawParseFailed } =
+    parseDiagnostics(captured.stderr);
+  // Unrecognized stderr only degrades the payload when the exit was
+  // nonzero — a clean exit-0 validate with logger-only stderr keeps its
+  // full digest.
+  const parseFailed = rawParseFailed && captured.exitCode !== 0;
   if (!parseFailed && captured.exitCode !== 0) {
     const firstError = allDiagnostics.find((d) => d.severity === "Error");
     if (firstError) {
@@ -824,6 +847,9 @@ async function bundleRun(rawArgs: string[]): Promise<AxiRenderable> {
         type: "pipelines",
         id: match.id,
         update_id: result.update_id,
+        ...(wait
+          ? { note: "--wait is jobs-only — update started without waiting" }
+          : {}),
         help: [`databricks-axi pipelines view ${match.id}${p}`],
       };
     } catch (error) {
@@ -836,6 +862,9 @@ async function bundleRun(rawArgs: string[]): Promise<AxiRenderable> {
             id: match.id,
             update_id: conflict[1],
             status: "update already in progress (no-op)",
+            ...(wait
+              ? { note: "--wait is jobs-only — update started without waiting" }
+              : {}),
             help: [`databricks-axi pipelines view ${match.id}${p}`],
           };
         }

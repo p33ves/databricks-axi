@@ -80,7 +80,7 @@ commands[51]:
   bundle summary [--force-pull] [--full] [--fields a,b] [--target <name>]
   bundle deploy [--yes] [--full] [--target <name>] [--var k=v] [--force-lock]
   bundle run <resource_key> [--wait] [--target <name>]
-  bundle destroy --yes [--target <name>] [--force-lock]
+  bundle destroy --yes [--full] [--target <name>] [--force-lock]
   serving list [--limit N] [--total] [--fields a,b]
   serving view <name>
   setup hooks

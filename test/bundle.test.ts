@@ -178,6 +178,20 @@ describe("bundle validate", () => {
     expect(out).toContain("valid: false");
   });
 
+  it("logger-only stderr on a clean exit 0 keeps the full digest, no parse_failed", async () => {
+    t.fake.respondWith("bundle validate", {
+      stdoutRaw: JSON.stringify(VALIDATE_CONFIG_CLEAN),
+      stderr: "Warn: [hostmetadata] cloud metadata lookup timed out\n",
+      exitCode: 0,
+    });
+    const { out, exitCode } = await t.run(["bundle", "validate"]);
+    expect(exitCode).toBe(0);
+    expect(out).not.toContain("parse_failed");
+    expect(out).toContain("bundle: axi_probe");
+    expect(out).toContain("valid: true");
+    expect(out).toContain("warnings: 0");
+  });
+
   it("drops the logger's Warn: [hostmetadata] line instead of miscounting it", async () => {
     t.fake.respondWith("bundle validate", {
       stdoutRaw: JSON.stringify(VALIDATE_CONFIG_CLEAN),
@@ -248,6 +262,28 @@ describe("bundle validate", () => {
     expect(out).toContain("msg");
     expect(out).not.toContain("msg=a,other=b");
   });
+
+  it.each([
+    ["no equals sign", "secret,value"],
+    ["empty key", "=v"],
+    ["non-identifier key", "bad key=v"],
+    ["digit-leading key", "1abc=v"],
+  ])(
+    "a malformed --var pair (%s) is rejected before spawning without echoing it",
+    async (_label, pair) => {
+      const { out, exitCode } = await t.run([
+        "bundle",
+        "validate",
+        "--var",
+        pair,
+      ]);
+      expect(exitCode).toBe(2);
+      expect(t.fake.calls()).toEqual([]);
+      expect(out).toContain("code: VALIDATION_ERROR");
+      expect(out).not.toContain(pair);
+      expect(out).not.toContain("secret,valu");
+    },
+  );
 
   it("C6: a repeated --var is rejected before spawning", async () => {
     const { exitCode } = await t.run([
@@ -722,6 +758,20 @@ describe("bundle run", () => {
       ["pipelines", "start-update", PIPELINE_UUID, "-o", "json"],
     ]);
     expect(out).toContain("update_id: u1");
+  });
+
+  it("--wait on a pipeline is a documented no-op: returns immediately with a note", async () => {
+    t.fake.respond("bundle summary", PIPELINE_SUMMARY);
+    t.fake.respond("pipelines start-update", { update_id: "u1" });
+    const { out, exitCode } = await t.run([
+      "bundle",
+      "run",
+      "probe_pipeline",
+      "--wait",
+    ]);
+    expect(exitCode).toBe(0);
+    expect(out).toContain("update_id: u1");
+    expect(out).toContain("jobs-only");
   });
 
   it("C7: key present but no id steers to bundle deploy without calling run-now/start-update", async () => {
