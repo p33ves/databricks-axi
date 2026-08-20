@@ -235,7 +235,7 @@ describe("bundle validate", () => {
     expect(out).toContain("code: VALIDATION_ERROR");
   });
 
-  it("C5: a comma in --var's value is rejected before spawning", async () => {
+  it("C5: a comma in --var's value is rejected before spawning, message names only the key", async () => {
     const { out, exitCode } = await t.run([
       "bundle",
       "validate",
@@ -245,6 +245,8 @@ describe("bundle validate", () => {
     expect(exitCode).toBe(2);
     expect(t.fake.calls()).toEqual([]);
     expect(out).toContain("comma");
+    expect(out).toContain("msg");
+    expect(out).not.toContain("msg=a,other=b");
   });
 
   it("C6: a repeated --var is rejected before spawning", async () => {
@@ -272,15 +274,18 @@ describe("bundle validate", () => {
     expect(t.fake.calls()).toEqual([]);
   });
 
-  it("a single --var forwards as one upstream --var=k=v", async () => {
-    t.fake.respondWith("bundle validate --var=a=1", {
+  it("F1: --var never lands on argv — delivered via BUNDLE_VAR_<name> env instead", async () => {
+    t.fake.respondWith("bundle validate", {
       stdoutRaw: JSON.stringify(VALIDATE_CONFIG_CLEAN),
       exitCode: 0,
     });
     await t.run(["bundle", "validate", "--var", "a=1"]);
-    expect(t.fake.calls()).toEqual([
-      ["bundle", "validate", "--var=a=1", "-o", "json"],
-    ]);
+    expect(t.fake.calls()).toEqual([["bundle", "validate", "-o", "json"]]);
+    for (const call of t.fake.calls()) {
+      expect(call).not.toContain("--var");
+      expect(call.some((a) => a.startsWith("--var"))).toBe(false);
+    }
+    expect(t.fake.envs()).toEqual([{ BUNDLE_VAR_a: "1" }]);
   });
 });
 
@@ -429,6 +434,13 @@ describe("bundle plan", () => {
     ]);
   });
 
+  it("F3: --fields subsets a plan row instead of being silently ignored", async () => {
+    t.fake.respond("bundle plan", PLAN_MIXED);
+    const { out } = await t.run(["bundle", "plan", "--fields", "key"]);
+    expect(out).toContain("resources[1]{key}:");
+    expect(out).not.toContain("changed_fields");
+  });
+
   it("plan_bytes is present in the default digest", async () => {
     t.fake.respond("bundle plan", { plan_version: 2, plan: {} });
     const { out } = await t.run(["bundle", "plan"]);
@@ -525,6 +537,16 @@ describe("bundle deploy", () => {
     expect(exitCode).toBe(0);
     expect(t.fake.calls()).toEqual([["bundle", "deploy", "--auto-approve"]]);
     expect(out).toContain("status: deployed");
+  });
+
+  it("F1: --var never lands on deploy argv — delivered via BUNDLE_VAR_<name> env instead", async () => {
+    t.fake.respondWith("bundle deploy --auto-approve", {
+      stdoutRaw: "",
+      exitCode: 0,
+    });
+    await t.run(["bundle", "deploy", "--yes", "--var", "env=prod"]);
+    expect(t.fake.calls()).toEqual([["bundle", "deploy", "--auto-approve"]]);
+    expect(t.fake.envs()).toEqual([{ BUNDLE_VAR_env: "prod" }]);
   });
 
   it("never forwards --force even when --yes is passed", async () => {

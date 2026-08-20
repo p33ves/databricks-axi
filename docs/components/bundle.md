@@ -67,13 +67,17 @@ help rather than silently dropping the tail.
   upstream signatures that document `[--var k=v]`): a raw-argv scan, before
   `parseArgs` ever runs. A comma in a `--var` value is real silent data
   loss upstream (`--var "a=1,b=2"` exits 0 having silently set two
-  variables) — rejected with `VALIDATION_ERROR`, no spawn. A repeated
-  `--var` is also rejected — `parseArgs` in strict mode silently keeps only
-  the last occurrence rather than throwing, so the count comes from an
-  explicit occurrence scan (matching both `--var value` and `--var=value`
-  forms) rather than relying on `parseArgs`. Single `--var k=v` forwards as
-  one upstream `--var=k=v`. Repeatable `--var` is deferred (raw
-  `databricks ... --var a --var b`, or `BUNDLE_VAR_<name>`, cover the rest).
+  variables) — rejected with `VALIDATION_ERROR` naming only the variable
+  key (never the value) in the message, no spawn. A repeated `--var` is
+  also rejected — `parseArgs` in strict mode silently keeps only the last
+  occurrence rather than throwing, so the count comes from an explicit
+  occurrence scan (matching both `--var value` and `--var=value` forms)
+  rather than relying on `parseArgs`. A single `--var k=v` never reaches
+  child argv at all: `bundleVarEnv` delivers it as a `BUNDLE_VAR_<name>`
+  environment variable on the spawned child instead, since
+  `/proc/<pid>/cmdline` is world-readable and `deploy` can run for up to
+  600s. Repeatable `--var` is deferred (raw `databricks ... --var a --var
+b`, or setting multiple `BUNDLE_VAR_<name>` vars directly, cover the rest).
 - **`bundle run`'s `--` guard** (`rejectDoubleDash`): upstream `bundle run --
 <cmd>` executes an arbitrary local command with the bundle's Databricks
   credentials injected into its environment — a credential-bearing
@@ -138,14 +142,24 @@ clipped; `--full` returns every diagnostic and the raw resolved `config`.
 `bundle`/`target`/`mode` from the resolved config's `bundle.{name,target,
 mode}`; `user` from `workspace.current_user.userName` (one scalar out of
 the full SCIM blob — the object itself, and `workspace.host` (which doesn't
-exist even with auth fully resolved) are never rendered); `root_path` from
-`workspace.root_path`. `workspace` is read with optional chaining, not
-`assertObject` — the whole object is absent when auth fails. `resources`
-rows carry `{type, count, keys}` (keys capped at 20 per type, `+N more`
-suffix) — exactly what `bundle run <key>` takes. `config_bytes` is the byte
-length of the raw stdout payload, in the default digest, so an agent can
-price `--full` before spending it (the resolved config is otherwise
-unbounded by bundle size).
+exist even with auth fully resolved) are never rendered **in the default
+digest**); `root_path` from `workspace.root_path`. `workspace` is read with
+optional chaining, not `assertObject` — the whole object is absent when auth
+fails. `resources` rows carry `{type, count, keys}` (keys capped at 20 per
+type, `+N more` suffix) — exactly what `bundle run <key>` takes.
+`config_bytes` is the byte length of the raw stdout payload, in the default
+digest, so an agent can price `--full` before spending it (the resolved
+config is otherwise unbounded by bundle size).
+
+**`--full` is a different contract**: it returns the raw resolved `config`
+verbatim, exactly as upstream printed it — including the full SCIM
+`current_user` blob, `workspace` (host/root_path/etc.), and every resolved
+variable value. None of that is redacted (payload data is never redacted,
+matching the `sql`/`fs cat` rule that only error/log text is a redaction
+surface); an agent asking for `--full` gets the whole config on purpose.
+`plan --full` has the same shape of escalation: it adds every addressable
+row's full `changes` map plus `new_state`/`remote_state`, i.e. the complete
+resource states, not just the diffed fields.
 
 ## `plan [--select <type>.<name>] [--full] [--fields a,b] [--target <name>]`
 
@@ -225,14 +239,23 @@ Upstream: `bundle deploy [-t target] [--var k=v] [--auto-approve]
 (`DEPLOY_TIMEOUT_MS`). Stdout is 0 bytes on both success and failure in
 `-o json` mode; all progress is on stderr.
 
+- `--var k=v` never reaches child argv — `/proc/<pid>/cmdline` is
+  world-readable and a deploy can run for up to 600s. It's delivered as a
+  `BUNDLE_VAR_<name>` environment variable instead (`bundleVarEnv`),
+  merged over `process.env` for the spawned child only (`runDatabricksCaptured`'s
+  `env` option). Same delivery for `validate`. The comma/repeat guards
+  (`scanVarGuards`) still run first, unchanged.
 - Success → `{status: "deployed", target, help}`.
 - Failure → a structured `UPSTREAM_ERROR` built from the `capture` result
   directly (never from `mapUpstreamError`, which returns only the first
   line and would drop the failure an agent needs to debug a DAB deploy):
-  the redacted tail of `stdout + "\n" + stderr`, last 50 lines
-  (`truncate(mode:"tail")`, same tail length as `jobs logs`), `--full` for
-  everything. `stderrTruncated` (past the shared 64KB capture cap) adds its
-  own help note.
+  the redacted tail of `stderr` (stdout is 0 bytes in `-o json` mode, so
+  there's nothing to join it with), last 50 lines (`truncate(mode:"tail")`,
+  same tail length as `jobs logs`), `--full` for everything. `stderrTruncated`
+  (past the shared 64KB capture cap) adds its own help note. Shared with
+  `destroy` via `deployFailure`, which renders only the tail; each caller
+  composes its own `help` array (the approval-required lines below, or a
+  plain `bundle summary` suggestion).
 - The interactive-approval refusal (`stdin: 'ignore'` means it can never
   actually prompt, so it fails loud instead of hanging) is detected by a
   `requires destructive actions` regex on stderr and gets dedicated help:
@@ -282,7 +305,7 @@ start-update` is never called with an empty id.
 
 Output: `{resource, type, id, run_id | update_id, state?, help}`.
 
-## `destroy --yes [--target <name>] [--force-lock]`
+## `destroy --yes [--full] [--target <name>] [--force-lock]`
 
 **The only intentionally destructive verb in the axi surface** — permanently
 deletes every resource _and workspace file_ this bundle deployed to the
@@ -298,9 +321,10 @@ target. Not undoable.
   not a mirror of a string that can drift upstream).
 - With `--yes`: forwards `--auto-approve` (plus `--force-lock` if passed).
   Success → `{status: "destroyed", target}` (stdout is 0 bytes). Failure →
-  the same redacted-tail error shape as `deploy`, without a `--full` escape
-  (destroy's failure surface is smaller in practice; not exposed here).
-- Same 600s timeout and stale-lock `timeoutHelp` rationale as `deploy`.
+  the same redacted-tail error shape as `deploy`, including the `--full`
+  escape (`deployFailure` is shared between the two, F9).
+- Same 600s timeout and stale-lock `timeoutHelp` rationale as `deploy`
+  (`staleLockTimeoutHelp`, one shared helper for both).
 
 ## Errors
 
@@ -319,8 +343,12 @@ unknown `bundle run` key, or a `jobs`/`pipelines` NOT_FOUND folded through
 `test/bundle.test.ts` uses `setupCli()`/`fake-databricks.ts`'s
 `respondWith` (added for this domain — the only helper that can seed
 stdout AND stderr AND a nonzero exit together, the exact shape every
-validate/plan/deploy fixture needs). Covers: the exact argv per subcommand
-including `--target`/`--profile`/`--var` threading; the §0b.1 regression
+validate/plan/deploy fixture needs) and `envs()` (added for F1 — the fake
+`databricks` stub records any `BUNDLE_VAR_*` environment variable it sees
+per call, since `--var` no longer lands on argv at all). Covers: the exact
+argv per subcommand including `--target`/`--profile` threading and `--var`'s
+absence from argv with its `BUNDLE_VAR_<name>` env delivery asserted via
+`envs()`; the §0b.1 regression
 (the real `Error` renders, not the first `Warning`, at exit 0); `--strict`
 computed client-side and absent from argv; the unknown-target and
 not-in-a-bundle special cases; the diagnostic parse-failure fallback; the

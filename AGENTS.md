@@ -322,6 +322,11 @@ run` at all: `run <resource_key>` resolves the key via `bundle summary`
   channel) and is paired with `runDatabricksCaptured` (`databricks.ts`),
   which never throws on a nonzero exit so both the stdout payload and the
   stderr diagnostics stay available to classify together.
+- `bundle`'s own `parseJsonObject` re-parses stdout with plain `JSON.parse`
+  (no int64 `*_id` quoting, unlike `runDatabricks`) on the live-verified
+  assumption that `bundle summary`/`plan`/`validate` ids arrive as JSON
+  strings already — if a future upstream CLI ships a bare numeric int64 id,
+  this needs revisiting.
 
 ## Generated files (never hand-edit)
 

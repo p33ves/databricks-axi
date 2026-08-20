@@ -32,6 +32,9 @@ export type FakeDatabricks = {
   calls: () => string[][];
   /** Contents of `--json @path` temp-file bodies, in call order. */
   bodies: () => string[];
+  /** `BUNDLE_VAR_*` environment variables seen by the child, in call order —
+   * `bundle validate`/`deploy`'s `--var` delivery never lands on argv. */
+  envs: () => Record<string, string>[];
 };
 
 type CannedReply = {
@@ -95,6 +98,11 @@ export function installFakeDatabricks(): FakeDatabricks {
 const { appendFileSync, readFileSync } = require("node:fs");
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(callsFile)}, JSON.stringify(args) + "\\n");
+const bundleVarEnv = {};
+for (const [k, v] of Object.entries(process.env)) {
+  if (k.startsWith("BUNDLE_VAR_")) bundleVarEnv[k] = v;
+}
+appendFileSync(${JSON.stringify(join(dir, "envs.jsonl"))}, JSON.stringify(bundleVarEnv) + "\\n");
 // Temp-file bodies vanish after the call — capture them now for bodies().
 const ji = args.indexOf("--json");
 if (ji >= 0 && args[ji + 1] && args[ji + 1].startsWith("@")) {
@@ -176,6 +184,14 @@ if (!matched) {
             .split("\n")
             .filter(Boolean)
             .map((line) => JSON.parse(line) as string)
+        : [],
+    envs: () =>
+      existsSync(join(dir, "envs.jsonl"))
+        ? readFileSync(join(dir, "envs.jsonl"), "utf8")
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => JSON.parse(line) as Record<string, string>)
         : [],
   };
 }

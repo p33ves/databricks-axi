@@ -23,6 +23,11 @@ export type RunDatabricksOptions = {
    * stdout text as-is. Only fs cat uses this — file content is data, not
    * a structured response. */
   raw?: boolean;
+  /** Extra environment variables, merged over process.env for the child.
+   * `bundle`'s `--var` delivery uses this (`BUNDLE_VAR_<name>`) instead of
+   * argv, since /proc/<pid>/cmdline is world-readable and a deploy can run
+   * for minutes. */
+  env?: Record<string, string>;
 };
 
 type SpawnResult = {
@@ -69,6 +74,7 @@ async function runGuarded(
     argv,
     timeoutMs,
     opts.raw ? RAW_OUTPUT_CAP_BYTES : undefined,
+    opts.env,
   );
   if (result.enoent) {
     throw new AxiError("databricks CLI not found on PATH", "CLI_MISSING", [
@@ -199,10 +205,12 @@ function spawnCollect(
   argv: string[],
   timeoutMs: number,
   maxBytes?: number,
+  env?: Record<string, string>,
 ): Promise<SpawnResult> {
   return new Promise((resolve) => {
     const child = spawn("databricks", argv, {
       stdio: ["ignore", "pipe", "pipe"],
+      ...(env ? { env: { ...process.env, ...env } } : {}),
     });
     const stdoutChunks: Buffer[] = [];
     let stdoutBytes = 0;

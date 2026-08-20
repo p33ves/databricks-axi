@@ -30,7 +30,7 @@ subcommands[6]:
   summary [--force-pull] [--full] [--fields a,b] [--target <name>]
   deploy [--yes] [--full] [--target <name>] [--var k=v] [--force-lock]
   run <resource_key> [--wait] [--target <name>]
-  destroy --yes [--target <name>] [--force-lock]
+  destroy --yes [--full] [--target <name>] [--force-lock]
 flags:
   --profile <name>  databricks auth profile passthrough
   --target <name>   bundle target (upstream -t), e.g. dev/prod
@@ -87,19 +87,20 @@ function scanVarGuards(args: string[]): void {
   let count = 0;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    let value: string | undefined;
+    let pair: string | undefined;
     if (arg === "--var") {
-      value = args[i + 1];
+      pair = args[i + 1];
       count++;
     } else if (arg.startsWith("--var=")) {
-      value = arg.slice("--var=".length);
+      pair = arg.slice("--var=".length);
       count++;
     } else {
       continue;
     }
-    if (typeof value === "string" && value.includes(",")) {
+    if (typeof pair === "string" && pair.includes(",")) {
+      const key = pair.slice(0, pair.indexOf("="));
       throw usage(
-        `--var value contains a comma — upstream silently splits it into multiple variable assignments: ${value}`,
+        `--var value for "${key}" contains a comma — upstream silently splits it into multiple variable assignments`,
         [
           "Pass raw `databricks bundle ... --var a=1 --var b=2` (repeatable, comma-free) instead",
           "Or set the BUNDLE_VAR_<name> environment variable, which takes the value verbatim with no splitting",
@@ -115,6 +116,17 @@ function scanVarGuards(args: string[]): void {
       ],
     );
   }
+}
+
+/** BUNDLE_VAR_<name> env delivery for --var (C5/F1): never lands on child
+ * argv, which /proc/<pid>/cmdline would expose for the whole 600s a deploy
+ * can run. `varFlag` is the "key=value" pair; scanVarGuards has already
+ * rejected a comma in it. */
+function bundleVarEnv(varFlag: string): Record<string, string> {
+  const eq = varFlag.indexOf("=");
+  const key = eq === -1 ? varFlag : varFlag.slice(0, eq);
+  const value = eq === -1 ? "" : varFlag.slice(eq + 1);
+  return { [`BUNDLE_VAR_${key}`]: value };
 }
 
 // The credential-bearing local-exec hazard (§4.6): a bare trailing `--`
@@ -147,58 +159,55 @@ function targetArgv(target: unknown): string[] {
 
 const TAIL_LINES = 50;
 
-/** Shared deploy/destroy failure renderer: the redacted tail of stdout+
- * stderr (0-byte stdout in practice, but the shape is shared with any
- * future upstream that does write progress to stdout), same tail length as
+/** Shared stale-lock timeoutHelp for deploy/destroy (both spawn with the
+ * same DEPLOY_TIMEOUT_MS hard SIGKILL and leave the same stale-lock
+ * hazard, C8). */
+function staleLockTimeoutHelp(tf: string, p: string): string[] {
+  return [
+    `databricks-axi bundle summary${tf}${p}`,
+    "If a retry reports the deploy lock held, pass --force-lock only if you know the other deployment isn't active (mode: development targets disable the lock entirely)",
+  ];
+}
+
+/** Shared deploy/destroy failure renderer: the redacted tail of stderr
+ * (stdout is 0 bytes in practice in `-o json` mode), same tail length as
  * `jobs logs`. Built from the `capture` result directly — never from
  * `mapUpstreamError`, which returns only the first line and would drop the
- * failure an agent actually needs to debug a DAB deploy. */
+ * failure an agent actually needs to debug a DAB deploy. `help` is the
+ * per-caller portion (composed at the call site); this only adds the
+ * shared `--full`/`stderrTruncated` notes. */
 function deployFailure(
   label: string,
   captured: CapturedResult,
+  full: boolean,
   tf: string,
   p: string,
-  opts: { full: boolean; supportsFull: boolean; approvalHelp?: boolean },
+  help: string[],
 ): AxiError {
-  const combined = [captured.stdout, captured.stderr]
-    .filter(Boolean)
-    .join("\n");
-  const redacted = redactSecrets(combined);
-  const t = opts.full
+  const redacted = redactSecrets(captured.stderr);
+  const t = full
     ? { text: redacted, truncated: false }
     : truncate(redacted, { lines: TAIL_LINES, mode: "tail" });
-  const help: string[] = [];
-  if (opts.approvalHelp) {
-    help.push(
-      `databricks-axi ${label} --yes${tf}${p}`,
-      `databricks-axi bundle plan${tf}${p}`,
-    );
-  } else {
-    help.push(`databricks-axi bundle summary${tf}${p}`);
-  }
-  if (opts.supportsFull && t.truncated) {
-    help.unshift(`databricks-axi ${label} --full${tf}${p}`);
+  const allHelp = [...help];
+  if (t.truncated) {
+    allHelp.unshift(`databricks-axi ${label} --full${tf}${p}`);
   }
   if (captured.stderrTruncated) {
-    help.push(
+    allHelp.push(
       "stderr exceeded the 64KB capture cap — some diagnostic output may be missing",
     );
   }
   return new AxiError(
     `${label} failed (exit ${captured.exitCode}):\n${t.text}`,
     "UPSTREAM_ERROR",
-    help,
+    allHelp,
   );
 }
 
 function parseJsonObject(stdout: string): AxiStructuredOutput {
-  const trimmed = stdout.trim();
-  if (!trimmed) {
-    return {};
-  }
   try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    return parsed !== null && typeof parsed === "object"
+    const parsed = JSON.parse(stdout) as unknown;
+    return parsed && typeof parsed === "object"
       ? (parsed as AxiStructuredOutput)
       : {};
   } catch {
@@ -213,6 +222,12 @@ type Diagnostic = {
   message: string;
   at?: string;
 };
+
+const SEVERITY_ORDER: Diagnostic["severity"][] = [
+  "Error",
+  "Warning",
+  "Recommendation",
+];
 
 // Severity prefixes are exactly these three (src: libs/diag) — a
 // `Warn: [hostmetadata] …` line comes from the logger, not the diag
@@ -251,7 +266,7 @@ function parseDiagnostics(stderr: string): {
     for (const line of lines.slice(1)) {
       const atMatch = /^\s*at (.+)/.exec(line);
       if (atMatch) {
-        diag.at = atMatch[1].trim();
+        diag.at = redactSecrets(atMatch[1].trim());
       }
     }
     diagnostics.push(diag);
@@ -268,7 +283,6 @@ function parseDiagnostics(stderr: string): {
 const NO_SUCH_TARGET = /no such target\.\s*Available targets:/i;
 
 const DIAGNOSTICS_CAP = 10;
-const RAW_STDERR_TAIL_LINES = 50;
 
 async function bundleValidate(args: string[]): Promise<AxiRenderable> {
   scanVarGuards(args);
@@ -290,15 +304,15 @@ async function bundleValidate(args: string[]): Promise<AxiRenderable> {
 
   const argv = ["bundle", "validate", ...targetArgv(target)];
   const varFlag = flags.get("var");
-  if (typeof varFlag === "string") {
-    argv.push(`--var=${varFlag}`);
-  }
+  const varEnv =
+    typeof varFlag === "string" ? bundleVarEnv(varFlag) : undefined;
   // --strict never reaches upstream argv (C4): forwarding it would inject a
   // synthetic top-level "N warnings were found" Error that has no config
   // problem behind it, making `errors: 1` a lie. `valid` is computed
   // client-side instead, from the real parsed counts.
   const captured = await runDatabricksCaptured(argv, {
     ...spawnOpts(flags),
+    ...(varEnv ? { env: varEnv } : {}),
     timeoutMs: 60_000,
     timeoutHelp: [`Rerun — validate is read-only and idempotent`],
   });
@@ -329,7 +343,7 @@ async function bundleValidate(args: string[]): Promise<AxiRenderable> {
       diagnostics: [],
       parse_failed: true,
       raw_stderr: truncate(redactSecrets(captured.stderr), {
-        lines: RAW_STDERR_TAIL_LINES,
+        lines: TAIL_LINES,
         mode: "tail",
       }).text,
       valid: captured.exitCode === 0,
@@ -359,11 +373,10 @@ async function bundleValidate(args: string[]): Promise<AxiRenderable> {
     return { type, count: keys.length, keys: `${shown.join(",")}${more}` };
   });
 
-  const sorted = [...allDiagnostics].sort((a, b) => {
-    const rank = (s: Diagnostic["severity"]) =>
-      s === "Error" ? 0 : s === "Warning" ? 1 : 2;
-    return rank(a.severity) - rank(b.severity);
-  });
+  const sorted = [...allDiagnostics].sort(
+    (a, b) =>
+      SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity),
+  );
   const project = (d: Diagnostic) => ({
     severity: d.severity,
     message: d.message,
@@ -395,12 +408,13 @@ async function bundleValidate(args: string[]): Promise<AxiRenderable> {
   out.warnings = warnings;
   out.config_bytes = Buffer.byteLength(captured.stdout, "utf8");
   out.resources = resourceRows;
-  out.diagnostics = sorted.slice(0, DIAGNOSTICS_CAP).map(project);
-  if (sorted.length > DIAGNOSTICS_CAP) {
+  out.diagnostics = (full ? sorted : sorted.slice(0, DIAGNOSTICS_CAP)).map(
+    project,
+  );
+  if (!full && sorted.length > DIAGNOSTICS_CAP) {
     out.truncated = `showing ${DIAGNOSTICS_CAP} of ${sorted.length} diagnostics — rerun with --full`;
   }
   if (full) {
-    out.diagnostics = sorted.map(project);
     out.config = config;
   }
   out.help = [`databricks-axi bundle plan${tf}${p}`];
@@ -409,15 +423,8 @@ async function bundleValidate(args: string[]): Promise<AxiRenderable> {
 
 // --- plan ---
 
-type PlanChange = {
-  action?: string;
-  old?: unknown;
-  new?: unknown;
-  remote?: unknown;
-  reason?: string;
-};
+type PlanChange = { action?: string };
 type PlanEntry = {
-  id?: string;
   action?: string;
   changes?: Record<string, PlanChange>;
   new_state?: unknown;
@@ -487,7 +494,7 @@ async function bundlePlan(args: string[]): Promise<AxiRenderable> {
   }
 
   const rows = addressable
-    .filter(([, entry]) => full || entry.action !== "skip")
+    .filter(([, entry]) => full || (entry.action ?? "skip") !== "skip")
     .map(([key, entry]) => {
       const shortKey = key.replace(/^resources\./, ""); // C1: upstream's own key is rejected by --select
       const changedFields = Object.entries(entry.changes ?? {})
@@ -521,8 +528,19 @@ async function bundlePlan(args: string[]): Promise<AxiRenderable> {
   }
   out.actions = actionCounts;
   out.nested = nested;
-  out.resources = rows;
-  out.count = rows.length;
+  const fields = full
+    ? [
+        "key",
+        "action",
+        "changed_fields",
+        "changes",
+        "new_state",
+        "remote_state",
+      ]
+    : ["key", "action", "changed_fields"];
+  const selected = renderRows(rows, flags, fields);
+  out.resources = selected;
+  out.count = selected.length;
   out.plan_bytes = Buffer.byteLength(captured.stdout, "utf8");
   if (actionCounts.recreate > 0 || actionCounts.delete > 0) {
     out.warning = `plan includes ${actionCounts.recreate} recreate + ${actionCounts.delete} delete action(s) — data-losing; review before deploy`;
@@ -666,9 +684,8 @@ async function bundleDeploy(args: string[]): Promise<AxiRenderable> {
 
   const argv = ["bundle", "deploy", ...targetArgv(target)];
   const varFlag = flags.get("var");
-  if (typeof varFlag === "string") {
-    argv.push(`--var=${varFlag}`);
-  }
+  const varEnv =
+    typeof varFlag === "string" ? bundleVarEnv(varFlag) : undefined;
   // --yes maps to upstream --auto-approve, never --force (Git-branch-
   // validation override, an unrelated flag the 2026-07-07 draft conflated).
   if (flags.get("yes") === true) {
@@ -683,21 +700,21 @@ async function bundleDeploy(args: string[]): Promise<AxiRenderable> {
 
   const captured = await runDatabricksCaptured(argv, {
     ...spawnOpts(flags),
+    ...(varEnv ? { env: varEnv } : {}),
     raw: true,
     timeoutMs: DEPLOY_TIMEOUT_MS,
-    timeoutHelp: [
-      `databricks-axi bundle summary${tf}${p}`,
-      "If a retry reports the deploy lock held, pass --force-lock only if you know the other deployment isn't active (mode: development targets disable the lock entirely)",
-    ],
+    timeoutHelp: staleLockTimeoutHelp(tf, p),
   });
 
   if (captured.exitCode !== 0) {
     checkNotInBundle(captured.stderr);
-    throw deployFailure("bundle deploy", captured, tf, p, {
-      full,
-      supportsFull: true,
-      approvalHelp: APPROVAL_REQUIRED.test(captured.stderr),
-    });
+    const help = APPROVAL_REQUIRED.test(captured.stderr)
+      ? [
+          `databricks-axi bundle deploy --yes${tf}${p}`,
+          `databricks-axi bundle plan${tf}${p}`,
+        ]
+      : [`databricks-axi bundle summary${tf}${p}`];
+    throw deployFailure("bundle deploy", captured, full, tf, p, help);
   }
 
   return {
@@ -829,6 +846,7 @@ async function bundleRun(rawArgs: string[]): Promise<AxiRenderable> {
 
   throw usage(`bundle run does not support resource type "${match.type}"`, [
     `Run raw: databricks bundle run ${key}${tf}${p}`,
+    "Never pass `--` to it — upstream `bundle run` executes an arbitrary local command with the bundle's credentials injected into its environment after `--`; see `databricks-axi bundle --help` instead",
   ]);
 }
 
@@ -840,10 +858,12 @@ async function bundleDestroy(args: string[]): Promise<AxiRenderable> {
     target: "value",
     yes: "boolean",
     "force-lock": "boolean",
+    full: "boolean",
   });
   if (positional.length > 0) {
     throw usage(`bundle destroy takes no arguments, got: ${positional[0]}`);
   }
+  const full = flags.get("full") === true;
   const p = profileSuffix(flags.get("profile"));
   const target = flags.get("target");
   const tf = targetSuffix(target);
@@ -872,18 +892,14 @@ async function bundleDestroy(args: string[]): Promise<AxiRenderable> {
     ...spawnOpts(flags),
     raw: true,
     timeoutMs: DEPLOY_TIMEOUT_MS,
-    timeoutHelp: [
-      `databricks-axi bundle summary${tf}${p}`,
-      "If a retry reports the deploy lock held, pass --force-lock only if you know the other deployment isn't active (mode: development targets disable the lock entirely)",
-    ],
+    timeoutHelp: staleLockTimeoutHelp(tf, p),
   });
 
   if (captured.exitCode !== 0) {
     checkNotInBundle(captured.stderr);
-    throw deployFailure("bundle destroy", captured, tf, p, {
-      full: false,
-      supportsFull: false,
-    });
+    throw deployFailure("bundle destroy", captured, full, tf, p, [
+      `databricks-axi bundle summary${tf}${p}`,
+    ]);
   }
 
   return {
