@@ -327,6 +327,13 @@ run` at all: `run <resource_key>` resolves the key via `bundle summary`
   assumption that `bundle summary`/`plan`/`validate` ids arrive as JSON
   strings already — if a future upstream CLI ships a bare numeric int64 id,
   this needs revisiting.
+- `databricks bundle <verb>` resolves auth from the `.databrickscfg`
+  `default_profile` even when `DATABRICKS_HOST`/`DATABRICKS_TOKEN` env vars
+  are set (live-verified 2026-08-20; every other command group honors the
+  env vars). With a config file present, the env vars are silently ignored —
+  a stale `default_profile` makes bundle commands authenticate against the
+  wrong workspace with no warning. Pass `--profile`/`-p` explicitly or keep
+  `default_profile` current when driving `bundle` in a mixed-auth setup.
 
 ## Generated files (never hand-edit)
 
