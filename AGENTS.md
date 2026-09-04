@@ -340,7 +340,18 @@ run` at all: `run <resource_key>` resolves the key via `bundle summary`
 - `skills/databricks-axi/SKILL.md` (regenerate: `pnpm run build:skill`;
   CI fails a stale copy via `build:skill -- --check`)
 - `pnpm-lock.yaml` (pnpm rewrites it on dependency changes; prettier
-  ignores it so Dependabot's raw lockfile output passes `format:check`)
+  ignores it so Dependabot's raw lockfile output passes `format:check`).
+  npm updates arrive as one grouped PR (`groups:` in
+  `.github/dependabot.yml`) because git merges lockfiles cleanly at the
+  text level while the result can be invalid YAML for pnpm
+  (`ERR_PNPM_BROKEN_LOCKFILE`, duplicated mapping key), which also blocks
+  Dependabot from rebasing anything else. Merge any other
+  lockfile-touching PR one at a time, rebasing each onto the previous
+  merge. Repair a broken lockfile by restoring it from the last
+  known-good commit and re-resolving with
+  `pnpm update --lockfile-only`, never by editing the YAML; revert
+  `package.json` first if `pnpm update` tightened its ranges, since the
+  `axi-sdk-js` floor is a published dependency contract.
 - `CHANGELOG.md` is frozen at 1.0.2 and no longer maintained. Release notes
   live on GitHub Releases, auto-generated from merged PR titles.
 
