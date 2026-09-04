@@ -7,6 +7,14 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    # One grouped PR per run, so every npm bump lands as a single
+    # pnpm-lock.yaml change. Separate PRs merge cleanly at the text level
+    # but can produce a lockfile pnpm rejects (ERR_PNPM_BROKEN_LOCKFILE).
+    # No dependency-type filter: production and development in one group.
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
